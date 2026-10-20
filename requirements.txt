@@ -9,3 +9,6 @@ psycopg[binary]
 fastapi
 uvicorn
 python-multipart
+pytesseract
+pypdfium2
+Pillow

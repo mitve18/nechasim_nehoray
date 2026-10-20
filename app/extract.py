@@ -1,30 +1,24 @@
-"""חילוץ טקסט מהסכמים: שכבת טקסט כשיש, OCR דרך OpenAI לסריקות, וניקוי לפני אינדוקס.
+"""חילוץ טקסט מהסכמים: שכבת טקסט כשיש, OCR עם Tesseract לסריקות, וניקוי לפני אינדוקס.
 
 python -m app.extract            טבלת סיכום לכל הקבצים בתיקייה
 python -m app.extract <fileId>   הטקסט המלא של קובץ אחד
+python -m app.extract --ocr <file.pdf>   OCR מקומי לקובץ, בלי Drive (לבדיקת ההתקנה של Tesseract)
 """
-import base64
 import io
+import os
 import re
+import shutil
 from collections import Counter
 
-from openai import OpenAI
 from pypdf import PdfReader
 
-MODEL = "gpt-5.5"
 MIN_CHARS_PER_PAGE = 50  # פחות מזה בממוצע = סריקה בלי שכבת טקסט
-PAGE_BREAK = "<<<PAGE>>>"
-OCR_PROMPT = (
-    "תמלל את המסמך הסרוק במדויק, מילה במילה, בשפת המקור (עברית, וכן אנגלית ומספרים כפי שהם). "
-    "שמור על מספור סעיפים ועל מעברי פסקאות. אל תתרגם, אל תסכם ואל תוסיף הערות משלך. "
-    f"בין עמוד לעמוד כתוב שורה שמכילה רק {PAGE_BREAK}. "
-    "חתימות, חותמות ולוגואים: כתוב [חתימה] / [חותמת] במקומם. החזר את התמלול בלבד."
-)
-IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+OCR_LANG = "heb+eng"
+OCR_DPI = 300
+WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/tiff"}
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 GDOC = "application/vnd.google-apps.document"
-
-ocr_tokens = {"input": 0, "output": 0}  # מצטבר לאורך הריצה, לצורך דיווח עלות
 
 
 def extract(f, data):
@@ -35,43 +29,41 @@ def extract(f, data):
         # ponytail: החלטה לכל הקובץ לפי ממוצע; עמודים סרוקים בודדים בתוך PDF טקסטואלי לא יעברו OCR
         if sum(len(p.strip()) for p in pages) >= MIN_CHARS_PER_PAGE * len(pages):
             return clean(pages), "text"
-        part = {"type": "input_file", "filename": "scan.pdf", "file_data": _data_url(data, mime)}
-        return _checked(clean(ocr(part)), len(pages)), "ocr"
+        return _checked(clean(ocr(_pdf_images(data))), len(pages)), "ocr"
     if mime in IMAGE_TYPES:
-        return _checked(clean(ocr({"type": "input_image", "image_url": _data_url(data, mime)})), 1), "ocr"
+        from PIL import Image
+        return _checked(clean(ocr([Image.open(io.BytesIO(data))])), 1), "ocr"
     if mime == DOCX:
         import docx
         return clean(["\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)]), "docx"
     if mime == GDOC or mime.startswith("text/"):
         return clean([data.decode("utf-8-sig")]), "text"
-    # ponytail: TIFF/HEIC/DOC ישן לא נתמכים; להוסיף המרה עם Pillow/LibreOffice אם יופיעו במאגר
+    # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
     raise ValueError(f"סוג קובץ לא נתמך: {mime}")
 
 
 def _checked(text, pages):
-    """תמלול קצר מדי ביחס למספר העמודים = המודל סירב או נכשל. לא נכניס אותו למאגר."""
+    """תמלול קצר מדי ביחס למספר העמודים = OCR נכשל (סריקה ריקה/לא קריאה). לא נכניס אותו למאגר."""
     if len(text) < MIN_CHARS_PER_PAGE * pages:
         raise RuntimeError(f"OCR החזיר {len(text)} תווים ל-{pages} עמודים: {text[:80]!r}")
     return text
 
 
-def _data_url(data, mime):
-    return f"data:{mime};base64,{base64.standard_b64encode(data).decode()}"
+def _pdf_images(data):
+    """עמודי ה-PDF כתמונות, אחד-אחד כדי לא להחזיק את כל הסריקה בזיכרון."""
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(data)
+    for page in pdf:
+        yield page.render(scale=OCR_DPI / 72).to_pil()
 
 
-def ocr(part):
-    """תמלול סריקה עם OpenAI. מחזיר רשימת עמודים."""
-    resp = OpenAI().responses.create(
-        model=MODEL,
-        reasoning={"effort": "low"},  # תמלול, לא הסקה
-        max_output_tokens=64000,
-        input=[{"role": "user", "content": [part, {"type": "input_text", "text": OCR_PROMPT}]}],
-    )
-    if resp.status != "completed":
-        raise RuntimeError(f"OCR נכשל: status={resp.status} {resp.incomplete_details}")
-    ocr_tokens["input"] += resp.usage.input_tokens
-    ocr_tokens["output"] += resp.usage.output_tokens
-    return resp.output_text.split(PAGE_BREAK)
+def ocr(images):
+    """תמלול סריקה עם Tesseract. מחזיר רשימת עמודים."""
+    import pytesseract
+    # ב-Linux tesseract ב-PATH; ב-Windows ה-installer לא מוסיף אותו ל-PATH, ולכן נופלים לנתיב ברירת המחדל
+    cmd = os.environ.get("TESSERACT_CMD") or shutil.which("tesseract") or WINDOWS_TESSERACT
+    pytesseract.pytesseract.tesseract_cmd = cmd
+    return [pytesseract.image_to_string(img, lang=OCR_LANG) for img in images]
 
 
 PAGE_NUM = re.compile(r"^\s*[-–]?\s*(עמוד|page)?\s*\d+\s*((מתוך|of|/)\s*\d+)?\s*[-–]?\s*$", re.I)
@@ -111,11 +103,14 @@ def _demo():
 if __name__ == "__main__":
     import sys
     from dotenv import load_dotenv
-    from app import drive
 
     load_dotenv()
     sys.stdout.reconfigure(encoding="utf-8")
     _demo()
+    if sys.argv[1:2] == ["--ocr"]:
+        print(extract({"mimeType": "application/pdf"}, open(sys.argv[2], "rb").read())[0])
+        sys.exit()
+    from app import drive
     svc = drive.service()
     files = drive.list_files(svc)
     if len(sys.argv) > 1:
@@ -129,4 +124,3 @@ if __name__ == "__main__":
             print(f"{method:5} | {len(text):6} | {f['name'][:45]} | {sample}")
         except Exception as e:
             print(f"ERROR | {f['name'][:45]} | {e}")
-    print(f"\nטוקנים ל-OCR בריצה זו: input={ocr_tokens['input']:,} output={ocr_tokens['output']:,}")

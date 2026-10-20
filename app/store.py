@@ -6,7 +6,7 @@ import psycopg
 from openai import OpenAI
 
 EMBED_MODEL = "text-embedding-3-small"
-SUMMARY_MODEL = "gpt-5.5"
+SUMMARY_MODEL = "gpt-4o"
 
 SCHEMA = """
 create extension if not exists vector;
@@ -48,7 +48,6 @@ def summarize(name, text):
     """תקציר קצר שמשמש לחיפוש ולהצגת המקורות."""
     resp = OpenAI().responses.create(
         model=SUMMARY_MODEL,
-        reasoning={"effort": "low"},
         input=f"שם הקובץ: {name}\n\n{text[:30000]}",
         instructions=(
             "כתוב בעברית תקציר של 3–4 משפטים למסמך המשפטי הבא: סוג המסמך (הסכם, כתב התחייבות וכו'), "

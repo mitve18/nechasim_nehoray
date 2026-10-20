@@ -1,0 +1,28 @@
+# סנכרון יומי של מאגר ההסכמים מ-Drive ל-Neon. הרצה ידנית: Actions ← sync ← Run workflow
+name: sync
+on:
+  schedule:
+    - cron: "0 3 * * *"  # 03:00 UTC = 05:00/06:00 בישראל
+  workflow_dispatch:
+concurrency: sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-heb
+      - run: pip install -r requirements.txt
+      - run: python sync.py
+        env:
+          DRIVE_FOLDER_ID: 1HS1MqHNvRyHeRuLZWWQQ8ClSBFgoRZQs
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

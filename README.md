@@ -2,9 +2,9 @@
 
 # מנסח ההסכמים
 
-אפליקציית ווב פנימית שמנסחת הסכמים בעברית בעזרת OpenAI, על בסיס מאגר הסכמים קיים ב-Google Drive.
+אפליקציית ווב פנימית שמנסחת הסכמים בעברית בעזרת OpenAI (gpt-4o), על בסיס מאגר הסכמים קיים ב-Google Drive.
 
-> הפרויקט נבנה בשלבים. הושלמו שלבים 1–5. הפריסה ל-Render (שלב 6) והסנכרון היומי ב-GitHub Actions עדיין לא הוגדרו.
+> הפרויקט נבנה בשלבים. האתר רץ ב-Render, והסנכרון היומי רץ ב-GitHub Actions.
 
 ## דרישות מקדימות
 - Python 3.11 ומעלה
@@ -103,6 +103,11 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
 <div dir="rtl">
 
 - לוג ריצות הסנכרון: `/admin/sync` (אחרי כניסה לאתר).
+- הסנכרון היומי רץ ב-GitHub Actions ([`.github/workflows/sync.yml`](.github/workflows/sync.yml)), והרצה ידנית: Actions ← sync ← **Run workflow**.
+- סריקות בלי שכבת טקסט עוברות OCR מקומי עם Tesseract (עברית + אנגלית), ולא דרך מודל. ב-Actions הוא מותקן אוטומטית.
+  להרצה ב-Windows: מתקינים את ה-installer של [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki), ובמסך הרכיבים מסמנים
+  **Additional language data → Hebrew**. הקוד מחפש את `tesseract` ב-PATH, ואחר כך ב-`C:\Program Files\Tesseract-OCR\tesseract.exe`.
+  נתיב אחר: מגדירים `TESSERACT_CMD`. בדיקה: `python -m app.extract --ocr scan.pdf`.
 - קובץ שנכשל בחילוץ או ב-OCR לא נכנס למאגר, ולכן ינוסה שוב בריצת הסנכרון הבאה.
 
 ### תקלות נפוצות

@@ -8,7 +8,9 @@ from openai import OpenAI
 
 from app import store
 
-MODEL = "gpt-5.5"
+MODEL = "gpt-4o"
+MAX_OUTPUT_TOKENS = 16384  # התקרה של gpt-4o; הסכם עברי ארוך במיוחד ייחתך ויחזיר שגיאה ברורה
+EXAMPLE_CHARS = 40000  # לכל מסמך מהמאגר, כדי ששלוש דוגמאות + השיחה ייכנסו בחלון של 128K טוקנים
 
 INSTRUCTIONS = """אתה עורך דין ישראלי מנוסה שמנסח הסכמים ומסמכים משפטיים בעברית עבור עובדי החברה.
 העובד מתאר את המסמך שהוא צריך. לרשותך מסמכים קיימים מהמאגר של החברה, ככל שנמצאו דומים.
@@ -48,17 +50,19 @@ def draft(messages):
 
 def respond(messages, examples):
     context = "\n\n".join(
-        f"<מסמך מהמאגר name=\"{e['name']}\">\n{e['text']}\n</מסמך מהמאגר>" for e in examples
+        f"<מסמך מהמאגר name=\"{e['name']}\">\n{e['text'][:EXAMPLE_CHARS]}\n</מסמך מהמאגר>" for e in examples
     ) or "לא נמצאו מסמכים דומים במאגר."
     resp = OpenAI().responses.create(
         model=MODEL,
-        reasoning={"effort": "medium"},
+        max_output_tokens=MAX_OUTPUT_TOKENS,
         instructions=INSTRUCTIONS + "\n\nמסמכים מהמאגר (לשימוש כדוגמאות לנוסח בלבד):\n\n" + context,
         input=messages,
         text={"format": {"type": "json_schema", "name": "draft", "schema": SCHEMA, "strict": True}},
     )
     if resp.status != "completed":
         raise RuntimeError(f"הניסוח נכשל: status={resp.status} {resp.incomplete_details}")
+    if not resp.output_text:  # ב-structured output סירוב מגיע כ-refusal ולא כ-JSON
+        raise RuntimeError("המודל סירב לנסח את המסמך")
     out = json.loads(resp.output_text)
     out["sources"] = [{"name": e["name"], "url": e["url"], "summary": e["summary"]} for e in examples]
     return out
