@@ -115,7 +115,7 @@ $("form").addEventListener("submit", async (e) => {
       add("assistant", q);
     } else {
       messages.push({ role: "assistant", content: r.title + "\n\n" + r.body, isDoc: true });
-      add("assistant", "ההסכם נוסח ומוצג בחלונית "ההסכם". אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.");
+      add("assistant", "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.");
       showDoc(r);
     }
   } catch (err) {
