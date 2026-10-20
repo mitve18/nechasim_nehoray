@@ -1,0 +1,11 @@
+google-api-python-client
+google-auth
+google-auth-oauthlib
+python-dotenv
+openai
+pypdf
+python-docx
+psycopg[binary]
+fastapi
+uvicorn
+python-multipart

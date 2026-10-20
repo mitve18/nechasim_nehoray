@@ -1,0 +1,23 @@
+# Render Blueprint. ערכים עם sync: false מוזנים רק בדשבורד של Render ולא נשמרים בקוד.
+services:
+  - type: web
+    name: agreements-drafter
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: DRIVE_FOLDER_ID
+        value: 1HS1MqHNvRyHeRuLZWWQQ8ClSBFgoRZQs
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

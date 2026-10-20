@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>כניסה · מנסח ההסכמים</title>
+<style>
+  body { font-family: system-ui, "Segoe UI", Arial, sans-serif; background: #f4f5f7; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+  form { background: #fff; padding: 32px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); width: min(320px, 90vw); }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  input, button { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 8px; }
+  input { border: 1px solid #ccc; margin-bottom: 12px; }
+  button { background: #1f4fd8; color: #fff; border: 0; cursor: pointer; }
+  .err { color: #b00020; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>מנסח ההסכמים</h1>
+  <p class="err" id="err" hidden>סיסמה שגויה</p>
+  <label for="pw">סיסמה</label>
+  <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+  <button>כניסה</button>
+</form>
+<script>if (location.search.includes("error")) document.getElementById("err").hidden = false;</script>
+</body>
+</html>
