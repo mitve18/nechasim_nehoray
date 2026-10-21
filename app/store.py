@@ -31,7 +31,10 @@ create table if not exists sync_runs (
     added int, updated int, removed int, ocr int, failed int,
     errors jsonb
 );
+-- מיגרציה: שמות הקבצים שנוספו/עודכנו בכל ריצה. ריצות ישנות נשארות עם null
+alter table sync_runs add column if not exists files jsonb;
 """
+TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 
 
 def connect():
@@ -94,17 +97,29 @@ def search(conn, query, k=3):
 
 def log_run(conn, stats):
     conn.execute(
-        """insert into sync_runs (started_at, finished_at, added, updated, removed, ocr, failed, errors)
-           values (%s, now(), %s, %s, %s, %s, %s, %s)""",
+        """insert into sync_runs (started_at, finished_at, added, updated, removed, ocr, failed, errors, files)
+           values (%s, now(), %s, %s, %s, %s, %s, %s, %s)""",
         (stats["started_at"], stats["added"], stats["updated"], stats["removed"], stats["ocr"],
-         len(stats["errors"]), json.dumps(stats["errors"], ensure_ascii=False)),
+         len(stats["errors"]), json.dumps(stats["errors"], ensure_ascii=False),
+         json.dumps(stats["files"], ensure_ascii=False)),
     )
 
 
 def recent_runs(conn, n=20):
+    """הריצות האחרונות, עם הזמנים בשעון ישראל."""
     rows = conn.execute(
-        "select started_at, finished_at, added, updated, removed, ocr, failed, errors "
-        "from sync_runs order by id desc limit %s", (n,)
+        "select started_at at time zone %s, finished_at at time zone %s, added, updated, removed, ocr, failed, "
+        "errors, files from sync_runs order by id desc limit %s", (TZ, TZ, n)
     ).fetchall()
-    keys = ("started_at", "finished_at", "added", "updated", "removed", "ocr", "failed", "errors")
+    keys = ("started_at", "finished_at", "added", "updated", "removed", "ocr", "failed", "errors", "files")
     return [dict(zip(keys, r)) for r in rows]
+
+
+def status(conn):
+    """לשורת הסטטוס בראש האתר: זמן הסיום של הריצה האחרונה בשעון ישראל, מספר המסמכים, והאם היו שגיאות."""
+    run = conn.execute(
+        "select finished_at at time zone %s, failed from sync_runs order by id desc limit 1", (TZ,)
+    ).fetchone()
+    documents = conn.execute("select count(*) from agreements").fetchone()[0]
+    return {"updated_at": f"{run[0]:%d/%m/%Y %H:%M}" if run else None, "documents": documents,
+            "failed": bool(run and run[1])}

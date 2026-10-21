@@ -2,7 +2,7 @@
 name: sync
 on:
   schedule:
-    - cron: "0 3 * * *"  # 03:00 UTC = 05:00/06:00 בישראל
+    - cron: "0 3 * * *"  # 03:00 UTC = 06:00 בשעון קיץ, 05:00 בשעון חורף בישראל. GitHub עלול לאחר בכמה דקות
   workflow_dispatch:
 concurrency: sync
 

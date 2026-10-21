@@ -62,6 +62,13 @@ def api_docx(req: DocxRequest):
     )
 
 
+@app.get("/api/status")
+def api_status():
+    """שורת הסטטוס בראש האתר. אם המסד לא זמין, הממשק פשוט לא מציג אותה."""
+    with store.connect() as conn:
+        return store.status(conn)
+
+
 @app.get("/admin/sync", response_class=HTMLResponse)
 def sync_log():
     with store.connect() as conn:
@@ -70,12 +77,13 @@ def sync_log():
     rows = "".join(
         f"<tr><td>{r['started_at']:%Y-%m-%d %H:%M}</td><td>{r['added']}</td><td>{r['updated']}</td>"
         f"<td>{r['removed']}</td><td>{r['ocr']}</td><td>{r['failed']}</td>"
+        f"<td>{'<br>'.join(_esc(n) for n in (r['files'] or {}).get('added', [])) or '—'}</td>"
         f"<td>{'<br>'.join(_esc(e['file'] + ': ' + e['error']) for e in r['errors'] or [])}</td></tr>"
         for r in runs
     )
     return f"""<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><title>לוג סנכרון</title>
 <style>body{{font-family:system-ui,Arial;margin:24px}}table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:6px 10px;text-align:right}}</style>
-<h1>לוג סנכרון</h1><table><tr><th>זמן (UTC)</th><th>נוספו</th><th>עודכנו</th><th>הוסרו</th><th>OCR</th><th>נכשלו</th><th>שגיאות</th></tr>{rows}</table></html>"""
+<h1>לוג סנכרון</h1><table><tr><th>זמן (שעון ישראל)</th><th>נוספו</th><th>עודכנו</th><th>הוסרו</th><th>OCR</th><th>נכשלו</th><th>קבצים שנוספו</th><th>שגיאות</th></tr>{rows}</table></html>"""
 
 
 def _esc(s):
