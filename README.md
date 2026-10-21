@@ -85,7 +85,7 @@ python sync.py --list
 אמורה להופיע רשימת כל הקבצים בתיקייה (כולל תתי-תיקיות): תאריך שינוי, סוג קובץ ושם.
 
 ## איפה שמים סודות
-הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY`, `DATABASE_URL` ו-`APP_PASSWORD`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
+הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY` ו-`DATABASE_URL`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
 
 ### פיתוח מקומי
 - הסודות נשמרים **רק** בקובץ `dev\.env`. הקובץ מוחרג ב-`.gitignore`.
@@ -111,7 +111,6 @@ python sync.py --list
 | `GOOGLE_REFRESH_TOKEN` | [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ← האפליקציה ← **Remove access**. אחר כך מריצים שוב `scripts/get_refresh_token.py` |
 | `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) ← Revoke למפתח ויצירת מפתח חדש |
 | `DATABASE_URL` | Neon ← הפרויקט ← Roles ← Reset password, ואז מעתיקים את ה-connection string החדש |
-| `APP_PASSWORD` | בוחרים סיסמה חדשה |
 
 אחרי ההנפקה מחדש מעדכנים את הערך החדש ב-`.env` וב-Render ← Environment.
 
@@ -126,7 +125,7 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
 
 <div dir="rtl">
 
-- לוג ריצות הסנכרון: `/admin/sync` (אחרי כניסה לאתר).
+- לוג ריצות הסנכרון: `/admin/sync`.
 - הסנכרון היומי רץ ב-GitHub Actions ([`.github/workflows/sync.yml`](.github/workflows/sync.yml)), והרצה ידנית: Actions ← sync ← **Run workflow**.
 - סריקות בלי שכבת טקסט עוברות OCR מקומי עם Tesseract (עברית + אנגלית), ולא דרך מודל. ב-Actions הוא מותקן אוטומטית.
   להרצה ב-Windows: מתקינים את ה-installer של [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki), ובמסך הרכיבים מסמנים
