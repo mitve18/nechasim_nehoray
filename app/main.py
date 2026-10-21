@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
@@ -18,6 +19,7 @@ from app import docx_export, draft, store  # noqa: E402
 STATIC = Path(__file__).parent / "static"
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")  # לוגו ו-favicon
 
 
 @app.get("/healthz")

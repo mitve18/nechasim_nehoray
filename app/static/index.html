@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>מנסח ההסכמים</title>
+    <meta name="theme-color" content="#0e2f4c" />
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
+    <link rel="apple-touch-icon" href="/static/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,22 +15,26 @@
     />
     <style>
       :root {
-        --bg: #f5f3ee;
+        /* פלטה לפי הלוגו: הכחול והשחור שלו, ותכלת בהיר להדגשות */
+        --bg: #f3f6f9;
         --card: #fff;
-        --line: #e3ded3;
-        --text: #1b2333;
-        --muted: #667085;
-        --navy: #16233f;
-        --navy-2: #22345c;
-        --gold: #b0894f;
-        --gold-soft: #f6efe2;
+        --line: #dce3ea;
+        --text: #1f2933;
+        --muted: #5f6b7a;
+        --brand: #1c5d8e;
+        --brand-dark: #164a72;
+        --brand-deep: #0e2f4c;
+        --brand-soft: #edf4fa;
+        --brand-line: #cfe0ee;
+        --accent: #2f8fd0;
+        --ring: rgba(47, 143, 208, 0.25);
         --warn-bg: #fff6e6;
         --warn: #8a4b08;
         --err-bg: #fdecee;
         --err: #9b1c2c;
         --radius: 14px;
         --shadow:
-          0 1px 2px rgba(22, 35, 63, 0.06), 0 8px 24px rgba(22, 35, 63, 0.06);
+          0 1px 2px rgba(14, 47, 76, 0.06), 0 8px 24px rgba(14, 47, 76, 0.07);
       }
       * {
         box-sizing: border-box;
@@ -40,7 +47,8 @@
         line-height: 1.55;
       }
       header {
-        background: linear-gradient(135deg, var(--navy), var(--navy-2));
+        background: linear-gradient(135deg, var(--brand-deep), var(--brand));
+        border-bottom: 3px solid var(--accent);
         color: #fff;
       }
       .top {
@@ -52,13 +60,13 @@
         gap: 14px;
       }
       .logo {
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
-        background: var(--gold);
-        display: grid;
-        place-items: center;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
         flex: none;
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 0.18),
+          0 4px 12px rgba(0, 0, 0, 0.25);
       }
       .top h1 {
         margin: 0;
@@ -69,12 +77,12 @@
       .top p {
         margin: 0;
         font-size: 14px;
-        color: #c8d0e0;
+        color: #cfe0ee;
       }
       .top p.status {
         margin-top: 2px;
         font-size: 12px;
-        color: #8f9bb5;
+        color: #9fbdd6;
       }
       .status a {
         color: inherit;
@@ -131,7 +139,7 @@
         font-size: 18px;
         font-weight: 700;
         margin: 0 0 4px;
-        color: var(--navy);
+        color: var(--brand-deep);
       }
       .hint {
         color: var(--muted);
@@ -161,13 +169,13 @@
         font-size: 15px;
       }
       .user {
-        background: var(--navy);
+        background: var(--brand);
         color: #fff;
         align-self: flex-start;
         border-bottom-right-radius: 4px;
       }
       .assistant {
-        background: #f1efe9;
+        background: #eef2f6;
         align-self: flex-end;
         border-bottom-left-radius: 4px;
       }
@@ -188,7 +196,7 @@
         height: 7px;
         margin: 0 2px;
         border-radius: 50%;
-        background: var(--gold);
+        background: var(--accent);
         animation: bounce 1.2s infinite;
       }
       .dots span:nth-child(2) {
@@ -226,8 +234,8 @@
       textarea:focus,
       input[type="text"]:focus {
         outline: none;
-        border-color: var(--gold);
-        box-shadow: 0 0 0 3px rgba(176, 137, 79, 0.18);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
       }
       textarea {
         resize: vertical;
@@ -263,18 +271,18 @@
           transform 0.05s;
       }
       button:hover:not(:disabled) {
-        background: #f7f5f0;
+        background: #f2f6fa;
       }
       button:active:not(:disabled) {
         transform: translateY(1px);
       }
       button.primary {
-        background: var(--navy);
+        background: var(--brand);
         color: #fff;
-        border-color: var(--navy);
+        border-color: var(--brand);
       }
       button.primary:hover:not(:disabled) {
-        background: var(--navy-2);
+        background: var(--brand-dark);
       }
       button:disabled {
         opacity: 0.55;
@@ -282,7 +290,7 @@
       }
       button:focus-visible,
       a:focus-visible {
-        outline: 3px solid rgba(176, 137, 79, 0.5);
+        outline: 3px solid var(--ring);
         outline-offset: 2px;
       }
       .kbd {
@@ -295,9 +303,9 @@
 
       /* מקורות מהמאגר */
       .sources {
-        background: var(--gold-soft);
-        border: 1px solid #e6d6b8;
-        border-inline-start: 5px solid var(--gold);
+        background: var(--brand-soft);
+        border: 1px solid var(--brand-line);
+        border-inline-start: 5px solid var(--brand);
         border-radius: 12px;
         padding: 14px 16px;
         margin-bottom: 18px;
@@ -309,10 +317,10 @@
         margin: 0 0 10px;
         font-size: 16px;
         font-weight: 700;
-        color: var(--navy);
+        color: var(--brand-deep);
       }
       .badge {
-        background: var(--gold);
+        background: var(--brand);
         color: #fff;
         border-radius: 999px;
         font-size: 13px;
@@ -328,7 +336,7 @@
       }
       #sources li {
         background: #fff;
-        border: 1px solid #ecdfc6;
+        border: 1px solid var(--brand-line);
         border-radius: 10px;
         padding: 10px 12px;
         display: flex;
@@ -337,7 +345,7 @@
       }
       #sources .name {
         font-weight: 700;
-        color: var(--navy);
+        color: var(--brand-dark);
         text-decoration: none;
         display: flex;
         gap: 6px;
@@ -360,7 +368,7 @@
       }
       #sources .open {
         font-size: 13px;
-        color: var(--gold);
+        color: var(--brand);
         font-weight: 500;
         text-decoration: none;
         margin-top: auto;
@@ -403,8 +411,8 @@
       .spinner {
         width: 46px;
         height: 46px;
-        border: 4px solid #e9e2d4;
-        border-top-color: var(--gold);
+        border: 4px solid #dbe7f1;
+        border-top-color: var(--brand);
         border-radius: 50%;
         animation: spin 1s linear infinite;
       }
@@ -415,7 +423,7 @@
       }
       .loading strong {
         font-size: 18px;
-        color: var(--navy);
+        color: var(--brand-deep);
       }
       .loading .sub {
         color: var(--muted);
@@ -424,7 +432,7 @@
       .bar {
         width: min(320px, 80%);
         height: 6px;
-        background: #eee6d6;
+        background: #e3edf5;
         border-radius: 99px;
         overflow: hidden;
       }
@@ -432,7 +440,7 @@
         display: block;
         height: 100%;
         width: 0;
-        background: var(--gold);
+        background: linear-gradient(90deg, var(--brand), var(--accent));
         border-radius: 99px;
         transition: width 1s linear;
       }
@@ -450,22 +458,7 @@
   <body>
     <header>
       <div class="top">
-        <div class="logo" aria-hidden="true">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M12 3v18M5 21h14M7 7h10M4 14l3-7 3 7a3 3 0 0 1-6 0zM14 14l3-7 3 7a3 3 0 0 1-6 0z"
-            />
-          </svg>
-        </div>
+        <img class="logo" src="/static/logo.png" alt="" width="54" height="54" />
         <div>
           <h1>מנסח ההסכמים</h1>
           <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
