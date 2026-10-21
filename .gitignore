@@ -2,3 +2,5 @@
 client_secret.json
 .venv/
 __pycache__/
+sample_export.docx
+sample_export.pdf

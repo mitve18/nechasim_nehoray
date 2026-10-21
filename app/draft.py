@@ -2,7 +2,9 @@
 
 python -m app.draft "תיאור ההסכם"   בדיקה מהטרמינל
 """
+import difflib
 import json
+import re
 from typing import Literal
 
 from agno.agent import Agent
@@ -31,7 +33,10 @@ INSTRUCTIONS = [  # סדר הרשימה הוא סדר ההוראות. Agno מו�
    - אם חסרים פרטים מהותיים, החזר status="questions" עם עד 6 שאלות קצרות וממוקדות, לפי סדר חשיבות.
    - אל תשאל על פרטים שוליים, ואל תשאל שוב על משהו שהעובד כבר ענה עליו.""",
     """- כשיש מספיק פרטים, החזר status="agreement" עם מסמך מלא:
-   - מבנה: כותרת, פרטי הצדדים, מבוא (הואיל), סעיפים ממוספרים (1., 1.1, 1.2), ובלוק חתימות לכל הצדדים.
+   - מבנה ה-body: פרטי הצדדים, מבוא (הואיל), סעיפים ממוספרים (1., 1.1, 1.2), ובלוק חתימות לכל הצדדים.
+   - אל תחזור על הכותרת בתוך ה-body.
+   - פסקאות המבוא כתובות בלי מספור, ומתחילות ב'הואיל ו...' ו'והואיל ו...'.
+   - הסעיפים הממוספרים מתחילים מ-1. אחרי 'לפיכך'.
    - כל סעיף מתחיל בכותרת בשורה נפרדת.
    - עברית משפטית תקנית ועקבית. כל מונח מוגדר מוגדר פעם אחת, ואחר כך משתמשים בו בדיוק באותה צורה.
    - אמץ את הנוסח, סדר הסעיפים והמינוח של המסמכים הדומים מהמאגר, כשהם מתאימים לבקשה.""",
@@ -94,7 +99,37 @@ def draft(messages):
         raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
     if not isinstance(result.content, Draft):  # סירוב או JSON לא תקין מגיעים כטקסט ולא כ-Draft
         raise RuntimeError(f"המודל לא החזיר מסמך תקין: {str(result.content)[:300]}")
-    return result.content.model_dump() | {"sources": sources}
+    out = result.content.model_dump()
+    out["title"], out["body"] = clean_output(out["title"], out["body"])
+    return out | {"sources": sources}
+
+
+def _plain(line):
+    """שורה בלי Markdown: בלי * בכלל, בלי __הדגשה__, בלי # או תבליט בתחילת השורה."""
+    line = line.replace("*", "")
+    line = re.sub(r"(?<![_\[])__([^_\[\]\s](?:[^_\[\]]*?[^_\[\]\s])?)__(?![_\]])", r"\1", line)  # לא נוגע ב-[___]
+    return re.sub(r"^\s*(#+|[-•])\s+", "", line).strip()
+
+
+def _norm(s):
+    return " ".join(re.sub(r"[^\w\s]", " ", s).split())
+
+
+def clean_output(title, body):
+    """מנקה את פלט המודל לפני שהוא מגיע לממשק ול-Word, גם כשהמודל לא ציית להוראות."""
+    title = _plain(title)
+    lines = [_plain(l) for l in body.splitlines()]
+    first = next((i for i, l in enumerate(lines) if l), None)
+    if first is not None:  # כותרת שחוזרת בראש ה-body, גם כגרסה מקוצרת שלה ("כתב התחייבות")
+        a, b = _norm(lines[first]), _norm(title)
+        if a and (a == b or b.startswith(a) or difflib.SequenceMatcher(None, a, b).ratio() > 0.85):
+            del lines[first]
+    # מבוא ממוספר ("1. המשרד...") בין "הואיל" ל"לפיכך": מסירים את המספור, כדי שהסעיפים יתחילו מ-1 אחרי "לפיכך"
+    start = next((i for i, l in enumerate(lines) if re.match(r"ו?הואיל", l)), None)
+    end = next((i for i, l in enumerate(lines) if l.startswith("לפיכך")), None)
+    if start is not None and end is not None and start < end:
+        lines[start:end] = [re.sub(r"^\d+\.\s+", "", l) for l in lines[start:end]]
+    return title, re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
 if __name__ == "__main__":

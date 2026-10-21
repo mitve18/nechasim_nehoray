@@ -120,6 +120,7 @@ python sync.py --list
 ```bash
 python sync.py                          # סנכרון: מאנדקס רק קבצים חדשים או ששונו
 python -m app.draft "תיאור ההסכם"       # בדיקת מנוע הניסוח מהטרמינל
+python tests/test_export.py             # בדיקת ניקוי הפלט וייצוא ל-Word, בלי סודות
 uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1:8000
 ```
 
