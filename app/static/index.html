@@ -60,8 +60,8 @@
         gap: 14px;
       }
       .logo {
-        width: 54px;
-        height: 54px;
+        width: 76px;
+        height: 76px;
         border-radius: 50%;
         flex: none;
         box-shadow:
@@ -78,14 +78,6 @@
         margin: 0;
         font-size: 14px;
         color: #cfe0ee;
-      }
-      .top p.status {
-        margin-top: 2px;
-        font-size: 12px;
-        color: #9fbdd6;
-      }
-      .status a {
-        color: inherit;
       }
       .banner {
         background: var(--warn-bg);
@@ -125,6 +117,10 @@
         }
         .top {
           padding: 14px 16px;
+        }
+        .logo {
+          width: 60px;
+          height: 60px;
         }
       }
       section {
@@ -632,7 +628,26 @@
         border-radius: 0;
         background: none;
         padding: 0 10px;
-        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+      #fd-pin {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #fd-pin .icon,
+      .focus .icon {
+        color: var(--brand);
       }
       .pin:hover:not(:disabled) {
         background: var(--brand-soft);
@@ -667,33 +682,14 @@
         margin: 8px 0 0;
       }
 
-      /* דוח "סטטוס מאגר ההסכמים" בצ'אט */
-      .tools {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 8px;
-      }
-      .chip {
-        font-size: 13px;
-        padding: 4px 12px;
-        border-radius: 999px;
-        background: var(--brand-soft);
-        border-color: var(--brand-line);
-        color: var(--brand-dark);
-      }
-      .chip:hover:not(:disabled) {
-        background: #e2eef8;
-      }
-      .msg.status-card {
-        align-self: stretch;
-        max-width: 100%;
-        white-space: normal;
+      /* "סטטוס מאגר ההסכמים": טבלה קבועה בראש הפאנל הצדדי */
+      .status-card {
         background: var(--card);
         border: 1px solid var(--line);
         border-inline-start: 4px solid var(--brand);
         border-radius: 12px;
-        padding: 14px 16px 10px;
-        box-shadow: var(--shadow);
+        padding: 12px 14px 10px;
+        margin-bottom: 16px;
       }
       .sc-title {
         display: flex;
@@ -881,11 +877,10 @@
   <body>
     <header>
       <div class="top">
-        <img class="logo" src="/static/logo.png" alt="" width="54" height="54" />
+        <img class="logo" src="/static/logo.png" alt="" width="76" height="76" />
         <div>
           <h1>מנסח ההסכמים</h1>
           <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
-          <p class="status" id="status" hidden></p>
         </div>
         <div class="actions">
           <button type="button" id="sync-btn" hidden>⟳ סנכרון</button>
@@ -899,6 +894,7 @@
     </div>
     <main>
       <section id="files-panel" aria-labelledby="files-h">
+        <div class="status-card" id="status-box" hidden></div>
         <details id="files-box" open>
           <summary>
             <h2 id="files-h">קבצים במאגר</h2>
@@ -937,11 +933,8 @@
         </p>
         <div id="chat" aria-live="polite"></div>
         <form id="form">
-          <div class="tools">
-            <button type="button" class="chip" id="status-btn">◉ סטטוס המאגר</button>
-          </div>
           <div class="focus" id="focus-bar" hidden>
-            📎 מבוסס על: <b id="focus-name"></b>
+            מבוסס על: <b id="focus-name"></b>
             <button type="button" id="focus-clear" aria-label="הסרת מסמך הבסיס">
               ✕
             </button>
@@ -1005,7 +998,7 @@
       <p class="dialog-error" id="fd-error" hidden></p>
       <div class="row">
         <a id="fd-drive" target="_blank" rel="noopener">פתח ב-Drive ↗</a>
-        <button type="button" id="fd-pin">📎 נסח על בסיס המסמך הזה</button>
+        <button type="button" id="fd-pin">נסח על בסיס המסמך הזה</button>
         <button type="button" id="fd-retry" hidden>נסה לאנדקס שוב</button>
         <button type="button" id="fd-close">סגירה</button>
       </div>
@@ -1033,6 +1026,25 @@
     </dialog>
 
     <div id="toast" role="status" aria-live="polite" hidden></div>
+
+    <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
+    <template id="icon-draft">
+      <svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path
+          d="M10 7v9a2 2 0 0 0 4 0V5a3 3 0 0 0-6 0v13a4 4 0 0 0 8 0V8"
+          transform="rotate(45 12 12)"
+        />
+      </svg>
+    </template>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -1225,24 +1237,11 @@
         $("input").focus();
       });
 
-      // שורת הסטטוס של המאגר. אם המסד לא זמין, השורה פשוט לא מוצגת
+      // טבלת הסטטוס בפאנל הצדדי. אם המסד לא זמין, היא פשוט לא מוצגת
       function loadStatus() {
         fetch("/api/status")
           .then((res) => (res.ok ? res.json() : null))
-          .then((s) => {
-            if (!s || !s.updated_at) return;
-            const line = $("status");
-            line.textContent = `המאגר עודכן לאחרונה: ${s.updated_at} · ${s.documents} מסמכים במאגר`;
-            if (s.failed)
-              line.append(
-                " · ",
-                Object.assign(document.createElement("a"), {
-                  href: "/admin/sync",
-                  textContent: "⚠️ בסנכרון האחרון היו שגיאות",
-                }),
-              );
-            line.hidden = false;
-          })
+          .then((s) => s && renderStatus(s))
           .catch(() => {});
       }
 
@@ -1319,6 +1318,9 @@
           textContent: STATUS[status] || status,
         });
       // תווית סטטוס, גודל ותאריך. כל אחד ב-span משלו, אחרת flex מחבר אותם לטקסט אחד
+      const draftIcon = () => $("icon-draft").content.firstElementChild.cloneNode(true);
+      $("fd-pin").prepend(draftIcon());
+      $("focus-bar").prepend(draftIcon());
       const fileMeta = (f) => [
         tag(f.status),
         el("span", { textContent: fmtSize(f.size_bytes) }),
@@ -1353,14 +1355,18 @@
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
               f.status === "indexed" &&
-                el("button", {
-                  type: "button",
-                  className: "pin",
-                  title: "נסח על בסיס המסמך הזה",
-                  ariaLabel: "נסח על בסיס " + f.name,
-                  textContent: "📎",
-                  onclick: () => setFocus(f),
-                }),
+                el(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pin",
+                    title: "נסח על בסיס המסמך הזה",
+                    ariaLabel: "נסח על בסיס " + f.name,
+                    onclick: () => setFocus(f),
+                  },
+                  draftIcon(),
+                  "נסח",
+                ),
             ),
           ),
         );
@@ -1447,15 +1453,9 @@
         URL.revokeObjectURL(a.href);
         return "הורד ✓";
       }
-      async function statusReport() {
-        let s;
-        try {
-          s = await api("/api/status");
-        } catch (e) {
-          add("error", "הדוח נכשל: " + e.message);
-          return;
-        }
-        const titleId = "sc-" + Date.now();
+      // טבלת "סטטוס מאגר ההסכמים": נשלפת מ-SQL בשרת, בלי מודל, ומתעדכנת יחד עם שורת הסטטוס
+      function renderStatus(s) {
+        if (!s.rows) return;
         const table = el(
           "table",
           { className: "sc-table" },
@@ -1478,14 +1478,11 @@
             ),
           ),
         );
-        table.setAttribute("aria-labelledby", titleId);
-        $("chat").append(
+        table.setAttribute("aria-labelledby", "sc-title");
+        $("status-box").replaceChildren(
+          el("h3", { className: "sc-title", id: "sc-title", textContent: s.title }),
+          table,
           el(
-            "div",
-            { className: "msg status-card" },
-            el("h3", { className: "sc-title", id: titleId, textContent: s.title }),
-            table,
-            el(
               "div",
               { className: "sc-foot" },
               el("span", { className: "sc-cost", textContent: "0 טוקנים · ישירות ממסד הנתונים" }),
@@ -1503,11 +1500,9 @@
                 feedbackButton("Word", "הורדת הדוח כקובץ Word", () => downloadStatusDocx(s.title)),
               ),
             ),
-          ),
         );
-        $("chat").scrollTop = $("chat").scrollHeight;
+        $("status-box").hidden = false;
       }
-      $("status-btn").onclick = statusReport;
 
       // כניסה: רק להעלאה ולסנכרון. בלי APP_PASSWORD בשרת, הכפתור לא מוצג
       async function loadMe() {
