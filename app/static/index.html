@@ -1,272 +1,718 @@
 <!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>מנסח ההסכמים</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #f5f3ee; --card: #fff; --line: #e3ded3; --text: #1b2333; --muted: #667085;
-    --navy: #16233f; --navy-2: #22345c; --gold: #b0894f; --gold-soft: #f6efe2;
-    --warn-bg: #fff6e6; --warn: #8a4b08; --err-bg: #fdecee; --err: #9b1c2c;
-    --radius: 14px; --shadow: 0 1px 2px rgba(22,35,63,.06), 0 8px 24px rgba(22,35,63,.06);
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Heebo", system-ui, "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.55; }
-  header { background: linear-gradient(135deg, var(--navy), var(--navy-2)); color: #fff; }
-  .top { max-width: 1280px; margin: 0 auto; padding: 18px 20px; display: flex; align-items: center; gap: 14px; }
-  .logo { width: 42px; height: 42px; border-radius: 10px; background: var(--gold); display: grid; place-items: center; flex: none; }
-  .top h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.2px; }
-  .top p { margin: 0; font-size: 14px; color: #c8d0e0; }
-  .banner { background: var(--warn-bg); color: var(--warn); padding: 9px 16px; text-align: center; font-size: 14px; font-weight: 500; border-bottom: 1px solid #f0d9a8; position: sticky; top: 0; z-index: 5; }
-  main { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; gap: 20px; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; gap: 12px; } .top { padding: 14px 16px; } }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column; min-width: 0; position: relative; }
-  @media (min-width: 901px) { #chat-panel { position: sticky; top: 56px; } }
-  h2 { font-size: 18px; font-weight: 700; margin: 0 0 4px; color: var(--navy); }
-  .hint { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
-  label.hint { display: block; margin: 0 0 6px; font-weight: 500; }
-  #chat { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; min-height: 200px; max-height: 52vh; margin-bottom: 14px; padding: 4px 2px; }
-  .msg { padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; max-width: 92%; font-size: 15px; }
-  .user { background: var(--navy); color: #fff; align-self: flex-start; border-bottom-right-radius: 4px; }
-  .assistant { background: #f1efe9; align-self: flex-end; border-bottom-left-radius: 4px; }
-  .error { background: var(--err-bg); color: var(--err); align-self: stretch; }
-  .typing { display: flex; align-items: center; gap: 10px; color: var(--muted); }
-  .dots span { display: inline-block; width: 7px; height: 7px; margin: 0 2px; border-radius: 50%; background: var(--gold); animation: bounce 1.2s infinite; }
-  .dots span:nth-child(2) { animation-delay: .15s; } .dots span:nth-child(3) { animation-delay: .3s; }
-  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-5px); opacity: 1; } }
-  textarea, input[type=text] { width: 100%; font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; background: #fff; direction: rtl; transition: border-color .15s, box-shadow .15s; }
-  textarea:focus, input[type=text]:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(176,137,79,.18); }
-  textarea { resize: vertical; }
-  input[type=text] { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
-  #body { min-height: 60vh; line-height: 1.8; font-size: 15px; }
-  .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  button { font: inherit; font-weight: 500; padding: 9px 18px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--text); cursor: pointer; transition: background .15s, transform .05s; }
-  button:hover:not(:disabled) { background: #f7f5f0; }
-  button:active:not(:disabled) { transform: translateY(1px); }
-  button.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
-  button.primary:hover:not(:disabled) { background: var(--navy-2); }
-  button:disabled { opacity: .55; cursor: default; }
-  button:focus-visible, a:focus-visible { outline: 3px solid rgba(176,137,79,.5); outline-offset: 2px; }
-  .kbd { color: var(--muted); font-size: 13px; }
-  [hidden] { display: none !important; }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>מנסח ההסכמים</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f5f3ee;
+        --card: #fff;
+        --line: #e3ded3;
+        --text: #1b2333;
+        --muted: #667085;
+        --navy: #16233f;
+        --navy-2: #22345c;
+        --gold: #b0894f;
+        --gold-soft: #f6efe2;
+        --warn-bg: #fff6e6;
+        --warn: #8a4b08;
+        --err-bg: #fdecee;
+        --err: #9b1c2c;
+        --radius: 14px;
+        --shadow:
+          0 1px 2px rgba(22, 35, 63, 0.06), 0 8px 24px rgba(22, 35, 63, 0.06);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Heebo", system-ui, "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      header {
+        background: linear-gradient(135deg, var(--navy), var(--navy-2));
+        color: #fff;
+      }
+      .top {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background: var(--gold);
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .top h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.2px;
+      }
+      .top p {
+        margin: 0;
+        font-size: 14px;
+        color: #c8d0e0;
+      }
+      .banner {
+        background: var(--warn-bg);
+        color: var(--warn);
+        padding: 9px 16px;
+        text-align: center;
+        font-size: 14px;
+        font-weight: 500;
+        border-bottom: 1px solid #f0d9a8;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 20px;
+        display: grid;
+        gap: 20px;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr;
+          padding: 12px;
+          gap: 12px;
+        }
+        .top {
+          padding: 14px 16px;
+        }
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        position: relative;
+      }
+      @media (min-width: 901px) {
+        #chat-panel {
+          position: sticky;
+          top: 56px;
+        }
+      }
+      h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        color: var(--navy);
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 14px;
+        margin: 0 0 14px;
+      }
+      label.hint {
+        display: block;
+        margin: 0 0 6px;
+        font-weight: 500;
+      }
+      #chat {
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 200px;
+        max-height: 52vh;
+        margin-bottom: 14px;
+        padding: 4px 2px;
+      }
+      .msg {
+        padding: 10px 14px;
+        border-radius: 14px;
+        white-space: pre-wrap;
+        max-width: 92%;
+        font-size: 15px;
+      }
+      .user {
+        background: var(--navy);
+        color: #fff;
+        align-self: flex-start;
+        border-bottom-right-radius: 4px;
+      }
+      .assistant {
+        background: #f1efe9;
+        align-self: flex-end;
+        border-bottom-left-radius: 4px;
+      }
+      .error {
+        background: var(--err-bg);
+        color: var(--err);
+        align-self: stretch;
+      }
+      .typing {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+      }
+      .dots span {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        margin: 0 2px;
+        border-radius: 50%;
+        background: var(--gold);
+        animation: bounce 1.2s infinite;
+      }
+      .dots span:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .dots span:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        40% {
+          transform: translateY(-5px);
+          opacity: 1;
+        }
+      }
+      textarea,
+      input[type="text"] {
+        width: 100%;
+        font: inherit;
+        color: inherit;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 11px 13px;
+        background: #fff;
+        direction: rtl;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      textarea:focus,
+      input[type="text"]:focus {
+        outline: none;
+        border-color: var(--gold);
+        box-shadow: 0 0 0 3px rgba(176, 137, 79, 0.18);
+      }
+      textarea {
+        resize: vertical;
+      }
+      input[type="text"] {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+      #body {
+        min-height: 60vh;
+        line-height: 1.8;
+        font-size: 15px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      button {
+        font: inherit;
+        font-weight: 500;
+        padding: 9px 18px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          transform 0.05s;
+      }
+      button:hover:not(:disabled) {
+        background: #f7f5f0;
+      }
+      button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      button.primary {
+        background: var(--navy);
+        color: #fff;
+        border-color: var(--navy);
+      }
+      button.primary:hover:not(:disabled) {
+        background: var(--navy-2);
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      button:focus-visible,
+      a:focus-visible {
+        outline: 3px solid rgba(176, 137, 79, 0.5);
+        outline-offset: 2px;
+      }
+      .kbd {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      [hidden] {
+        display: none !important;
+      }
 
-  /* מקורות מהמאגר */
-  .sources { background: var(--gold-soft); border: 1px solid #e6d6b8; border-inline-start: 5px solid var(--gold); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
-  .sources-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 16px; font-weight: 700; color: var(--navy); }
-  .badge { background: var(--gold); color: #fff; border-radius: 999px; font-size: 13px; padding: 1px 10px; }
-  #sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  #sources li { background: #fff; border: 1px solid #ecdfc6; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-  #sources .name { font-weight: 700; color: var(--navy); text-decoration: none; display: flex; gap: 6px; align-items: flex-start; }
-  #sources a.name:hover { text-decoration: underline; }
-  #sources .name::before { content: "📄"; flex: none; }
-  #sources small { color: var(--muted); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-  #sources .open { font-size: 13px; color: var(--gold); font-weight: 500; text-decoration: none; margin-top: auto; }
-  #sources .none { color: var(--muted); grid-column: 1 / -1; }
+      /* מקורות מהמאגר */
+      .sources {
+        background: var(--gold-soft);
+        border: 1px solid #e6d6b8;
+        border-inline-start: 5px solid var(--gold);
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+      }
+      .sources-h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 10px;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--navy);
+      }
+      .badge {
+        background: var(--gold);
+        color: #fff;
+        border-radius: 999px;
+        font-size: 13px;
+        padding: 1px 10px;
+      }
+      #sources {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      }
+      #sources li {
+        background: #fff;
+        border: 1px solid #ecdfc6;
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      #sources .name {
+        font-weight: 700;
+        color: var(--navy);
+        text-decoration: none;
+        display: flex;
+        gap: 6px;
+        align-items: flex-start;
+      }
+      #sources a.name:hover {
+        text-decoration: underline;
+      }
+      #sources .name::before {
+        content: "📄";
+        flex: none;
+      }
+      #sources small {
+        color: var(--muted);
+        font-size: 13px;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      #sources .open {
+        font-size: 13px;
+        color: var(--gold);
+        font-weight: 500;
+        text-decoration: none;
+        margin-top: auto;
+      }
+      #sources .none {
+        color: var(--muted);
+        grid-column: 1 / -1;
+      }
 
-  .empty { color: var(--muted); text-align: center; margin: 48px auto; max-width: 340px; }
-  .empty .ico { font-size: 40px; display: block; margin-bottom: 8px; opacity: .7; }
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        margin: 48px auto;
+        max-width: 340px;
+      }
+      .empty .ico {
+        font-size: 40px;
+        display: block;
+        margin-bottom: 8px;
+        opacity: 0.7;
+      }
 
-  /* מצב טעינה */
-  .loading { position: absolute; inset: 0; background: rgba(255,255,255,.88); backdrop-filter: blur(2px); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 120px; gap: 14px; z-index: 2; text-align: center; padding-inline: 20px; }
-  .spinner { width: 46px; height: 46px; border: 4px solid #e9e2d4; border-top-color: var(--gold); border-radius: 50%; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading strong { font-size: 18px; color: var(--navy); }
-  .loading .sub { color: var(--muted); font-size: 14px; }
-  .bar { width: min(320px, 80%); height: 6px; background: #eee6d6; border-radius: 99px; overflow: hidden; }
-  .bar i { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 99px; transition: width 1s linear; }
-  @media (prefers-reduced-motion: reduce) { .spinner, .dots span { animation: none; } .bar i { transition: none; } }
-</style>
-</head>
-<body>
-<header>
-  <div class="top">
-    <div class="logo" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 21h14M7 7h10M4 14l3-7 3 7a3 3 0 0 1-6 0zM14 14l3-7 3 7a3 3 0 0 1-6 0z"/></svg>
-    </div>
-    <div>
-      <h1>מנסח ההסכמים</h1>
-      <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
-    </div>
-  </div>
-</header>
-<div class="banner" role="note">⚠️ ההסכמים נוצרים על ידי בינה מלאכותית ומהווים טיוטה בלבד. יש לבדוק כל הסכם לפני שימוש.</div>
-<main>
-  <section id="chat-panel" aria-labelledby="chat-h">
-    <h2 id="chat-h">שיחה</h2>
-    <p class="hint">תאר את ההסכם שאתה צריך: סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם יחסרו פרטים מהותיים, המערכת תשאל.</p>
-    <div id="chat" aria-live="polite"></div>
-    <form id="form">
-      <label for="input" class="hint">ההודעה שלך</label>
-      <textarea id="input" rows="4" required placeholder="לדוגמה: כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים…"></textarea>
-      <div class="row">
-        <button class="primary" id="send">שליחה</button>
-        <button type="button" id="reset">שיחה חדשה</button>
-        <span class="kbd">Ctrl+Enter לשליחה</span>
+      /* מצב טעינה */
+      .loading {
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(2px);
+        border-radius: var(--radius);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding-top: 120px;
+        gap: 14px;
+        z-index: 2;
+        text-align: center;
+        padding-inline: 20px;
+      }
+      .spinner {
+        width: 46px;
+        height: 46px;
+        border: 4px solid #e9e2d4;
+        border-top-color: var(--gold);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .loading strong {
+        font-size: 18px;
+        color: var(--navy);
+      }
+      .loading .sub {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .bar {
+        width: min(320px, 80%);
+        height: 6px;
+        background: #eee6d6;
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: var(--gold);
+        border-radius: 99px;
+        transition: width 1s linear;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner,
+        .dots span {
+          animation: none;
+        }
+        .bar i {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="top">
+        <div class="logo" aria-hidden="true">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M12 3v18M5 21h14M7 7h10M4 14l3-7 3 7a3 3 0 0 1-6 0zM14 14l3-7 3 7a3 3 0 0 1-6 0z"
+            />
+          </svg>
+        </div>
+        <div>
+          <h1>מנסח ההסכמים</h1>
+          <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
+        </div>
       </div>
-    </form>
-  </section>
-
-  <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
-    <h2 id="doc-h" style="margin-bottom:14px">ההסכם</h2>
-    <div id="doc" hidden>
-      <div class="sources" aria-labelledby="sources-h">
-        <p class="sources-h" id="sources-h">📚 מקורות מהמאגר <span class="badge" id="sources-n">0</span></p>
-        <ul id="sources"></ul>
-      </div>
-      <label for="title" class="hint">כותרת</label>
-      <input type="text" id="title">
-      <label for="body" class="hint">נוסח (ניתן לערוך)</label>
-      <textarea id="body"></textarea>
-      <div class="row">
-        <button type="button" class="primary" id="download">⬇ הורדה כ-Word</button>
-        <button type="button" id="copy">העתקה</button>
-      </div>
+    </header>
+    <div class="banner" role="note">
+      ⚠️ ההסכמים נוצרים על ידי בינה מלאכותית ומהווים טיוטה בלבד. יש לבדוק כל
+      הסכם לפני שימוש.
     </div>
-    <p class="empty" id="placeholder"><span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן לאחר הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.</p>
-    <div class="loading" id="loading" hidden role="status">
-      <div class="spinner" aria-hidden="true"></div>
-      <strong>מנסח את ההסכם…</strong>
-      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-      <span class="sub"><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות. אפשר להשאיר את החלון פתוח.</span>
-    </div>
-  </section>
-</main>
+    <main>
+      <section id="chat-panel" aria-labelledby="chat-h">
+        <h2 id="chat-h">שיחה</h2>
+        <p class="hint">
+          תאר את ההסכם שאתה צריך: סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם
+          יחסרו פרטים מהותיים, המערכת תשאל.
+        </p>
+        <div id="chat" aria-live="polite"></div>
+        <form id="form">
+          <label for="input" class="hint">ההודעה שלך</label>
+          <textarea
+            id="input"
+            rows="4"
+            required
+            placeholder="לדוגמה: כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים…"
+          ></textarea>
+          <div class="row">
+            <button class="primary" id="send">שליחה</button>
+            <button type="button" id="reset">שיחה חדשה</button>
+            <span class="kbd">Ctrl+Enter לשליחה</span>
+          </div>
+        </form>
+      </section>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const EXPECTED_SECONDS = 120;
-let messages = [];
-let timer = null;
+      <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
+        <h2 id="doc-h" style="margin-bottom: 14px">ההסכם</h2>
+        <div id="doc" hidden>
+          <div class="sources" aria-labelledby="sources-h">
+            <p class="sources-h" id="sources-h">
+              📚 מקורות מהמאגר <span class="badge" id="sources-n">0</span>
+            </p>
+            <ul id="sources"></ul>
+          </div>
+          <label for="title" class="hint">כותרת</label>
+          <input type="text" id="title" />
+          <label for="body" class="hint">נוסח (ניתן לערוך)</label>
+          <textarea id="body"></textarea>
+          <div class="row">
+            <button type="button" class="primary" id="download">
+              ⬇ הורדה כ-Word
+            </button>
+            <button type="button" id="copy">העתקה</button>
+          </div>
+        </div>
+        <p class="empty" id="placeholder">
+          <span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן לאחר
+          הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.
+        </p>
+        <div class="loading" id="loading" hidden role="status">
+          <div class="spinner" aria-hidden="true"></div>
+          <strong>מנסח את ההסכם…</strong>
+          <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+          <span class="sub"
+            ><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות. אפשר
+            להשאיר את החלון פתוח.</span
+          >
+        </div>
+      </section>
+    </main>
 
-function add(role, text) {
-  const div = document.createElement("div");
-  div.className = "msg " + role;
-  div.textContent = text;
-  $("chat").appendChild(div);
-  $("chat").scrollTop = $("chat").scrollHeight;
-  return div;
-}
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const EXPECTED_SECONDS = 120;
+      let messages = [];
+      let timer = null;
 
-function busy(on) {
-  for (const id of ["send", "reset", "input", "download", "copy"]) $(id).disabled = on;
-  $("loading").hidden = !on;
-  $("doc-panel").setAttribute("aria-busy", on);
-  clearInterval(timer);
-  $("typing")?.remove();
-  if (!on) return;
-  const t = add("assistant typing", "");
-  t.id = "typing";
-  t.innerHTML = '<span class="dots"><span></span><span></span><span></span></span><span>מנסח… <b id="elapsed2">0:00</b></span>';
-  const start = Date.now();
-  const tick = () => {
-    const s = Math.floor((Date.now() - start) / 1000);
-    const txt = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-    $("elapsed").textContent = txt;
-    if ($("elapsed2")) $("elapsed2").textContent = txt;
-    $("bar").style.width = Math.min(95, (s / EXPECTED_SECONDS) * 95) + "%";  // לא מגיע ל-100 עד שהתשובה מגיעה
-  };
-  tick();
-  timer = setInterval(tick, 1000);
-}
+      function add(role, text) {
+        const div = document.createElement("div");
+        div.className = "msg " + role;
+        div.textContent = text;
+        $("chat").appendChild(div);
+        $("chat").scrollTop = $("chat").scrollHeight;
+        return div;
+      }
 
-$("form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const text = $("input").value.trim();
-  if (!text) return;
-  // אם העובד ערך את ההסכם ידנית, המודל יקבל את הגרסה הערוכה
-  if (!$("doc").hidden && messages.length && messages.at(-1).role === "assistant" && messages.at(-1).isDoc) {
-    messages.at(-1).content = $("title").value + "\n\n" + $("body").value;
-  }
-  messages.push({ role: "user", content: text });
-  add("user", text);
-  $("input").value = "";
-  busy(true);
-  try {
-    const res = await fetch("/api/draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })) }),
-    });
-    if (res.status === 401) { location.href = "/login"; return; }
-    if (!res.ok) throw new Error("שגיאת שרת (" + res.status + ")");
-    const r = await res.json();
-    busy(false);
-    if (r.status === "questions") {
-      const q = "כדי לנסח את ההסכם חסרים לי כמה פרטים:\n" + r.questions.map((x, i) => `${i + 1}. ${x}`).join("\n");
-      messages.push({ role: "assistant", content: q });
-      add("assistant", q);
-      $("input").focus();
-    } else {
-      messages.push({ role: "assistant", content: r.title + "\n\n" + r.body, isDoc: true });
-      add("assistant", "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.");
-      showDoc(r);
-    }
-  } catch (err) {
-    busy(false);
-    messages.pop();
-    add("error", "הניסוח נכשל: " + err.message + ". נסה שוב.");
-  }
-});
+      function busy(on) {
+        for (const id of ["send", "reset", "input", "download", "copy"])
+          $(id).disabled = on;
+        $("loading").hidden = !on;
+        $("doc-panel").setAttribute("aria-busy", on);
+        clearInterval(timer);
+        $("typing")?.remove();
+        if (!on) return;
+        const t = add("assistant typing", "");
+        t.id = "typing";
+        t.innerHTML =
+          '<span class="dots"><span></span><span></span><span></span></span><span>מנסח… <b id="elapsed2">0:00</b></span>';
+        const start = Date.now();
+        const tick = () => {
+          const s = Math.floor((Date.now() - start) / 1000);
+          const txt =
+            Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+          $("elapsed").textContent = txt;
+          if ($("elapsed2")) $("elapsed2").textContent = txt;
+          $("bar").style.width =
+            Math.min(95, (s / EXPECTED_SECONDS) * 95) + "%"; // לא מגיע ל-100 עד שהתשובה מגיעה
+        };
+        tick();
+        timer = setInterval(tick, 1000);
+      }
 
-function showDoc(r) {
-  $("doc").hidden = false;
-  $("placeholder").hidden = true;
-  $("title").value = r.title;
-  $("body").value = r.body;
-  $("sources-n").textContent = r.sources.length;
-  $("sources").replaceChildren(...(r.sources.length ? r.sources.map((s) => {
-    const li = document.createElement("li");
-    const a = document.createElement(s.url ? "a" : "span");
-    a.className = "name";
-    a.textContent = s.name;
-    const small = document.createElement("small");
-    small.textContent = s.summary;
-    li.append(a, small);
-    if (s.url) {
-      a.href = s.url; a.target = "_blank"; a.rel = "noopener";
-      const open = Object.assign(document.createElement("a"), { className: "open", href: s.url, target: "_blank", rel: "noopener", textContent: "פתיחה ב-Drive ↗" });
-      li.append(open);
-    }
-    return li;
-  }) : [Object.assign(document.createElement("li"), { className: "none", textContent: "לא נמצאו הסכמים דומים במאגר. ההסכם נוסח ללא דוגמאות." })]));
-  if (innerWidth <= 900) $("doc-panel").scrollIntoView({ behavior: "smooth" });
-}
+      $("form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = $("input").value.trim();
+        if (!text) return;
+        // אם העובד ערך את ההסכם ידנית, המודל יקבל את הגרסה הערוכה
+        if (
+          !$("doc").hidden &&
+          messages.length &&
+          messages.at(-1).role === "assistant" &&
+          messages.at(-1).isDoc
+        ) {
+          messages.at(-1).content = $("title").value + "\n\n" + $("body").value;
+        }
+        messages.push({ role: "user", content: text });
+        add("user", text);
+        $("input").value = "";
+        busy(true);
+        try {
+          const res = await fetch("/api/draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: messages.map(({ role, content }) => ({
+                role,
+                content,
+              })),
+            }),
+          });
+          if (res.status === 401) {
+            location.href = "/login";
+            return;
+          }
+          if (!res.ok) throw new Error("שגיאת שרת (" + res.status + ")");
+          const r = await res.json();
+          busy(false);
+          if (r.status === "questions") {
+            const q =
+              "כדי לנסח את ההסכם חסרים לי כמה פרטים:\n" +
+              r.questions.map((x, i) => `${i + 1}. ${x}`).join("\n");
+            messages.push({ role: "assistant", content: q });
+            add("assistant", q);
+            $("input").focus();
+          } else {
+            messages.push({
+              role: "assistant",
+              content: r.title + "\n\n" + r.body,
+              isDoc: true,
+            });
+            add(
+              "assistant",
+              "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.",
+            );
+            showDoc(r);
+          }
+        } catch (err) {
+          busy(false);
+          messages.pop();
+          add("error", "הניסוח נכשל: " + err.message + ". נסה שוב.");
+        }
+      });
 
-$("copy").addEventListener("click", async () => {
-  await navigator.clipboard.writeText($("title").value + "\n\n" + $("body").value);
-  $("copy").textContent = "הועתק ✓";
-  setTimeout(() => ($("copy").textContent = "העתקה"), 1500);
-});
+      function showDoc(r) {
+        $("doc").hidden = false;
+        $("placeholder").hidden = true;
+        $("title").value = r.title;
+        $("body").value = r.body;
+        $("sources-n").textContent = r.sources.length;
+        $("sources").replaceChildren(
+          ...(r.sources.length
+            ? r.sources.map((s) => {
+                const li = document.createElement("li");
+                const a = document.createElement(s.url ? "a" : "span");
+                a.className = "name";
+                a.textContent = s.name;
+                const small = document.createElement("small");
+                small.textContent = s.summary;
+                li.append(a, small);
+                if (s.url) {
+                  a.href = s.url;
+                  a.target = "_blank";
+                  a.rel = "noopener";
+                  const open = Object.assign(document.createElement("a"), {
+                    className: "open",
+                    href: s.url,
+                    target: "_blank",
+                    rel: "noopener",
+                    textContent: "פתיחה ב-Drive ↗",
+                  });
+                  li.append(open);
+                }
+                return li;
+              })
+            : [
+                Object.assign(document.createElement("li"), {
+                  className: "none",
+                  textContent:
+                    "לא נמצאו הסכמים דומים במאגר. ההסכם נוסח ללא דוגמאות.",
+                }),
+              ]),
+        );
+        if (innerWidth <= 900)
+          $("doc-panel").scrollIntoView({ behavior: "smooth" });
+      }
 
-$("download").addEventListener("click", async () => {
-  const res = await fetch("/api/docx", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: $("title").value, body: $("body").value }),
-  });
-  if (!res.ok) { add("error", "ההורדה נכשלה"); return; }
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(await res.blob());
-  a.download = ($("title").value.trim() || "הסכם") + ".docx";
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
+      $("copy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(
+          $("title").value + "\n\n" + $("body").value,
+        );
+        $("copy").textContent = "הועתק ✓";
+        setTimeout(() => ($("copy").textContent = "העתקה"), 1500);
+      });
 
-$("reset").addEventListener("click", () => {
-  messages = [];
-  $("chat").replaceChildren();
-  $("doc").hidden = true;
-  $("placeholder").hidden = false;
-  $("input").focus();
-});
+      $("download").addEventListener("click", async () => {
+        const res = await fetch("/api/docx", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: $("title").value,
+            body: $("body").value,
+          }),
+        });
+        if (!res.ok) {
+          add("error", "ההורדה נכשלה");
+          return;
+        }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(await res.blob());
+        a.download = ($("title").value.trim() || "הסכם") + ".docx";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
 
-$("input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("form").requestSubmit();
-});
-</script>
-</body>
+      $("reset").addEventListener("click", () => {
+        messages = [];
+        $("chat").replaceChildren();
+        $("doc").hidden = true;
+        $("placeholder").hidden = false;
+        $("input").focus();
+      });
+
+      $("input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey))
+          $("form").requestSubmit();
+      });
+    </script>
+  </body>
 </html>
