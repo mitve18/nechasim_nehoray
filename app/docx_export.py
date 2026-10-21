@@ -99,7 +99,7 @@ def _border(p, *sides, sz="6", color="auto", space="4"):
         bdr.append(_el(f"w:{side}", val="single", sz=sz, space=space, color=color))
 
 
-def _setup(d):
+def _setup(d, ai_note=True):
     sec = d.sections[0]
     sec.page_width, sec.page_height = Cm(21), Cm(29.7)
     sec.top_margin = sec.bottom_margin = sec.left_margin = sec.right_margin = Cm(2.5)
@@ -115,9 +115,10 @@ def _setup(d):
     pf.line_spacing, pf.space_after, pf.alignment = 1.5, Pt(6), WD_ALIGN_PARAGRAPH.JUSTIFY
     _ppr_add(st.element.get_or_add_pPr(), OxmlElement("w:bidi"))
 
-    header = sec.header.paragraphs[0]
-    header.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(header, HEADER_NOTE, size=9, color=GRAY)
+    if ai_note:  # דוח נתונים הוא לא טיוטה, ולכן בלי הערת AI
+        header = sec.header.paragraphs[0]
+        header.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _run(header, HEADER_NOTE, size=9, color=GRAY)
 
     footer = sec.footer.paragraphs[0]
     footer.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -227,6 +228,29 @@ def build(title, body):
             _line(d, lines[i])
             i += 1
 
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def build_table(title, header, rows):
+    """דוח נתונים כטבלה מסודרת ב-RTL: אותו עיצוב עמוד, בלי הערת "טיוטת AI" (זה לא טיוטה)."""
+    d = docx.Document()
+    _setup(d, ai_note=False)
+    _border(_para(d, title, bold=True, size=16, align=WD_ALIGN_PARAGRAPH.CENTER, after=18), "bottom", space="6")
+    t = _table(d, len(rows) + 1, len(header))
+    t.style = d.styles["Table Grid"]
+    for i, values in enumerate([header, *rows]):
+        for j, value in enumerate(values):
+            cell = t.cell(i, j)
+            p = cell.paragraphs[0]
+            p.paragraph_format.space_after, p.paragraph_format.line_spacing = Pt(3), 1.15
+            r = _run(p, value, bold=i == 0)
+            if j > 0 and i > 0:
+                r.font.rtl = False  # מספרים ותאריכים משמאל לימין: "21/10/2026 07:58" ולא "07:58 21/10/2026"
+                r.font.name = "Arial"  # בגופן David הנקודתיים בשעה מוצגות עם רווח ("07: 58")
+            if i == 0:
+                cell._tc.get_or_add_tcPr().append(_el("w:shd", val="clear", color="auto", fill="EDF4FA"))
     buf = io.BytesIO()
     d.save(buf)
     return buf.getvalue()

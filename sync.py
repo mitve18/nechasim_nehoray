@@ -72,6 +72,8 @@ def sync():
         store.save_files(conn, rows)
         store.prune_files(conn, [f["id"] for f in files])
 
+        fill_pages(conn, svc, files)
+
         backfill(conn, stats)
         store.log_run(conn, stats)
     stats["in_db"] = len(known) - stats["removed"] + stats["added"]
@@ -82,6 +84,21 @@ def sync():
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(summary(stats))
     return stats
+
+
+def fill_pages(conn, svc, files):
+    """מספר עמודים למסמכים שאונדקסו לפני שהוא נשמר: הורדה וספירה בלבד, בלי OCR ובלי מודל.
+    קורה פעם אחת לכל מסמך. כישלון לא מכשיל את הריצה, והמסמך ייספר בריצה הבאה."""
+    missing = store.missing_pages(conn)
+    for f in files:
+        if f["id"] not in missing or not extract.countable(f["mimeType"]):
+            continue
+        try:
+            store.save_pages(conn, f["id"], extract.page_count(f, drive.download(svc, f)))
+        except Exception as e:
+            print(f"ספירת עמודים נכשלה  {f['name']}  ({e})")
+            continue
+        print(f"נספרו עמודים  {f['name']}")
 
 
 def backfill(conn, stats):

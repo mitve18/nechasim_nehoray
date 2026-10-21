@@ -56,6 +56,11 @@ def _image_frames(data):
     return [frame.convert("RGB") for frame in ImageSequence.Iterator(Image.open(io.BytesIO(data)))]
 
 
+def countable(mime):
+    """לסוגים האלה יש מספר עמודים. ל-DOCX ול-Google Docs אין עמודים עד שמציגים אותם."""
+    return mime == "application/pdf" or mime in IMAGE_TYPES
+
+
 def page_count(f, data):
     """מספר העמודים האמיתי, ל-PDF ולתמונות. לסוגים אחרים None."""
     if f["mimeType"] == "application/pdf":

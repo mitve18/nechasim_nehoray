@@ -118,11 +118,39 @@ def api_docx(req: DocxRequest):
     )
 
 
+STATUS_TITLE = "סטטוס מאגר ההסכמים"
+STATUS_HEADER = ["מדד", "ערך"]
+
+
+def status_text(rows):
+    """"העתקה": טקסט קריא, שורה לכל מדד."""
+    return "\n".join([STATUS_TITLE, *(f"{r['label']}: {r['value']}" for r in rows)])
+
+
+def status_tsv(rows):
+    """"העתקת טבלה": עמודות מופרדות בטאב, כך שהדבקה באקסל ממלאת תאים."""
+    return "\n".join("\t".join(cells) for cells in [STATUS_HEADER, *([r["label"], r["value"]] for r in rows)])
+
+
 @app.get("/api/status")
 def api_status():
-    """שורת הסטטוס בראש האתר. אם המסד לא זמין, הממשק פשוט לא מציג אותה."""
+    """שורת הסטטוס בראש האתר, ודוח "סטטוס מאגר ההסכמים" בצ'אט. מ-SQL בלבד, בלי מודל.
+    אם המסד לא זמין, הממשק פשוט לא מציג את שורת הסטטוס."""
     with store.connect() as conn:
-        return store.status(conn)
+        rows = store.status_rows(conn)
+        return store.status(conn) | {"title": STATUS_TITLE, "rows": rows, "text": status_text(rows),
+                                     "tsv": status_tsv(rows)}
+
+
+@app.get("/api/status/docx")
+def api_status_docx():
+    with store.connect() as conn:
+        rows = store.status_rows(conn)
+    return Response(
+        docx_export.build_table(STATUS_TITLE, STATUS_HEADER, [[r["label"], r["value"]] for r in rows]),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(STATUS_TITLE + '.docx')}"},
+    )
 
 
 @app.get("/api/files")

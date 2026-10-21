@@ -42,6 +42,8 @@ alter table sync_runs add column if not exists files jsonb;
 alter table agreements add column if not exists metadata jsonb;
 alter table agreements add column if not exists end_date date;
 alter table agreements add column if not exists metadata_version int;
+-- מספר העמודים האמיתי מהקובץ (PDF ותמונות). null = עוד לא נספר; הסנכרון הבא סופר למסמכים הקיימים
+alter table agreements add column if not exists pages int;
 create table if not exists files (
     file_id text primary key,
     name text not null,
@@ -133,14 +135,15 @@ def upsert(conn, f, method, text, pages=None):
         meta["pages"] = pages
     conn.execute(
         """insert into agreements (file_id, name, url, modified_time, method, summary, text, embedding,
-                                   metadata, end_date, metadata_version)
-           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s)
+                                   metadata, end_date, metadata_version, pages)
+           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s)
            on conflict (file_id) do update set name=excluded.name, url=excluded.url,
              modified_time=excluded.modified_time, method=excluded.method, summary=excluded.summary,
              text=excluded.text, embedding=excluded.embedding, metadata=excluded.metadata,
-             end_date=excluded.end_date, metadata_version=excluded.metadata_version, indexed_at=now()""",
+             end_date=excluded.end_date, metadata_version=excluded.metadata_version, pages=excluded.pages,
+             indexed_at=now()""",
         (f["id"], f["name"], f.get("webViewLink"), f["modifiedTime"], method, summary, text,
-         embed(f"{f['name']}\n{summary}"), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION),
+         embed(f"{f['name']}\n{summary}"), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages),
     )
 
 
@@ -226,6 +229,43 @@ def files_list(conn):
                                   coalesce(a.url, 'https://drive.google.com/file/d/' || f.file_id || '/view') as url,
                                   a.summary, a.metadata
                            from files f left join agreements a using (file_id) order by f.name""")
+
+
+def missing_pages(conn):
+    """מסמכים שאונדקסו לפני שמספר העמודים נשמר."""
+    return {r[0] for r in conn.execute("select file_id from agreements where pages is null").fetchall()}
+
+
+def save_pages(conn, file_id, pages):
+    conn.execute("update agreements set pages = %s where file_id = %s", (pages, file_id))
+
+
+def status_rows(conn):
+    """דוח "סטטוס מאגר ההסכמים": שורות של מדד וערך, מ-SQL בלבד. ערך שעוד לא ידוע מוצג "—" ולא 0."""
+    total, failed = conn.execute("select count(*), count(*) filter (where status = 'failed') from files").fetchone()
+    # עמודים ידועים רק כשאין PDF או תמונה במאגר שעוד לא נספרו. DOCX ו-Google Docs אין להם עמודים, ולא נספרים
+    pages, ocr_pages, uncounted = conn.execute(
+        """select sum(a.pages), sum(a.pages) filter (where a.method = 'ocr'),
+                  count(*) filter (where a.pages is null and (f.mime_type = 'application/pdf'
+                                                               or f.mime_type like 'image/%'))
+           from agreements a left join files f using (file_id)"""
+    ).fetchone()
+    s = status(conn)
+    known = pages is not None and not uncounted
+    dash = "—"
+
+    def row(label, value, tone=""):
+        return {"label": label, "value": dash if value is None else f"{value:,}" if isinstance(value, int) else value,
+                "tone": "muted" if value is None else tone}
+
+    return [
+        row('סה"כ מסמכים בתיקייה', total if total else None),  # טבלה ריקה = הסנכרון עוד לא רץ
+        row("מאונדקסים", s["documents"]),
+        row("נכשלו", failed if total else None, "bad" if failed else ""),
+        row("עמודים", pages if known else None),
+        row("עמודים שעברו OCR", (ocr_pages or 0) if known else None),
+        row("אינדוקס אחרון", s["updated_at"]),
+    ]
 
 
 def log_run(conn, stats):

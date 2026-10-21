@@ -5,3 +5,4 @@ __pycache__/
 sample_export.docx
 sample_export.pdf
 tests/.pglite/
+preview_status.html

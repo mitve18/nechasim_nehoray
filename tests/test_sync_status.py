@@ -48,7 +48,8 @@ def _fake_backends(logged, downloads, summary_path):
                                 retry_ids=lambda conn: set(), delete=lambda conn, ids: None,
                                 upsert=lambda conn, f, method, text, pages=None: None,
                                 save_files=lambda conn, rows: None, prune_files=lambda conn, ids: None,
-                                pending_metadata=lambda conn: [], log_run=lambda conn, stats: logged.append(stats)), \
+                                pending_metadata=lambda conn: [], missing_pages=lambda conn: set(),
+                                log_run=lambda conn, stats: logged.append(stats)), \
             mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder-123", "GITHUB_STEP_SUMMARY": summary_path}), \
             mock.patch.object(sys, "argv", ["sync.py"]):
         yield
@@ -149,9 +150,11 @@ def test_status_and_admin_pages():
     ]
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
                              status=lambda conn: {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True},
-                             recent_runs=lambda conn: runs):
+                             recent_runs=lambda conn: runs, status_rows=lambda conn: []):
         c = TestClient(main.app)
-        assert c.get("/api/status").json() == {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True}
+        s = c.get("/api/status").json()
+        assert {k: s[k] for k in ("updated_at", "documents", "failed")} == {
+            "updated_at": "21/10/2026 06:04", "documents": 42, "failed": True}
         html = c.get("/admin/sync").text
     assert "זמן (שעון ישראל)" in html and "UTC" not in html
     assert "2026-10-21 06:00" in html and "&lt;הסכם&gt;.pdf" in html and "<td>—</td>" in html

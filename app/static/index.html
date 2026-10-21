@@ -667,6 +667,118 @@
         margin: 8px 0 0;
       }
 
+      /* דוח "סטטוס מאגר ההסכמים" בצ'אט */
+      .tools {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .chip {
+        font-size: 13px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        border-color: var(--brand-line);
+        color: var(--brand-dark);
+      }
+      .chip:hover:not(:disabled) {
+        background: #e2eef8;
+      }
+      .msg.status-card {
+        align-self: stretch;
+        max-width: 100%;
+        white-space: normal;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-inline-start: 4px solid var(--brand);
+        border-radius: 12px;
+        padding: 14px 16px 10px;
+        box-shadow: var(--shadow);
+      }
+      .sc-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 10px;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--brand-deep);
+      }
+      .sc-title::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+        flex: none;
+      }
+      .sc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      .sc-table thead th {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        text-align: start;
+        padding: 0 0 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      .sc-table thead th + th,
+      .sc-table td {
+        text-align: end;
+      }
+      .sc-table tbody th {
+        text-align: start;
+        font-weight: 400;
+        padding: 7px 0;
+      }
+      .sc-table td {
+        padding: 7px 0 7px 2px;
+        font-weight: 700;
+        color: var(--brand-deep);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .sc-table tbody tr + tr {
+        border-top: 1px solid #edf1f5;
+      }
+      .sc-table .tone-bad {
+        color: var(--err);
+      }
+      .sc-table .tone-muted {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .sc-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--line);
+      }
+      .sc-cost {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .sc-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-inline-start: auto; /* גם כשהכפתורים יורדים לשורה משלהם, הם נשארים בצד השני */
+      }
+      .sc-btn {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        min-width: 64px;
+      }
+
       /* מסמך בסיס לניסוח */
       .focus {
         display: flex;
@@ -825,6 +937,9 @@
         </p>
         <div id="chat" aria-live="polite"></div>
         <form id="form">
+          <div class="tools">
+            <button type="button" class="chip" id="status-btn">◉ סטטוס המאגר</button>
+          </div>
           <div class="focus" id="focus-bar" hidden>
             📎 מבוסס על: <b id="focus-name"></b>
             <button type="button" id="focus-clear" aria-label="הסרת מסמך הבסיס">
@@ -1305,6 +1420,94 @@
         if (focus) $("input").focus();
       }
       $("focus-clear").onclick = () => setFocus(null);
+
+      // דוח "סטטוס מאגר ההסכמים": נשלף מ-SQL בשרת, בלי מודל. מוצג בצ'אט ולא נשלח לניסוח
+      function feedbackButton(label, aria, action) {
+        const b = el("button", { type: "button", className: "sc-btn", textContent: label });
+        b.setAttribute("aria-label", aria);
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            b.textContent = await action();
+          } catch {
+            b.textContent = "נכשל";
+          }
+          setTimeout(() => {
+            b.textContent = label;
+            b.disabled = false;
+          }, 1600);
+        };
+        return b;
+      }
+      async function downloadStatusDocx(title) {
+        const res = await fetch("/api/status/docx");
+        if (!res.ok) throw new Error();
+        const a = el("a", { href: URL.createObjectURL(await res.blob()), download: title + ".docx" });
+        a.click();
+        URL.revokeObjectURL(a.href);
+        return "הורד ✓";
+      }
+      async function statusReport() {
+        let s;
+        try {
+          s = await api("/api/status");
+        } catch (e) {
+          add("error", "הדוח נכשל: " + e.message);
+          return;
+        }
+        const titleId = "sc-" + Date.now();
+        const table = el(
+          "table",
+          { className: "sc-table" },
+          el(
+            "thead",
+            {},
+            el("tr", {}, el("th", { scope: "col", textContent: "מדד" }), el("th", { scope: "col", textContent: "ערך" })),
+          ),
+          el(
+            "tbody",
+            {},
+            ...s.rows.map((r) =>
+              el(
+                "tr",
+                {},
+                el("th", { scope: "row", textContent: r.label }),
+                // ערכים מספריים ותאריך מוצגים משמאל לימין, כמו "21/10/2026 07:58"
+                el("td", { className: r.tone ? "tone-" + r.tone : "" }, el("bdi", { dir: "ltr", textContent: r.value })),
+              ),
+            ),
+          ),
+        );
+        table.setAttribute("aria-labelledby", titleId);
+        $("chat").append(
+          el(
+            "div",
+            { className: "msg status-card" },
+            el("h3", { className: "sc-title", id: titleId, textContent: s.title }),
+            table,
+            el(
+              "div",
+              { className: "sc-foot" },
+              el("span", { className: "sc-cost", textContent: "0 טוקנים · ישירות ממסד הנתונים" }),
+              el(
+                "div",
+                { className: "sc-actions" },
+                feedbackButton("העתקה", "העתקת הדוח כטקסט", async () => {
+                  await navigator.clipboard.writeText(s.text);
+                  return "הועתק ✓";
+                }),
+                feedbackButton("העתקת טבלה", "העתקת הטבלה להדבקה באקסל", async () => {
+                  await navigator.clipboard.writeText(s.tsv);
+                  return "הועתק ✓";
+                }),
+                feedbackButton("Word", "הורדת הדוח כקובץ Word", () => downloadStatusDocx(s.title)),
+              ),
+            ),
+          ),
+        );
+        $("chat").scrollTop = $("chat").scrollHeight;
+      }
+      $("status-btn").onclick = statusReport;
 
       // כניסה: רק להעלאה ולסנכרון. בלי APP_PASSWORD בשרת, הכפתור לא מוצג
       async function loadMe() {
