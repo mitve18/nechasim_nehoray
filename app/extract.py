@@ -21,9 +21,17 @@ DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 GDOC = "application/vnd.google-apps.document"
 
 
+def supported(mime):
+    """האם אפשר לחלץ טקסט מהסוג הזה. נבדק לפני ההורדה, כדי שסוג לא נתמך ייכשל עם סיבה ברורה."""
+    return mime in ("application/pdf", DOCX, GDOC) or mime in IMAGE_TYPES or mime.startswith("text/")
+
+
 def extract(f, data):
     """מחזיר (טקסט נקי, שיטה). f הוא ה-dict מ-drive.list_files, data הם ה-bytes של הקובץ."""
     mime = f["mimeType"]
+    if not supported(mime):
+        # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
+        raise ValueError(f"סוג קובץ לא נתמך: {mime}")
     if mime == "application/pdf":
         pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages]
         # ponytail: החלטה לכל הקובץ לפי ממוצע; עמודים סרוקים בודדים בתוך PDF טקסטואלי לא יעברו OCR
@@ -36,10 +44,7 @@ def extract(f, data):
     if mime == DOCX:
         import docx
         return clean(["\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)]), "docx"
-    if mime == GDOC or mime.startswith("text/"):
-        return clean([data.decode("utf-8-sig")]), "text"
-    # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
-    raise ValueError(f"סוג קובץ לא נתמך: {mime}")
+    return clean([data.decode("utf-8-sig")]), "text"  # GDOC או text/*
 
 
 def _checked(text, pages):

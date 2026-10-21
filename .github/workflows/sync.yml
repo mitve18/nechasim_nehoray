@@ -8,11 +8,11 @@ concurrency: sync
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # גרסה קבועה: ubuntu-latest עובר ל-Ubuntu 26, ושם tesseract-ocr-heb עוד לא נבדק
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip

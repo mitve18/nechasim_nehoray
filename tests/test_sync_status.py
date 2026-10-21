@@ -1,4 +1,5 @@
-"""בדיקות לסיכום הסנכרון, ל-/api/status ול-/admin/sync, עם תחליפים ל-Drive ול-Neon. בלי סודות ובלי רשת.
+"""בדיקות לסיכום הסנכרון, לרשימת הקבצים מ-Drive, ל-/api/status ול-/admin/sync, עם תחליפים ל-Drive ול-Neon.
+בלי סודות ובלי רשת.
 
 python tests/test_sync_status.py   (או pytest)
 """
@@ -12,23 +13,32 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from googleapiclient.errors import HttpError  # noqa: E402
 
 import sync  # noqa: E402
-from app import main, store  # noqa: E402
+from app import drive, main, store  # noqa: E402
 
+LIST_FILES = drive.list_files  # הפונקציה האמיתית, לפני שהבדיקה הראשונה מחליפה אותה
+PDF, PNG = "application/pdf", "image/png"
+SHORTCUT, FOLDER = drive.SHORTCUT_MIME, drive.FOLDER_MIME
 FILES = [
-    {"id": "new", "name": "הסכם חדש.pdf", "modifiedTime": "2"},
-    {"id": "old", "name": "הסכם | ישן.pdf", "modifiedTime": "2"},
-    {"id": "same", "name": "לא השתנה.pdf", "modifiedTime": "1"},
-    {"id": "bad", "name": "סריקה פגומה.pdf", "modifiedTime": "1"},
+    {"id": "new", "name": "הסכם חדש.png", "mimeType": PNG, "modifiedTime": "2026-10-21T08:12:33.000Z"},
+    {"id": "old", "name": "הסכם | ישן.pdf", "mimeType": PDF, "modifiedTime": "2"},
+    {"id": "same", "name": "לא השתנה.pdf", "mimeType": PDF, "modifiedTime": "1"},
+    {"id": "bad", "name": "סריקה פגומה.pdf", "mimeType": PDF, "modifiedTime": "1"},
+    {"id": "heic", "name": "צילום.heic", "mimeType": "image/heic", "modifiedTime": "1"},
+    {"id": "sc", "name": "קיצור", "mimeType": SHORTCUT, "modifiedTime": "1",
+     "error": "קיצור דרך לקובץ שאין אליו גישה (404)"},
 ]
 
 
-def _fake_backends(logged):
+def _fake_backends(logged, downloads):
+    os.environ["DRIVE_FOLDER_ID"] = "folder-123"
     sync.drive.service = lambda: None
-    sync.drive.list_files = lambda svc: FILES
-    sync.drive.download = lambda svc, f: b""
-    sync.extract.extract = lambda f, data: (_ for _ in ()).throw(RuntimeError("OCR נכשל")) if f["id"] == "bad" else ("t", "text")
+    sync.drive.list_files = lambda svc, folder: FILES
+    sync.drive.download = lambda svc, f: downloads.append(f["id"]) or b""
+    sync.extract.extract = (lambda f, data: (_ for _ in ()).throw(RuntimeError("OCR נכשל"))
+                            if f["id"] == "bad" else ("t", "ocr" if f["mimeType"] == PNG else "text"))
     store.connect = lambda: contextlib.nullcontext()
     store.init = lambda conn: None
     store.indexed = lambda conn: {"old": "1", "same": "1", "gone": "1"}
@@ -38,8 +48,8 @@ def _fake_backends(logged):
 
 
 def test_sync_summary_and_exit_code():
-    logged = []
-    _fake_backends(logged)
+    logged, downloads = [], []
+    _fake_backends(logged, downloads)
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["GITHUB_STEP_SUMMARY"] = path = os.path.join(tmp, "summary.md")
         sys.argv = ["sync.py"]
@@ -50,10 +60,70 @@ def test_sync_summary_and_exit_code():
             assert e.code == 1
         md = Path(path).read_text(encoding="utf-8")
     del os.environ["GITHUB_STEP_SUMMARY"]
-    assert "| 1 | 1 | 1 | 1 |" in md, md  # נוספו, עודכנו, הוסרו, נכשלו
-    assert "- הסכם חדש.pdf" in md and "- הסכם \\| ישן.pdf" in md and "סריקה פגומה.pdf: OCR נכשל" in md
-    assert "לא השתנה" not in md
-    assert logged[0]["files"] == {"added": ["הסכם חדש.pdf"], "updated": ["הסכם | ישן.pdf"]}
+
+    assert "| 1 | 1 | 1 | 3 |" in md, md  # נוספו, עודכנו, הוסרו, נכשלו
+    assert "בתיקייה: 6 קבצים · במאגר אחרי הריצה: 3 מסמכים" in md  # 3 ידועים, 1 נמחק, 1 נוסף
+    assert "תיקייה שנסרקה: `folder-123`" in md
+    assert "- הסכם חדש.png" in md and "- הסכם \\| ישן.pdf" in md and "סריקה פגומה.pdf: OCR נכשל" in md
+
+    block = md.split("<details>")[1]
+    assert "| הסכם חדש.png | image/png | 2026-10-21 08:12 | נוסף |" in block
+    assert "| לא השתנה.pdf | application/pdf | 1 | ללא שינוי |" in block
+    assert "| צילום.heic | image/heic | 1 | נכשל: סוג קובץ לא נתמך: image/heic |" in block
+    assert "| קיצור |" in block and "נכשל: קיצור דרך לקובץ שאין אליו גישה (404)" in block
+    assert block.index("נכשל") < block.index("נוסף") < block.index("עודכן") < block.index("ללא שינוי")
+    assert md.rstrip().endswith("</details>")
+
+    assert "heic" not in downloads and "sc" not in downloads  # סוג לא נתמך לא מורד בכלל
+    assert logged[0]["files"] == {"added": ["הסכם חדש.png"], "updated": ["הסכם | ישן.pdf"]}
+    assert logged[0]["ocr"] == 1
+
+
+class _Req:
+    def __init__(self, fn):
+        self.execute = fn
+
+
+class FakeDrive:
+    """Drive מזויף: תוכן תיקיות לפי parent (בשני עמודים), ו-get שמחזיר את היעד של קיצור דרך."""
+    TREE = {
+        "root": [[{"id": "a", "name": "א.pdf", "mimeType": PDF},
+                  {"id": "sub", "name": "תת-תיקייה", "mimeType": FOLDER}],
+                 [{"id": "s1", "name": "קיצור לא", "mimeType": SHORTCUT, "shortcutDetails": {"targetId": "a"}},
+                  {"id": "s2", "name": "קיצור לחוץ", "mimeType": SHORTCUT, "shortcutDetails": {"targetId": "ext"}},
+                  {"id": "s3", "name": "קיצור לשורש", "mimeType": SHORTCUT, "shortcutDetails": {"targetId": "root"}},
+                  {"id": "s4", "name": "אין גישה", "mimeType": SHORTCUT, "shortcutDetails": {"targetId": "secret"}}]],
+        "sub": [[{"id": "b", "name": "ב.png", "mimeType": PNG},
+                 {"id": "s5", "name": "קיצור לתיקייה", "mimeType": SHORTCUT, "shortcutDetails": {"targetId": "sub2"}}]],
+        "sub2": [[{"id": "c", "name": "ג.pdf", "mimeType": PDF}]],
+    }
+    TARGETS = {"a": TREE["root"][0][0], "ext": {"id": "ext", "name": "חיצוני.pdf", "mimeType": PDF},
+               "root": {"id": "root", "name": "שורש", "mimeType": FOLDER},
+               "sub2": {"id": "sub2", "name": "תיקייה אחרת", "mimeType": FOLDER}}
+
+    def files(self):
+        return self
+
+    def list(self, q, pageToken=None, **kw):
+        pages = self.TREE[q.split("'")[1]]
+        i = int(pageToken or 0)
+        resp = {"files": pages[i]} | ({"nextPageToken": str(i + 1)} if i + 1 < len(pages) else {})
+        return _Req(lambda: resp)
+
+    def get(self, fileId, **kw):
+        def execute():
+            if fileId not in self.TARGETS:
+                raise HttpError(type("Resp", (), {"status": 404, "reason": "Not Found"})(), b"")
+            return self.TARGETS[fileId]
+        return _Req(execute)
+
+
+def test_list_files_shortcuts():
+    files = LIST_FILES(FakeDrive(), "root")
+    names = sorted(f["name"] for f in files)
+    # א.pdf פעם אחת למרות הקיצור אליו, קיצור לתיקייה נסרק, קיצור לשורש לא יוצר לולאה, עמוד שני נקרא
+    assert names == sorted(["א.pdf", "ב.png", "ג.pdf", "חיצוני.pdf", "אין גישה"]), names
+    assert next(f for f in files if f["name"] == "אין גישה")["error"] == "קיצור דרך לקובץ שאין אליו גישה (404)"
 
 
 def test_status_and_admin_pages():
@@ -76,5 +146,6 @@ def test_status_and_admin_pages():
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     test_sync_summary_and_exit_code()
+    test_list_files_shortcuts()
     test_status_and_admin_pages()
     print("ok")
