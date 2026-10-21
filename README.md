@@ -6,6 +6,28 @@
 
 > הפרויקט נבנה בשלבים. האתר רץ ב-Render, והסנכרון היומי רץ ב-GitHub Actions.
 
+## איך הפרויקט משתמש ב-Agno
+מנוע הניסוח ([`app/draft.py`](app/draft.py)) הוא Agent של [Agno](https://docs.agno.com) (גרסה מוצמדת ב-`requirements.txt`):
+- **מודל:** `OpenAIResponses(id="gpt-4o")`.
+- **Tool:** `search_agreements` מחפש הסכמים דומים ב-pgvector ב-Neon (`store.search`). ה-Agent מחליט על שאילתת החיפוש בעצמו.
+  בחרנו tool ולא Knowledge של Agno, כי הטבלה הקיימת שומרת גם תקציר, טקסט מלא וקישור ל-Drive, והסנכרון משתמש בכולם. כך לא נדרשת מיגרציה.
+- **פלט מובנה:** `output_schema=Draft` (status, questions, title, body). רשימת המקורות נאספת מתוך קריאות ה-tool ומוחזרת לממשק.
+- גם התקצירים בסנכרון נוצרים ב-Agent של Agno. ה-OCR נשאר Tesseract.
+
+</div>
+
+```
+משתמש ──► /api/draft ──► Agent (Agno)
+                            │  קריאה ל-tool
+                            ▼
+                     search_agreements ──► Neon (pgvector) ──► הסכמים דומים
+                            │
+                            ▼
+                     מודל gpt-4o ──► תשובה מובנית (questions / agreement) + מקורות ──► משתמש
+```
+
+<div dir="rtl">
+
 ## דרישות מקדימות
 - Python 3.11 ומעלה
 - חשבון Google עם גישה לתיקיית ההסכמים
@@ -20,7 +42,7 @@
 1. **APIs & Services → OAuth consent screen** (נקרא גם **Google Auth Platform**).
 2. סוג משתמש: **External** (או **Internal** אם יש לכם Google Workspace).
 3. מלא שם אפליקציה ומייל תמיכה.
-4. ב-**Data Access / Scopes** הוסף את ההרשאה `https://www.googleapis.com/auth/drive.readonly` (קריאה בלבד).
+4. ב-**Data Access / Scopes** הוסף את ההרשאה `https://www.googleapis.com/auth/drive` (קריאה וכתיבה מלאה).
 5. **חשוב:** ב-**Audience** לחץ **Publish app** כדי להעביר את האפליקציה לסטטוס **In production**.
    באפליקציה בסטטוס *Testing*, ה-refresh token **פג אחרי 7 ימים** והסנכרון יפסיק לעבוד.
    אין צורך לעבור אימות (verification) של Google לשימוש פנימי. בזמן ההתחברות תופיע אזהרת "Google hasn't verified this app". לחץ **Advanced → Go to ... (unsafe)**.
@@ -31,8 +53,10 @@
 3. הורד את קובץ ה-JSON ושמור אותו בתיקיית הפרויקט בשם `client_secret.json`. הקובץ כבר מוחרג ב-`.gitignore`, אל תעלה אותו ל-git.
 
 ### 4. צמצום הרשאות (מומלץ)
-ל-Google אין הרשאה שמגבילה גישה לתיקייה אחת בלבד, ולכן `drive.readonly` מאפשר קריאה של **כל** ה-Drive של החשבון המחובר.
-מומלץ ליצור חשבון Google ייעודי (למשל `agreements-bot@...`), לשתף איתו **רק** את תיקיית ההסכמים (הרשאת צפייה), ולהתחבר בשלב הבא עם החשבון הזה.
+ל-Google אין הרשאה שמגבילה גישה לתיקייה אחת בלבד, ולכן `drive` מאפשר קריאה, כתיבה ומחיקה של **כל** ה-Drive של החשבון המחובר.
+מומלץ ליצור חשבון Google ייעודי (למשל `agreements-bot@...`), לשתף איתו **רק** את תיקיית ההסכמים (הרשאת עריכה), ולהתחבר בשלב הבא עם החשבון הזה.
+
+> אם ה-refresh token הופק עם scope אחר (למשל `drive.readonly`), הסנכרון ייכשל עם `invalid_scope`. צריך להפיק token חדש.
 
 ### 5. הפקת refresh token (פעם אחת)
 </div>
@@ -114,6 +138,7 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
 | שגיאה | פתרון |
 |---|---|
 | `invalid_grant` | ה-refresh token פג או בוטל. ודא שהאפליקציה ב-*In production* והרץ שוב את `get_refresh_token.py` |
+| `invalid_scope` | ה-token הופק עם scope אחר. הפק token חדש עם `https://www.googleapis.com/auth/drive` ועדכן את `GOOGLE_REFRESH_TOKEN` |
 | `File not found` / רשימה ריקה | לחשבון המחובר אין גישה לתיקייה, או ש-`DRIVE_FOLDER_ID` שגוי |
 | `KeyError: 'GOOGLE_...'` | קובץ `.env` חסר או לא מלא |
 

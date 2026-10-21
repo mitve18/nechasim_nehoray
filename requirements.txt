@@ -3,6 +3,7 @@ google-auth
 google-auth-oauthlib
 python-dotenv
 openai
+agno==3.1.7
 pypdf
 python-docx
 psycopg[binary]

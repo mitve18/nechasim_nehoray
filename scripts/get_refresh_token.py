@@ -6,7 +6,7 @@ import sys
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 flow = InstalledAppFlow.from_client_secrets_file(sys.argv[1], SCOPES)
 # access_type=offline + prompt=consent מבטיחים שיוחזר refresh token

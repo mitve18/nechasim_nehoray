@@ -1,4 +1,4 @@
-"""גישה ל-Google Drive: OAuth 2.0 עם refresh token (offline), קריאה בלבד."""
+"""גישה ל-Google Drive: OAuth 2.0 עם refresh token (offline), הרשאת קריאה וכתיבה (scope: drive)."""
 import io
 import os
 
@@ -6,7 +6,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
 

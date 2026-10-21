@@ -1,8 +1,11 @@
-"""מאגר ההסכמים ב-Postgres (Neon) עם pgvector, ו-embeddings/תקצירים דרך OpenAI."""
+"""מאגר ההסכמים ב-Postgres (Neon) עם pgvector. embeddings דרך OpenAI, תקצירים דרך Agent של Agno."""
 import json
 import os
 
 import psycopg
+from agno.agent import Agent
+from agno.models.openai import OpenAIResponses
+from agno.run.base import RunStatus
 from openai import OpenAI
 
 EMBED_MODEL = "text-embedding-3-small"
@@ -46,15 +49,17 @@ def embed(text):
 
 def summarize(name, text):
     """תקציר קצר שמשמש לחיפוש ולהצגת המקורות."""
-    resp = OpenAI().responses.create(
-        model=SUMMARY_MODEL,
-        input=f"שם הקובץ: {name}\n\n{text[:30000]}",
+    agent = Agent(
+        model=OpenAIResponses(id=SUMMARY_MODEL),
         instructions=(
             "כתוב בעברית תקציר של 3–4 משפטים למסמך המשפטי הבא: סוג המסמך (הסכם, כתב התחייבות וכו'), "
             "הצדדים, התחום המקצועי, והנושאים והסעיפים העיקריים. בלי הקדמות."
         ),
     )
-    return resp.output_text.strip()
+    result = agent.run(f"שם הקובץ: {name}\n\n{text[:30000]}")
+    if result.status != RunStatus.completed or not result.content:  # הקובץ לא נשמר, ולכן ינוסה שוב בריצה הבאה
+        raise RuntimeError(f"התקציר נכשל: status={result.status}")
+    return result.content.strip()
 
 
 def indexed(conn):
