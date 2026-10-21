@@ -4,3 +4,4 @@ client_secret.json
 __pycache__/
 sample_export.docx
 sample_export.pdf
+tests/.pglite/

@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -18,7 +19,6 @@ from googleapiclient.errors import HttpError  # noqa: E402
 import sync  # noqa: E402
 from app import drive, main, store  # noqa: E402
 
-LIST_FILES = drive.list_files  # הפונקציה האמיתית, לפני שהבדיקה הראשונה מחליפה אותה
 PDF, PNG = "application/pdf", "image/png"
 SHORTCUT, FOLDER = drive.SHORTCUT_MIME, drive.FOLDER_MIME
 FILES = [
@@ -32,36 +32,41 @@ FILES = [
 ]
 
 
-def _fake_backends(logged, downloads):
-    os.environ["DRIVE_FOLDER_ID"] = "folder-123"
-    sync.drive.service = lambda: None
-    sync.drive.list_files = lambda svc, folder: FILES
-    sync.drive.download = lambda svc, f: downloads.append(f["id"]) or b""
-    sync.extract.extract = (lambda f, data: (_ for _ in ()).throw(RuntimeError("OCR נכשל"))
-                            if f["id"] == "bad" else ("t", "ocr" if f["mimeType"] == PNG else "text"))
-    store.connect = lambda: contextlib.nullcontext()
-    store.init = lambda conn: None
-    store.indexed = lambda conn: {"old": "1", "same": "1", "gone": "1"}
-    store.delete = lambda conn, ids: None
-    store.upsert = lambda conn, f, method, text: None
-    store.log_run = lambda conn, stats: logged.append(stats)
+@contextlib.contextmanager
+def _fake_backends(logged, downloads, summary_path):
+    """Drive ו-Neon מזויפים. mock.patch מחזיר את הפונקציות האמיתיות בסוף, כדי לא לפגוע בבדיקות אחרות."""
+    def fake_extract(f, data):
+        if f["id"] == "bad":
+            raise RuntimeError("OCR נכשל")
+        return "t", "ocr" if f["mimeType"] == PNG else "text"
+
+    with mock.patch.multiple(sync.drive, service=lambda: None, list_files=lambda svc, folder: FILES,
+                             download=lambda svc, f: downloads.append(f["id"]) or b""), \
+            mock.patch.multiple(sync.extract, extract=fake_extract, page_count=lambda f, data: None), \
+            mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
+                                indexed=lambda conn: {"old": "1", "same": "1", "gone": "1"},
+                                retry_ids=lambda conn: set(), delete=lambda conn, ids: None,
+                                upsert=lambda conn, f, method, text, pages=None: None,
+                                save_files=lambda conn, rows: None, prune_files=lambda conn, ids: None,
+                                pending_metadata=lambda conn: [], log_run=lambda conn, stats: logged.append(stats)), \
+            mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder-123", "GITHUB_STEP_SUMMARY": summary_path}), \
+            mock.patch.object(sys, "argv", ["sync.py"]):
+        yield
 
 
 def test_sync_summary_and_exit_code():
     logged, downloads = [], []
-    _fake_backends(logged, downloads)
     with tempfile.TemporaryDirectory() as tmp:
-        os.environ["GITHUB_STEP_SUMMARY"] = path = os.path.join(tmp, "summary.md")
-        sys.argv = ["sync.py"]
-        try:
-            sync.main()
-            raise AssertionError("קובץ שנכשל חייב להכשיל את הריצה")
-        except SystemExit as e:
-            assert e.code == 1
+        path = os.path.join(tmp, "summary.md")
+        with _fake_backends(logged, downloads, path):
+            try:
+                sync.main()
+                raise AssertionError("קובץ שנכשל חייב להכשיל את הריצה")
+            except SystemExit as e:
+                assert e.code == 1
         md = Path(path).read_text(encoding="utf-8")
-    del os.environ["GITHUB_STEP_SUMMARY"]
 
-    assert "| 1 | 1 | 1 | 3 |" in md, md  # נוספו, עודכנו, הוסרו, נכשלו
+    assert "| 1 | 1 | 1 | 1 | 2 |" in md, md  # נוספו, עודכנו, הוסרו, לא נתמכו, נכשלו
     assert "בתיקייה: 6 קבצים · במאגר אחרי הריצה: 3 מסמכים" in md  # 3 ידועים, 1 נמחק, 1 נוסף
     assert "תיקייה שנסרקה: `folder-123`" in md
     assert "- הסכם חדש.png" in md and "- הסכם \\| ישן.pdf" in md and "סריקה פגומה.pdf: OCR נכשל" in md
@@ -69,14 +74,23 @@ def test_sync_summary_and_exit_code():
     block = md.split("<details>")[1]
     assert "| הסכם חדש.png | image/png | 2026-10-21 08:12 | נוסף |" in block
     assert "| לא השתנה.pdf | application/pdf | 1 | ללא שינוי |" in block
-    assert "| צילום.heic | image/heic | 1 | נכשל: סוג קובץ לא נתמך: image/heic |" in block
+    assert "| צילום.heic | image/heic | 1 | לא נתמך: סוג קובץ לא נתמך: image/heic |" in block
     assert "| קיצור |" in block and "נכשל: קיצור דרך לקובץ שאין אליו גישה (404)" in block
-    assert block.index("נכשל") < block.index("נוסף") < block.index("עודכן") < block.index("ללא שינוי")
+    assert (block.index("נכשל") < block.index("| לא נתמך") < block.index("נוסף") < block.index("עודכן")
+            < block.index("ללא שינוי"))
     assert md.rstrip().endswith("</details>")
+    assert "הושלמו נתונים מובנים" not in md  # אין מסמכים להשלמה, אין שורה
 
     assert "heic" not in downloads and "sc" not in downloads  # סוג לא נתמך לא מורד בכלל
-    assert logged[0]["files"] == {"added": ["הסכם חדש.png"], "updated": ["הסכם | ישן.pdf"]}
+    assert logged[0]["files"] == {"added": ["הסכם חדש.png"], "updated": ["הסכם | ישן.pdf"], "backfilled": []}
     assert logged[0]["ocr"] == 1
+
+
+def test_summary_backfill_line():
+    stats = {"added": 0, "updated": 0, "removed": 0, "unsupported": 0, "errors": [], "in_db": 2, "folder": "f",
+             "seen": [], "files": {"added": [], "updated": [], "backfilled": ["א.pdf", "ב.pdf"]}}
+    md = sync.summary(stats)
+    assert "**הושלמו נתונים מובנים ל-2 מסמכים**\n- א.pdf\n- ב.pdf" in md, md
 
 
 class _Req:
@@ -119,7 +133,7 @@ class FakeDrive:
 
 
 def test_list_files_shortcuts():
-    files = LIST_FILES(FakeDrive(), "root")
+    files = drive.list_files(FakeDrive(), "root")
     names = sorted(f["name"] for f in files)
     # א.pdf פעם אחת למרות הקיצור אליו, קיצור לתיקייה נסרק, קיצור לשורש לא יוצר לולאה, עמוד שני נקרא
     assert names == sorted(["א.pdf", "ב.png", "ג.pdf", "חיצוני.pdf", "אין גישה"]), names
@@ -127,25 +141,27 @@ def test_list_files_shortcuts():
 
 
 def test_status_and_admin_pages():
-    store.connect = lambda: contextlib.nullcontext()
-    store.init = lambda conn: None
-    store.status = lambda conn: {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True}
-    store.recent_runs = lambda conn: [
+    runs = [
         {"started_at": datetime.datetime(2026, 10, 21, 6, 0), "added": 1, "updated": 0, "removed": 0, "ocr": 0,
-         "failed": 0, "errors": [], "files": {"added": ["<הסכם>.pdf"], "updated": []}},
+         "failed": 0, "errors": [], "files": {"added": ["<הסכם>.pdf"], "updated": [], "backfilled": ["ישן.pdf"]}},
         {"started_at": datetime.datetime(2026, 10, 20, 6, 0), "added": 0, "updated": 0, "removed": 0, "ocr": 0,
          "failed": 0, "errors": None, "files": None},  # ריצה מלפני המיגרציה
     ]
-    c = TestClient(main.app)
-    assert c.get("/api/status").json() == {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True}
-    html = c.get("/admin/sync").text
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
+                             status=lambda conn: {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True},
+                             recent_runs=lambda conn: runs):
+        c = TestClient(main.app)
+        assert c.get("/api/status").json() == {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True}
+        html = c.get("/admin/sync").text
     assert "זמן (שעון ישראל)" in html and "UTC" not in html
     assert "2026-10-21 06:00" in html and "&lt;הסכם&gt;.pdf" in html and "<td>—</td>" in html
+    assert "הושלמו נתונים מובנים" in html and "<td>ישן.pdf</td>" in html
 
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     test_sync_summary_and_exit_code()
+    test_summary_backfill_line()
     test_list_files_shortcuts()
     test_status_and_admin_pages()
     print("ok")

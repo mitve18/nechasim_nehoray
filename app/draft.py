@@ -61,8 +61,18 @@ class Draft(BaseModel):
     body: str
 
 
-def build_agent(sources):
-    """Agent חדש לכל בקשה. ה-tool ממלא את sources במסמכים ששלף, כדי להחזיר אותם לממשק."""
+def build_agent(sources, focus=None):
+    """Agent חדש לכל בקשה. ה-tool ממלא את sources במסמכים ששלף, כדי להחזיר אותם לממשק.
+
+    focus: מסמך שהעובד בחר ("נסח על בסיס המסמך הזה"). הוא נכנס להקשר כדוגמה העיקרית ומופיע ראשון במקורות,
+    ותוצאות החיפוש משמשות רק כדוגמאות משניות.
+    """
+    context = None
+    if focus:
+        sources.append({"name": focus["name"], "url": focus["url"], "summary": focus["summary"], "base": True})
+        context = (f"העובד בחר מסמך בסיס. זו הדוגמה העיקרית: אמץ את המבנה, סדר הסעיפים והנוסח שלו, "
+                   f"והתאם אותו לבקשה. מסמכים שתמצא בחיפוש הם דוגמאות משניות בלבד.\n"
+                   f"<מסמך בסיס name=\"{focus['name']}\">\n{focus['text'][:EXAMPLE_CHARS]}\n</מסמך בסיס>")
 
     def search_agreements(query: str) -> str:
         """חיפוש סמנטי במאגר ההסכמים של החברה. מחזיר עד 3 מסמכים דומים, לשימוש כדוגמאות לנוסח.
@@ -85,16 +95,24 @@ def build_agent(sources):
         description=DESCRIPTION,
         instructions=INSTRUCTIONS,
         expected_output=EXPECTED_OUTPUT,
+        additional_context=context,
         tools=[search_agreements],
         tool_call_limit=3,  # חיפוש אחד מספיק; התקרה מונעת לולאת חיפושים יקרה
         output_schema=Draft,
     )
 
 
-def draft(messages):
-    """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources."""
+def draft(messages, focus_file_id=None):
+    """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources.
+    focus_file_id: מסמך בסיס מהמאגר (אופציונלי). LookupError אם הוא לא במאגר."""
+    focus = None
+    if focus_file_id:
+        with store.connect() as conn:
+            focus = store.get_doc(conn, focus_file_id)
+        if not focus:
+            raise LookupError("מסמך הבסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
     sources = []
-    result = build_agent(sources).run(messages)
+    result = build_agent(sources, focus).run(messages)
     if result.status != RunStatus.completed:
         raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
     if not isinstance(result.content, Draft):  # סירוב או JSON לא תקין מגיעים כטקסט ולא כ-Draft

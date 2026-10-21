@@ -85,7 +85,7 @@ python sync.py --list
 אמורה להופיע רשימת כל הקבצים בתיקייה (כולל תתי-תיקיות): תאריך שינוי, סוג קובץ ושם.
 
 ## איפה שמים סודות
-הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY` ו-`DATABASE_URL`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
+הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY`, `DATABASE_URL`, `APP_PASSWORD` ו-`GH_DISPATCH_TOKEN`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
 
 ### פיתוח מקומי
 - הסודות נשמרים **רק** בקובץ `dev\.env`. הקובץ מוחרג ב-`.gitignore`.
@@ -111,6 +111,8 @@ python sync.py --list
 | `GOOGLE_REFRESH_TOKEN` | [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ← האפליקציה ← **Remove access**. אחר כך מריצים שוב `scripts/get_refresh_token.py` |
 | `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) ← Revoke למפתח ויצירת מפתח חדש |
 | `DATABASE_URL` | Neon ← הפרויקט ← Roles ← Reset password, ואז מעתיקים את ה-connection string החדש |
+| `APP_PASSWORD` | בוחרים סיסמה חדשה ב-Render. כל מי שנכנס עם הסיסמה הישנה מתנתק אוטומטית |
+| `GH_DISPATCH_TOKEN` | GitHub ← Settings ← Developer settings ← Fine-grained tokens ← Revoke, ויוצרים token חדש |
 
 אחרי ההנפקה מחדש מעדכנים את הערך החדש ב-`.env` וב-Render ← Environment.
 
@@ -118,9 +120,9 @@ python sync.py --list
 </div>
 
 ```bash
-python sync.py                          # סנכרון: מאנדקס רק קבצים חדשים או ששונו
+python sync.py                          # סנכרון: קבצים חדשים, ששונו או שסומנו "נסה שוב", ו-backfill
 python -m app.draft "תיאור ההסכם"       # בדיקת מנוע הניסוח מהטרמינל
-python tests/test_export.py             # בדיקת ניקוי הפלט וייצוא ל-Word, בלי סודות
+python -m pytest tests                  # כל הבדיקות, בלי סודות (pip install pytest py-pglite; דורש Node)
 uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1:8000
 ```
 
@@ -133,6 +135,19 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
   **Additional language data → Hebrew**. הקוד מחפש את `tesseract` ב-PATH, ואחר כך ב-`C:\Program Files\Tesseract-OCR\tesseract.exe`.
   נתיב אחר: מגדירים `TESSERACT_CMD`. בדיקה: `python -m app.extract --ocr scan.pdf`.
 - קובץ שנכשל בחילוץ או ב-OCR לא נכנס למאגר, ולכן ינוסה שוב בריצת הסנכרון הבאה.
+- תמונות (png, jpg, tif, webp) עוברות OCR כמו PDF סרוק, כולל TIFF עם כמה עמודים.
+
+### פאנל הקבצים, נתונים מובנים ודוחות
+- **טבלת `files`:** הסנכרון רושם כל קובץ שהוא רואה ב-Drive עם סטטוס: `indexed` (מאונדקס), `failed` (נכשל, עם הסיבה),
+  `unsupported` (סוג לא נתמך) או `queued` (בתור: הועלה מהאתר או סומן "נסה שוב"). "לא נתמך" לא מכשיל את ה-workflow.
+- **נתונים מובנים:** אותה קריאה למודל שכותבת את התקציר מחזירה גם סוג מסמך, צדדים, מספר תוכנית, מיקום, גוש/חלקה,
+  תאריכים, סכומים ועמודים (עמודה `metadata` מסוג jsonb, ו-`end_date` בעמודה נפרדת). שדה שלא כתוב במסמך נשאר null.
+- **Backfill:** בכל סנכרון, מסמכים בלי נתונים מובנים (או עם `metadata_version` ישן) מושלמים מהטקסט ששמור במסד,
+  בלי הורדה מ-Drive ובלי OCR. מוסיפים שדה? מעלים את `METADATA_VERSION` ב-[`app/store.py`](app/store.py), והסנכרון הבא משלים.
+- **דוחות** ("מסתיימים בקרוב", "סטטוס אינדקס", "לפי סוג מסמך / תוכנית") הם שאילתות SQL בלבד, בלי מודל ובלי עלות.
+- **העלאה, "נסה שוב" וכפתור הסנכרון** זמינים רק כש-`APP_PASSWORD` מוגדר ב-Render והמשתמש נכנס (כפתור "כניסה" בראש האתר).
+  הקובץ נבדק בשרת לפי סיומת, גודל (עד 20MB) ותוכן, ומועלה לתיקייה הראשית. שם קיים מקבל סיומת (1), (2).
+- **כפתור הסנכרון** מפעיל את ה-workflow דרך GitHub API (`GH_DISPATCH_TOKEN`, `GH_REPO`), לכל היותר פעם ב-5 דקות.
 
 ### תקלות נפוצות
 | שגיאה | פתרון |

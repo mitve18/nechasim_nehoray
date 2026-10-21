@@ -52,7 +52,7 @@
         color: #fff;
       }
       .top {
-        max-width: 1280px;
+        max-width: 1560px;
         margin: 0 auto;
         padding: 18px 20px;
         display: flex;
@@ -100,13 +100,22 @@
         z-index: 5;
       }
       main {
-        max-width: 1280px;
+        max-width: 1560px;
         margin: 0 auto;
         padding: 20px;
         display: grid;
         gap: 20px;
-        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        grid-template-columns: 300px minmax(0, 2fr) minmax(0, 3fr);
         align-items: start;
+      }
+      @media (max-width: 1200px) {
+        /* פאנל הקבצים עובר לשורה משלו מעל הצ'אט, ומתקפל */
+        main {
+          grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+        }
+        #files-panel {
+          grid-column: 1 / -1;
+        }
       }
       @media (max-width: 900px) {
         main {
@@ -133,6 +142,18 @@
         #chat-panel {
           position: sticky;
           top: 56px;
+        }
+      }
+      @media (min-width: 1201px) {
+        #files-panel {
+          position: sticky;
+          top: 56px;
+          max-height: calc(100vh - 76px);
+        }
+        #files-box[open] {
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
         }
       }
       h2 {
@@ -453,6 +474,370 @@
           transition: none;
         }
       }
+
+      /* כפתורים בכותרת העליונה */
+      .actions {
+        margin-inline-start: auto;
+        display: flex;
+        gap: 8px;
+      }
+      .actions button {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.35);
+        color: #fff;
+      }
+      .actions button:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      /* פאנל הקבצים */
+      #files-panel {
+        padding: 16px;
+      }
+      #files-box > summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #files-box > summary::-webkit-details-marker {
+        display: none;
+      }
+      #files-box > summary::before {
+        content: "▾";
+        color: var(--muted);
+        transition: transform 0.15s;
+      }
+      #files-box:not([open]) > summary::before {
+        transform: rotate(90deg);
+      }
+      #files-box > summary h2 {
+        margin: 0;
+      }
+      .count {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      #files-q {
+        width: 100%;
+        font: inherit;
+        font-size: 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 12px 0 10px;
+      }
+      #files-q:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      .dropzone {
+        display: block;
+        border: 2px dashed var(--brand-line);
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        border-radius: 12px;
+        padding: 12px;
+        text-align: center;
+        font-size: 13px;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .dropzone:hover,
+      .dropzone.over {
+        border-color: var(--accent);
+        background: #e2eef8;
+      }
+      .dropzone:focus-within {
+        outline: 3px solid var(--ring);
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      #upload-progress {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      #upload-progress .bar {
+        width: 100%;
+        margin-bottom: 4px;
+      }
+      #files {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        overflow-y: auto;
+        min-height: 0;
+        display: grid;
+        gap: 6px;
+        align-content: start;
+      }
+      @media (max-width: 1200px) {
+        #files {
+          max-height: 50vh;
+        }
+      }
+      .file {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+      }
+      .file:hover {
+        border-color: var(--brand-line);
+        background: #fafcfe;
+      }
+      .file-open {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        background: none;
+        padding: 8px 10px;
+        text-align: start;
+        display: grid;
+        gap: 2px;
+      }
+      .file-open:hover:not(:disabled) {
+        background: none;
+      }
+      .file-name {
+        font-weight: 500;
+        font-size: 14px;
+        overflow-wrap: anywhere;
+        unicode-bidi: plaintext;
+      }
+      .file-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pin {
+        border: 0;
+        border-inline-start: 1px solid var(--line);
+        border-radius: 0;
+        background: none;
+        padding: 0 10px;
+        font-size: 15px;
+      }
+      .pin:hover:not(:disabled) {
+        background: var(--brand-soft);
+      }
+      .tag {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .tag-indexed {
+        background: #e5f4ea;
+        color: #1d6b3d;
+      }
+      .tag-failed {
+        background: var(--err-bg);
+        color: var(--err);
+      }
+      .tag-queued {
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+      }
+      .tag-unsupported {
+        background: #eef0f3;
+        color: #4b5563;
+      }
+      .files-note {
+        color: var(--muted);
+        font-size: 13px;
+        margin: 8px 0 0;
+      }
+
+      /* דוחות */
+      .reports {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 12px;
+      }
+      .reports button {
+        font-size: 13px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        border-color: var(--brand-line);
+        color: var(--brand-dark);
+      }
+      .reports button:hover:not(:disabled) {
+        background: #e2eef8;
+      }
+      .msg.report {
+        align-self: stretch;
+        max-width: 100%;
+        background: #fff;
+        border: 1px solid var(--line);
+        white-space: normal;
+      }
+      .report-h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        color: var(--brand-deep);
+        margin-bottom: 8px;
+      }
+      .free {
+        font-size: 11px;
+        font-weight: 500;
+        color: #1d6b3d;
+        background: #e5f4ea;
+        border-radius: 999px;
+        padding: 0 8px;
+      }
+      .report h4 {
+        margin: 12px 0 4px;
+        font-size: 14px;
+      }
+      .rtable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .rtable th,
+      .rtable td {
+        text-align: start;
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .rtable th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .rtable a {
+        color: var(--brand);
+      }
+      .overdue {
+        color: var(--err);
+        font-weight: 500;
+      }
+      .pending-note {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 8px 0 0;
+      }
+
+      /* מסמך בסיס לניסוח */
+      .focus {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--brand-soft);
+        border: 1px solid var(--brand-line);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .focus b {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .focus button {
+        padding: 0 8px;
+        border: 0;
+        background: none;
+      }
+      .base-badge {
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--brand);
+        border-radius: 999px;
+        padding: 0 8px;
+        align-self: flex-start;
+      }
+
+      /* חלונות */
+      dialog {
+        border: 0;
+        border-radius: var(--radius);
+        box-shadow: 0 20px 50px rgba(14, 47, 76, 0.3);
+        padding: 22px;
+        width: min(560px, calc(100vw - 32px));
+        max-height: calc(100vh - 48px);
+        color: var(--text);
+      }
+      dialog::backdrop {
+        background: rgba(14, 47, 76, 0.45);
+      }
+      dialog h3 {
+        margin: 0 0 6px;
+        font-size: 18px;
+        color: var(--brand-deep);
+        overflow-wrap: anywhere;
+      }
+      .meta {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 6px 14px;
+        margin: 14px 0;
+        font-size: 14px;
+      }
+      .meta dt {
+        color: var(--muted);
+      }
+      .meta dd {
+        margin: 0;
+      }
+      .dialog-error {
+        background: var(--err-bg);
+        color: var(--err);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 14px;
+      }
+      .dialog-note {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      #login-dialog input {
+        width: 100%;
+        font: inherit;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin: 6px 0 12px;
+      }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--brand-deep);
+        color: #fff;
+        padding: 10px 18px;
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        z-index: 20;
+        max-width: calc(100vw - 32px);
+        font-size: 14px;
+      }
     </style>
   </head>
   <body>
@@ -464,6 +849,10 @@
           <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
           <p class="status" id="status" hidden></p>
         </div>
+        <div class="actions">
+          <button type="button" id="sync-btn" hidden>⟳ סנכרון</button>
+          <button type="button" id="login-btn" hidden>כניסה</button>
+        </div>
       </div>
     </header>
     <div class="banner" role="note">
@@ -471,14 +860,58 @@
       הסכם לפני שימוש.
     </div>
     <main>
+      <section id="files-panel" aria-labelledby="files-h">
+        <details id="files-box" open>
+          <summary>
+            <h2 id="files-h">קבצים במאגר</h2>
+            <span class="count" id="files-count"></span>
+          </summary>
+          <input
+            type="search"
+            id="files-q"
+            placeholder="חיפוש לפי שם…"
+            aria-label="חיפוש קבצים לפי שם"
+          />
+          <label class="dropzone" id="dropzone" hidden>
+            <input
+              type="file"
+              id="file-input"
+              class="visually-hidden"
+              multiple
+              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.docx"
+            />
+            ⬆ גרור לכאן קבצים או לחץ לבחירה · קבצי PDF ותמונות
+          </label>
+          <div id="upload-progress" hidden role="status">
+            <div class="bar" aria-hidden="true"><i id="upload-bar"></i></div>
+            <span id="upload-text"></span>
+          </div>
+          <ul id="files"></ul>
+          <p class="files-note" id="files-note" hidden></p>
+        </details>
+      </section>
+
       <section id="chat-panel" aria-labelledby="chat-h">
         <h2 id="chat-h">שיחה</h2>
         <p class="hint">
           תאר את ההסכם שאתה צריך: סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם
           יחסרו פרטים מהותיים, המערכת תשאל.
         </p>
+        <div class="reports" role="group" aria-label="דוחות">
+          <button type="button" data-report="expiring">⏳ מסתיימים בקרוב</button>
+          <button type="button" data-report="index">◉ סטטוס אינדקס</button>
+          <button type="button" data-report="types">
+            🗂 לפי סוג מסמך / תוכנית
+          </button>
+        </div>
         <div id="chat" aria-live="polite"></div>
         <form id="form">
+          <div class="focus" id="focus-bar" hidden>
+            📎 מבוסס על: <b id="focus-name"></b>
+            <button type="button" id="focus-clear" aria-label="הסרת מסמך הבסיס">
+              ✕
+            </button>
+          </div>
           <label for="input" class="hint">ההודעה שלך</label>
           <textarea
             id="input"
@@ -529,6 +962,43 @@
         </div>
       </section>
     </main>
+
+    <dialog id="file-dialog" aria-labelledby="fd-name">
+      <h3 id="fd-name"></h3>
+      <div class="file-meta" id="fd-sub"></div>
+      <dl class="meta" id="fd-meta"></dl>
+      <p class="dialog-note" id="fd-summary"></p>
+      <p class="dialog-error" id="fd-error" hidden></p>
+      <div class="row">
+        <a id="fd-drive" target="_blank" rel="noopener">פתח ב-Drive ↗</a>
+        <button type="button" id="fd-pin">📎 נסח על בסיס המסמך הזה</button>
+        <button type="button" id="fd-retry" hidden>נסה לאנדקס שוב</button>
+        <button type="button" id="fd-close">סגירה</button>
+      </div>
+    </dialog>
+
+    <dialog id="login-dialog" aria-labelledby="login-h">
+      <form id="login-form">
+        <h3 id="login-h">כניסה</h3>
+        <p class="dialog-note">
+          הכניסה נדרשת להעלאת קבצים ולהפעלת סנכרון. הניסוח זמין גם בלי כניסה.
+        </p>
+        <label for="login-pw" class="hint">סיסמה</label>
+        <input
+          id="login-pw"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+        <p class="dialog-error" id="login-error" hidden></p>
+        <div class="row">
+          <button class="primary">כניסה</button>
+          <button type="button" id="login-cancel">ביטול</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite" hidden></div>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -597,9 +1067,15 @@
                 role,
                 content,
               })),
+              focus_file_id: focus?.id ?? null,
             }),
           });
-          if (!res.ok) throw new Error("שגיאת שרת (" + res.status + ")");
+          if (!res.ok) {
+            const d = (await res.json().catch(() => ({}))).detail;
+            throw new Error(
+              typeof d === "string" ? d : "שגיאת שרת (" + res.status + ")",
+            );
+          }
           const r = await res.json();
           busy(false);
           if (r.status === "questions") {
@@ -643,6 +1119,13 @@
                 a.textContent = s.name;
                 const small = document.createElement("small");
                 small.textContent = s.summary;
+                if (s.base)
+                  li.append(
+                    Object.assign(document.createElement("span"), {
+                      className: "base-badge",
+                      textContent: "מסמך בסיס",
+                    }),
+                  );
                 li.append(a, small);
                 if (s.url) {
                   a.href = s.url;
@@ -704,27 +1187,468 @@
         $("chat").replaceChildren();
         $("doc").hidden = true;
         $("placeholder").hidden = false;
+        setFocus(null);
         $("input").focus();
       });
 
       // שורת הסטטוס של המאגר. אם המסד לא זמין, השורה פשוט לא מוצגת
-      fetch("/api/status")
-        .then((res) => (res.ok ? res.json() : null))
-        .then((s) => {
-          if (!s || !s.updated_at) return;
-          const el = $("status");
-          el.textContent = `המאגר עודכן לאחרונה: ${s.updated_at} · ${s.documents} מסמכים במאגר`;
-          if (s.failed)
-            el.append(
-              " · ",
-              Object.assign(document.createElement("a"), {
-                href: "/admin/sync",
-                textContent: "⚠️ בסנכרון האחרון היו שגיאות",
-              }),
-            );
-          el.hidden = false;
-        })
-        .catch(() => {});
+      function loadStatus() {
+        fetch("/api/status")
+          .then((res) => (res.ok ? res.json() : null))
+          .then((s) => {
+            if (!s || !s.updated_at) return;
+            const line = $("status");
+            line.textContent = `המאגר עודכן לאחרונה: ${s.updated_at} · ${s.documents} מסמכים במאגר`;
+            if (s.failed)
+              line.append(
+                " · ",
+                Object.assign(document.createElement("a"), {
+                  href: "/admin/sync",
+                  textContent: "⚠️ בסנכרון האחרון היו שגיאות",
+                }),
+              );
+            line.hidden = false;
+          })
+          .catch(() => {});
+      }
+
+      // ---- פאנל קבצים, דוחות, מסמך בסיס, כניסה, סנכרון והעלאה ----
+      const STATUS = {
+        indexed: "מאונדקס",
+        failed: "נכשל",
+        queued: "בתור",
+        unsupported: "לא נתמך",
+      };
+      const META = [
+        ["doc_type", "סוג מסמך"],
+        ["parties", "צדדים"],
+        ["plan_number", "מספר תוכנית"],
+        ["location", "מיקום"],
+        ["gush_helka", "גוש / חלקה"],
+        ["start_date", "תאריך התחלה"],
+        ["end_date", "תאריך סיום"],
+        ["amounts", "סכומים"],
+        ["pages", "עמודים"],
+      ];
+      const UPLOAD_EXT = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "docx"];
+      const MAX_UPLOAD = 20 * 1024 * 1024;
+      let files = [];
+      let focus = null; // מסמך הבסיס לניסוח: { id, name }
+      let me = { login: false, writer: false, sync: false };
+      let syncWatch = null;
+
+      // יוצר אלמנט. טקסט נכנס תמיד כ-textContent, כך ששמות קבצים לא יכולים להזריק HTML
+      function el(tag, props = {}, ...children) {
+        const e = Object.assign(document.createElement(tag), props);
+        e.append(...children.filter((c) => c != null && c !== false));
+        return e;
+      }
+      async function api(url, opts = {}) {
+        const res = await fetch(
+          url,
+          opts.body
+            ? { headers: { "Content-Type": "application/json" }, ...opts }
+            : opts,
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok)
+          throw new Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : "שגיאת שרת (" + res.status + ")",
+          );
+        return data;
+      }
+      function toast(text, ms = 7000) {
+        $("toast").textContent = text;
+        $("toast").hidden = false;
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => ($("toast").hidden = true), ms);
+      }
+      const fmtDate = (d) =>
+        d
+          ? new Date(d.length === 10 ? d + "T12:00:00Z" : d).toLocaleDateString(
+              "he-IL",
+              { timeZone: "Asia/Jerusalem" },
+            )
+          : "";
+      const fmtSize = (b) =>
+        b == null
+          ? ""
+          : b < 1024 * 1024
+            ? Math.max(1, Math.round(b / 1024)) + " KB"
+            : (b / 1024 / 1024).toFixed(1) + " MB";
+      const mins = (s) => (s <= 60 ? "דקה" : Math.ceil(s / 60) + " דקות");
+      const tag = (status) =>
+        el("span", {
+          className: "tag tag-" + status,
+          textContent: STATUS[status] || status,
+        });
+      const link = (d) =>
+        d.url
+          ? el("a", { href: d.url, target: "_blank", rel: "noopener", textContent: d.name })
+          : d.name;
+      // תווית סטטוס, גודל ותאריך. כל אחד ב-span משלו, אחרת flex מחבר אותם לטקסט אחד
+      const fileMeta = (f) => [
+        tag(f.status),
+        el("span", { textContent: fmtSize(f.size_bytes) }),
+        el("span", { textContent: fmtDate(f.modified_time) }),
+      ];
+
+      // פאנל הקבצים. החיפוש מסנן בצד הלקוח, בלי קריאה לשרת
+      async function loadFiles() {
+        try {
+          files = await api("/api/files");
+        } catch {
+          $("files-note").textContent = "רשימת הקבצים לא זמינה כרגע.";
+          $("files-note").hidden = false;
+          return;
+        }
+        renderFiles();
+      }
+      function renderFiles() {
+        const q = $("files-q").value.trim().toLowerCase();
+        const shown = files.filter((f) => f.name.toLowerCase().includes(q));
+        const failed = files.filter((f) => f.status === "failed").length;
+        $("files-count").textContent = `${files.length} מסמכים · ${failed} נכשלו`;
+        $("files").replaceChildren(
+          ...shown.map((f) =>
+            el(
+              "li",
+              { className: "file" },
+              el(
+                "button",
+                { type: "button", className: "file-open", onclick: () => openFile(f.file_id) },
+                el("span", { className: "file-name", textContent: f.name }),
+                el("span", { className: "file-meta" }, ...fileMeta(f)),
+              ),
+              f.status === "indexed" &&
+                el("button", {
+                  type: "button",
+                  className: "pin",
+                  title: "נסח על בסיס המסמך הזה",
+                  ariaLabel: "נסח על בסיס " + f.name,
+                  textContent: "📎",
+                  onclick: () => setFocus(f),
+                }),
+            ),
+          ),
+        );
+        $("files-note").hidden = shown.length > 0;
+        $("files-note").textContent = files.length
+          ? "לא נמצאו קבצים בשם הזה."
+          : "הרשימה תתמלא אחרי הסנכרון הבא.";
+      }
+      $("files-q").addEventListener("input", renderFiles);
+
+      function fmtMeta(key, v) {
+        if (key === "amounts")
+          return v
+            .map((a) => [a.amount?.toLocaleString("he-IL"), a.currency].filter(Boolean).join(" "))
+            .join(" · ");
+        if (key.endsWith("_date")) return fmtDate(v);
+        return Array.isArray(v) ? v.join(" · ") : String(v);
+      }
+      function openFile(id) {
+        const f = files.find((x) => x.file_id === id);
+        if (!f) return;
+        const m = f.metadata;
+        $("fd-name").textContent = f.name;
+        $("fd-sub").replaceChildren(...fileMeta(f));
+        $("fd-meta").replaceChildren(
+          ...(m
+            ? META.filter(([k]) => m[k] != null && !(Array.isArray(m[k]) && !m[k].length)).flatMap(
+                ([k, label]) => [el("dt", { textContent: label }), el("dd", { textContent: fmtMeta(k, m[k]) })],
+              )
+            : f.status === "indexed"
+              ? [
+                  el("dt", { textContent: "נתונים מובנים" }),
+                  el("dd", { textContent: "יושלמו בסנכרון הבא" }),
+                ]
+              : []),
+        );
+        $("fd-summary").textContent = f.summary || "";
+        $("fd-error").textContent = f.error || "";
+        $("fd-error").hidden = !f.error;
+        $("fd-drive").href = f.url;
+        $("fd-pin").hidden = f.status !== "indexed";
+        $("fd-pin").onclick = () => {
+          setFocus(f);
+          $("file-dialog").close();
+        };
+        $("fd-retry").hidden = !(me.writer && f.status === "failed");
+        $("fd-retry").onclick = () => retry(f);
+        $("file-dialog").showModal();
+      }
+      $("fd-close").onclick = () => $("file-dialog").close();
+
+      // "נסח על בסיס המסמך הזה": המסמך נשלח כ-focus_file_id עד שמסירים אותו
+      function setFocus(f) {
+        focus = f ? { id: f.file_id, name: f.name } : null;
+        $("focus-bar").hidden = !focus;
+        $("focus-name").textContent = focus?.name ?? "";
+        if (focus) $("input").focus();
+      }
+      $("focus-clear").onclick = () => setFocus(null);
+
+      // דוחות: נשלפים מ-SQL בשרת, בלי מודל. לא נכנסים להיסטוריית השיחה
+      function table(head, rows) {
+        return el(
+          "table",
+          { className: "rtable" },
+          el("thead", {}, el("tr", {}, ...head.map((h) => el("th", { textContent: h })))),
+          el("tbody", {}, ...rows.map((r) => el("tr", {}, ...r.map((c) => el("td", {}, c))))),
+        );
+      }
+      const note = (text) => el("p", { className: "dialog-note", textContent: text });
+      function groupTable(groups, label) {
+        if (!groups.length) return note("אין נתונים עדיין.");
+        return table(
+          [label, "מספר", "מסמכים"],
+          groups.map((g) => [
+            g.value,
+            String(g.count),
+            el("span", {}, ...g.docs.flatMap((d, i) => [i ? " · " : null, link(d)])),
+          ]),
+        );
+      }
+      const REPORTS = {
+        expiring: (rows) =>
+          rows.length
+            ? [
+                table(
+                  ["מסמך", "סוג", "תאריך סיום", "מצב"],
+                  rows.map((d) => [
+                    link(d),
+                    d.doc_type ?? "",
+                    fmtDate(d.end_date),
+                    d.days_left < 0
+                      ? el("span", { className: "overdue", textContent: `פג לפני ${-d.days_left} ימים` })
+                      : d.days_left === 0
+                        ? "מסתיים היום"
+                        : `בעוד ${d.days_left} ימים`,
+                  ]),
+                ),
+              ]
+            : [note("אין מסמכים שפגו או שמסתיימים ב-90 הימים הקרובים.")],
+        index: (r, pending) => [
+          table(
+            ["סטטוס", "קבצים"],
+            Object.entries(STATUS).map(([k, label]) => [label, String(r.counts[k] ?? 0)]),
+          ),
+          note(`מסמכים בלי נתונים מובנים: ${pending} · סנכרון אחרון: ${r.last_sync ?? "עוד לא רץ"}`),
+          ...(r.failed.length
+            ? [
+                el("h4", { textContent: "קבצים שנכשלו" }),
+                table(["קובץ", "סיבה"], r.failed.map((f) => [f.name, f.error ?? ""])),
+              ]
+            : []),
+        ],
+        types: (r) => [
+          el("h4", { textContent: "לפי סוג מסמך" }),
+          groupTable(r.doc_type, "סוג"),
+          el("h4", { textContent: "לפי תוכנית" }),
+          groupTable(r.plan_number, "תוכנית"),
+        ],
+      };
+      async function report(kind, title) {
+        let data;
+        try {
+          data = await api("/api/reports/" + kind);
+        } catch (e) {
+          add("error", "הדוח נכשל: " + e.message);
+          return;
+        }
+        const box = el(
+          "div",
+          { className: "msg report" },
+          el("div", { className: "report-h" }, title, el("span", { className: "free", textContent: "ללא עלות AI" })),
+          ...REPORTS[kind](data.rows, data.pending),
+        );
+        if (data.pending && kind !== "index")
+          box.append(
+            el("p", {
+              className: "pending-note",
+              textContent: `${data.pending} מסמכים עדיין ממתינים להשלמת נתונים בסנכרון הבא`,
+            }),
+          );
+        $("chat").append(box);
+        $("chat").scrollTop = $("chat").scrollHeight;
+      }
+      document
+        .querySelectorAll("[data-report]")
+        .forEach((b) => b.addEventListener("click", () => report(b.dataset.report, b.textContent.trim())));
+
+      // כניסה: רק להעלאה ולסנכרון. בלי APP_PASSWORD בשרת, הכפתור לא מוצג
+      async function loadMe() {
+        try {
+          me = await api("/api/me");
+        } catch {
+          return;
+        }
+        $("login-btn").hidden = !me.login || me.writer;
+        $("sync-btn").hidden = !(me.writer && me.sync);
+        $("dropzone").hidden = !me.writer;
+      }
+      $("login-btn").onclick = () => {
+        $("login-error").hidden = true;
+        $("login-dialog").showModal();
+      };
+      $("login-cancel").onclick = () => $("login-dialog").close();
+      $("login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await api("/api/login", {
+            method: "POST",
+            body: JSON.stringify({ password: $("login-pw").value }),
+          });
+        } catch (err) {
+          $("login-error").textContent = err.message;
+          $("login-error").hidden = false;
+          return;
+        }
+        $("login-pw").value = "";
+        $("login-dialog").close();
+        await loadMe();
+        toast("מחובר. אפשר להעלות קבצים ולהפעיל סנכרון.");
+      });
+
+      // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת
+      function watchSync() {
+        if (syncWatch) return;
+        const start = Date.now();
+        let seen = false;
+        syncWatch = setInterval(async () => {
+          loadFiles();
+          loadStatus();
+          let running = true;
+          try {
+            running = (await api("/api/sync")).running;
+          } catch {}
+          seen ||= running;
+          const done = !running && (seen || Date.now() - start > 90000); // ריצה חדשה מופיעה ב-GitHub אחרי כמה שניות
+          if (done || Date.now() - start > 30 * 60000) {
+            clearInterval(syncWatch);
+            syncWatch = null;
+            loadFiles();
+            loadStatus();
+            if (done) toast("הסנכרון הסתיים. רשימת הקבצים עודכנה.");
+          }
+        }, 30000);
+      }
+      // הודעה על הסנכרון שהופעל אחרי העלאה או "נסה שוב"
+      function afterSync(s) {
+        if (!s) return " הקובץ יעובד בסנכרון הלילי.";
+        if (s.error) return " " + s.error;
+        if (s.started) {
+          watchSync();
+          return " הסנכרון התחיל, יסתיים בעוד כמה דקות.";
+        }
+        if (s.deferred) {
+          setTimeout(watchSync, s.retry_after * 1000);
+          return ` הסנכרון יופעל אוטומטית בעוד ${mins(s.retry_after)}.`;
+        }
+        return "";
+      }
+      $("sync-btn").onclick = async () => {
+        try {
+          const s = await api("/api/sync", { method: "POST" });
+          if (!s.started)
+            return toast(`סנכרון כבר הופעל לאחרונה. אפשר להפעיל שוב בעוד ${mins(s.retry_after)}.`);
+          toast("הסנכרון התחיל, יסתיים בעוד כמה דקות");
+          watchSync();
+        } catch (e) {
+          toast(e.message);
+        }
+      };
+      async function retry(f) {
+        try {
+          const r = await api(`/api/files/${encodeURIComponent(f.file_id)}/retry`, { method: "POST" });
+          $("file-dialog").close();
+          toast(`"${r.name}" יעובד מחדש.` + afterSync(r.sync));
+          loadFiles();
+        } catch (e) {
+          toast(e.message);
+        }
+      }
+
+      // העלאה: קובץ אחרי קובץ, עם פס התקדמות. השרת בודק שוב סוג, גודל ותוכן
+      function sendFile(file, onProgress) {
+        return new Promise((resolve, reject) => {
+          const x = new XMLHttpRequest();
+          x.open("POST", "/api/upload?name=" + encodeURIComponent(file.name));
+          x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+          x.onload = () => {
+            let d = {};
+            try {
+              d = JSON.parse(x.responseText);
+            } catch {}
+            if (x.status < 300) resolve(d);
+            else reject(new Error(typeof d.detail === "string" ? d.detail : "שגיאת שרת (" + x.status + ")"));
+          };
+          x.onerror = () => reject(new Error("שגיאת רשת"));
+          x.send(file);
+        });
+      }
+      async function uploadFiles(list) {
+        const all = [...list];
+        if (!all.length) return;
+        const done = [], failed = [], syncs = [];
+        $("upload-progress").hidden = false;
+        $("upload-bar").style.width = "0";
+        for (const [i, file] of all.entries()) {
+          $("upload-text").textContent = `מעלה ${i + 1} מתוך ${all.length}: ${file.name}`;
+          const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+          if (!UPLOAD_EXT.includes(ext)) {
+            failed.push(`${file.name}: סוג קובץ לא מותר`);
+            continue;
+          }
+          if (file.size > MAX_UPLOAD) {
+            failed.push(`${file.name}: גדול מ-20MB`);
+            continue;
+          }
+          try {
+            const r = await sendFile(file, (p) => {
+              $("upload-bar").style.width = Math.round(((i + p) / all.length) * 100) + "%";
+            });
+            done.push(r.renamed ? `${file.name} (נשמר בשם ${r.name})` : r.name);
+            if (r.sync) syncs.push(r.sync);
+          } catch (e) {
+            failed.push(e.message.includes(file.name) ? e.message : `${file.name}: ${e.message}`);
+          }
+        }
+        $("upload-bar").style.width = "100%";
+        let msg = done.length ? `הועלו ${done.length} קבצים: ${done.join(", ")}.` : "";
+        if (failed.length) msg += ` לא הועלו: ${failed.join("; ")}.`;
+        if (done.length) {
+          const started = syncs.find((s) => s.started), deferred = syncs.find((s) => s.deferred);
+          msg += afterSync(started || deferred || syncs[0]);
+          if (started && deferred) setTimeout(watchSync, deferred.retry_after * 1000); // גם הסנכרון שתוזמן לקבצים האחרונים
+        }
+        $("upload-text").textContent = msg.trim();
+        toast(msg.trim(), 10000);
+        loadFiles();
+      }
+      $("file-input").addEventListener("change", (e) => {
+        uploadFiles(e.target.files);
+        e.target.value = "";
+      });
+      const dropzone = $("dropzone");
+      dropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.classList.add("over");
+      });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
+      dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("over");
+        uploadFiles(e.dataTransfer.files);
+      });
+
+      $("files-box").open = matchMedia("(min-width: 1201px)").matches; // במסך צר הפאנל מתחיל מקופל
+      loadStatus();
+      loadMe();
+      loadFiles();
 
       $("input").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey))

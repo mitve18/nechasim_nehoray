@@ -21,6 +21,10 @@ DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 GDOC = "application/vnd.google-apps.document"
 
 
+class Unsupported(ValueError):
+    """סוג קובץ שאי אפשר לחלץ ממנו טקסט. בטבלת files הוא מסומן "לא נתמך" ולא "נכשל"."""
+
+
 def supported(mime):
     """האם אפשר לחלץ טקסט מהסוג הזה. נבדק לפני ההורדה, כדי שסוג לא נתמך ייכשל עם סיבה ברורה."""
     return mime in ("application/pdf", DOCX, GDOC) or mime in IMAGE_TYPES or mime.startswith("text/")
@@ -31,7 +35,7 @@ def extract(f, data):
     mime = f["mimeType"]
     if not supported(mime):
         # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
-        raise ValueError(f"סוג קובץ לא נתמך: {mime}")
+        raise Unsupported(f"סוג קובץ לא נתמך: {mime}")
     if mime == "application/pdf":
         pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages]
         # ponytail: החלטה לכל הקובץ לפי ממוצע; עמודים סרוקים בודדים בתוך PDF טקסטואלי לא יעברו OCR
@@ -39,12 +43,27 @@ def extract(f, data):
             return clean(pages), "text"
         return _checked(clean(ocr(_pdf_images(data))), len(pages)), "ocr"
     if mime in IMAGE_TYPES:
-        from PIL import Image
-        return _checked(clean(ocr([Image.open(io.BytesIO(data))])), 1), "ocr"
+        frames = _image_frames(data)  # TIFF סרוק יכול להכיל כמה עמודים
+        return _checked(clean(ocr(frames)), len(frames)), "ocr"
     if mime == DOCX:
         import docx
         return clean(["\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)]), "docx"
     return clean([data.decode("utf-8-sig")]), "text"  # GDOC או text/*
+
+
+def _image_frames(data):
+    from PIL import Image, ImageSequence
+    return [frame.convert("RGB") for frame in ImageSequence.Iterator(Image.open(io.BytesIO(data)))]
+
+
+def page_count(f, data):
+    """מספר העמודים האמיתי, ל-PDF ולתמונות. לסוגים אחרים None."""
+    if f["mimeType"] == "application/pdf":
+        return len(PdfReader(io.BytesIO(data)).pages)
+    if f["mimeType"] in IMAGE_TYPES:
+        from PIL import Image
+        return getattr(Image.open(io.BytesIO(data)), "n_frames", 1)
+    return None
 
 
 def _checked(text, pages):

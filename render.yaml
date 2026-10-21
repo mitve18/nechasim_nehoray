@@ -21,3 +21,11 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      # העלאה, "נסה שוב" וסנכרון מהאתר: זמינים רק כשהסיסמה מוגדרת והמשתמש מחובר
+      - key: APP_PASSWORD
+        sync: false
+      # כפתור הסנכרון: fine-grained token רק ל-repo הזה, Actions: Read and write
+      - key: GH_DISPATCH_TOKEN
+        sync: false
+      - key: GH_REPO
+        sync: false
