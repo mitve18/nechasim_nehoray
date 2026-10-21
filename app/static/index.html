@@ -6,7 +6,7 @@
     <title>מנסח ההסכמים</title>
     <meta name="theme-color" content="#0e2f4c" />
     <link rel="icon" type="image/png" href="/static/favicon.png" />
-    <link rel="apple-touch-icon" href="/static/logo.png" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -59,10 +59,14 @@
         align-items: center;
         gap: 14px;
       }
+      /* הלוגו שקוף ורחב: אריח לבן עם פינות מעוגלות מתאים לצורה שלו יותר מעיגול */
       .logo {
-        width: 76px;
-        height: 76px;
-        border-radius: 50%;
+        width: 70px;
+        height: 70px;
+        padding: 9px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 18px;
         flex: none;
         box-shadow:
           0 0 0 3px rgba(255, 255, 255, 0.18),
@@ -119,8 +123,10 @@
           padding: 14px 16px;
         }
         .logo {
-          width: 60px;
-          height: 60px;
+          width: 56px;
+          height: 56px;
+          padding: 7px;
+          border-radius: 15px;
         }
       }
       section {
@@ -138,18 +144,6 @@
         #chat-panel {
           position: sticky;
           top: 56px;
-        }
-      }
-      @media (min-width: 1201px) {
-        #files-panel {
-          position: sticky;
-          top: 56px;
-          max-height: calc(100vh - 76px);
-        }
-        #files-box[open] {
-          display: flex;
-          flex-direction: column;
-          min-height: 0;
         }
       }
       h2 {
@@ -481,6 +475,7 @@
         background: rgba(255, 255, 255, 0.12);
         border-color: rgba(255, 255, 255, 0.35);
         color: #fff;
+        white-space: nowrap;
       }
       .actions button:hover:not(:disabled) {
         background: rgba(255, 255, 255, 0.22);
@@ -490,7 +485,8 @@
       #files-panel {
         padding: 16px;
       }
-      #files-box > summary {
+      /* חלק מתקפל עם חץ: "סטטוס מאגר ההסכמים" ו"קבצים במאגר" */
+      .fold > summary {
         list-style: none;
         cursor: pointer;
         display: flex;
@@ -498,19 +494,23 @@
         gap: 8px;
         flex-wrap: wrap;
       }
-      #files-box > summary::-webkit-details-marker {
+      .fold > summary::-webkit-details-marker {
         display: none;
       }
-      #files-box > summary::before {
+      .fold > summary::before {
         content: "▾";
         color: var(--muted);
         transition: transform 0.15s;
       }
-      #files-box:not([open]) > summary::before {
+      .fold:not([open]) > summary::before {
         transform: rotate(90deg);
       }
-      #files-box > summary h2 {
+      .fold > summary h2,
+      .fold > summary h3 {
         margin: 0;
+      }
+      #status-box[open] > summary {
+        margin-bottom: 10px;
       }
       .count {
         color: var(--muted);
@@ -536,9 +536,10 @@
         background: var(--brand-soft);
         color: var(--brand-dark);
         border-radius: 12px;
-        padding: 12px;
+        padding: 8px 10px;
         text-align: center;
         font-size: 13px;
+        line-height: 1.4;
         cursor: pointer;
         margin-bottom: 10px;
         transition:
@@ -570,20 +571,19 @@
         width: 100%;
         margin-bottom: 4px;
       }
+      /* הרשימה נגללת בתוך עצמה, כך שהדף לא מתארך כשיש הרבה קבצים */
       #files {
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: 0 0 0 4px;
+        max-height: min(340px, 45vh);
         overflow-y: auto;
-        min-height: 0;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--brand-line) transparent;
         display: grid;
         gap: 6px;
         align-content: start;
-      }
-      @media (max-width: 1200px) {
-        #files {
-          max-height: 50vh;
-        }
       }
       .file {
         display: flex;
@@ -601,19 +601,25 @@
         min-width: 0;
         border: 0;
         background: none;
-        padding: 8px 10px;
+        padding: 7px 10px;
         text-align: start;
         display: grid;
-        gap: 2px;
+        gap: 3px;
       }
       .file-open:hover:not(:disabled) {
         background: none;
       }
       .file-name {
         font-weight: 500;
-        font-size: 14px;
+        font-size: 13.5px;
+        line-height: 1.4;
         overflow-wrap: anywhere;
         unicode-bidi: plaintext;
+        /* עד שתי שורות; השם המלא מופיע במעבר עכבר */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       .file-meta {
         display: flex;
@@ -692,27 +698,14 @@
         margin-bottom: 16px;
       }
       .sc-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0 0 10px;
         font-size: 15px;
         font-weight: 700;
         color: var(--brand-deep);
       }
-      .sc-title::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 0 3px var(--ring);
-        flex: none;
-      }
       .sc-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 14px;
+        font-size: 13px;
       }
       .sc-table thead th {
         font-size: 12px;
@@ -729,10 +722,10 @@
       .sc-table tbody th {
         text-align: start;
         font-weight: 400;
-        padding: 7px 0;
+        padding: 5px 0;
       }
       .sc-table td {
-        padding: 7px 0 7px 2px;
+        padding: 5px 0 5px 2px;
         font-weight: 700;
         color: var(--brand-deep);
         font-variant-numeric: tabular-nums;
@@ -877,7 +870,7 @@
   <body>
     <header>
       <div class="top">
-        <img class="logo" src="/static/logo.png" alt="" width="76" height="76" />
+        <img class="logo" src="/static/logo.png" alt="" width="70" height="70" />
         <div>
           <h1>מנסח ההסכמים</h1>
           <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
@@ -894,8 +887,13 @@
     </div>
     <main>
       <section id="files-panel" aria-labelledby="files-h">
-        <div class="status-card" id="status-box" hidden></div>
-        <details id="files-box" open>
+        <details class="status-card fold" id="status-box" open hidden>
+          <summary>
+            <h3 class="sc-title" id="sc-title">סטטוס מאגר ההסכמים</h3>
+          </summary>
+          <div id="status-body"></div>
+        </details>
+        <details class="fold" id="files-box" open>
           <summary>
             <h2 id="files-h">קבצים במאגר</h2>
             <span class="count" id="files-count"></span>
@@ -914,7 +912,7 @@
               multiple
               accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.docx"
             />
-            ⬆ גרור לכאן קבצים או לחץ לבחירה · קבצי PDF ותמונות
+            ⬆ גרור קבצים או לחץ להעלאה
           </label>
           <div id="upload-progress" hidden role="status">
             <div class="bar" aria-hidden="true"><i id="upload-bar"></i></div>
@@ -1350,7 +1348,7 @@
               { className: "file" },
               el(
                 "button",
-                { type: "button", className: "file-open", onclick: () => openFile(f.file_id) },
+                { type: "button", className: "file-open", title: f.name, onclick: () => openFile(f.file_id) },
                 el("span", { className: "file-name", textContent: f.name }),
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
@@ -1365,7 +1363,6 @@
                     onclick: () => setFocus(f),
                   },
                   draftIcon(),
-                  "נסח",
                 ),
             ),
           ),
@@ -1479,8 +1476,7 @@
           ),
         );
         table.setAttribute("aria-labelledby", "sc-title");
-        $("status-box").replaceChildren(
-          el("h3", { className: "sc-title", id: "sc-title", textContent: s.title }),
+        $("status-body").replaceChildren(
           table,
           el(
               "div",
@@ -1489,11 +1485,8 @@
               el(
                 "div",
                 { className: "sc-actions" },
-                feedbackButton("העתקה", "העתקת הדוח כטקסט", async () => {
-                  await navigator.clipboard.writeText(s.text);
-                  return "הועתק ✓";
-                }),
-                feedbackButton("העתקת טבלה", "העתקת הטבלה להדבקה באקסל", async () => {
+                // טבלה מופרדת בטאבים: נדבקת כטבלה באקסל, וכשורות קריאות בכל מקום אחר
+                feedbackButton("העתקה", "העתקת הטבלה, אפשר להדביק גם באקסל", async () => {
                   await navigator.clipboard.writeText(s.tsv);
                   return "הועתק ✓";
                 }),
@@ -1670,7 +1663,8 @@
         uploadFiles(e.dataTransfer.files);
       });
 
-      $("files-box").open = matchMedia("(min-width: 1201px)").matches; // במסך צר הפאנל מתחיל מקופל
+      // במסך צר שני החלקים בפאנל מתחילים מקופלים, כדי שהצ'אט לא ירד לתחתית הדף
+      $("files-box").open = $("status-box").open = matchMedia("(min-width: 1201px)").matches;
       loadStatus();
       loadMe();
       loadFiles();

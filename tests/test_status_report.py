@@ -94,10 +94,7 @@ def test_fill_pages_counts_existing_pdf_and_images_only():
         assert dict(conn.execute("select file_id, pages from agreements").fetchall()) == {"pdf": 9, "done": 4, "word": None}
 
 
-def test_text_and_tsv_formats():
-    assert main.status_text(ROWS) == ("סטטוס מאגר ההסכמים\n"
-                                      'סה"כ מסמכים בתיקייה: 48\nעמודים: 1,236\nעמודים שעברו OCR: —\n'
-                                      "אינדוקס אחרון: 21/10/2026 07:58")
+def test_tsv_format():
     tsv = main.status_tsv(ROWS)
     assert tsv.split("\n") == ["מדד\tערך", 'סה"כ מסמכים בתיקייה\t48', "עמודים\t1,236", "עמודים שעברו OCR\t—",
                                "אינדוקס אחרון\t21/10/2026 07:58"]

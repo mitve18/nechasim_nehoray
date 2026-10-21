@@ -122,24 +122,18 @@ STATUS_TITLE = "סטטוס מאגר ההסכמים"
 STATUS_HEADER = ["מדד", "ערך"]
 
 
-def status_text(rows):
-    """"העתקה": טקסט קריא, שורה לכל מדד."""
-    return "\n".join([STATUS_TITLE, *(f"{r['label']}: {r['value']}" for r in rows)])
-
-
 def status_tsv(rows):
-    """"העתקת טבלה": עמודות מופרדות בטאב, כך שהדבקה באקסל ממלאת תאים."""
+    """"העתקה": עמודות מופרדות בטאב. באקסל נדבק כטבלה, ובכל מקום אחר כשורות קריאות."""
     return "\n".join("\t".join(cells) for cells in [STATUS_HEADER, *([r["label"], r["value"]] for r in rows)])
 
 
 @app.get("/api/status")
 def api_status():
-    """שורת הסטטוס בראש האתר, ודוח "סטטוס מאגר ההסכמים" בצ'אט. מ-SQL בלבד, בלי מודל.
-    אם המסד לא זמין, הממשק פשוט לא מציג את שורת הסטטוס."""
+    """טבלת "סטטוס מאגר ההסכמים" בפאנל הצדדי. מ-SQL בלבד, בלי מודל.
+    אם המסד לא זמין, הממשק פשוט לא מציג אותה."""
     with store.connect() as conn:
         rows = store.status_rows(conn)
-        return store.status(conn) | {"title": STATUS_TITLE, "rows": rows, "text": status_text(rows),
-                                     "tsv": status_tsv(rows)}
+        return store.status(conn) | {"title": STATUS_TITLE, "rows": rows, "tsv": status_tsv(rows)}
 
 
 @app.get("/api/status/docx")
