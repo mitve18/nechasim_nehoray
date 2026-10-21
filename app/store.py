@@ -228,38 +228,6 @@ def files_list(conn):
                            from files f left join agreements a using (file_id) order by f.name""")
 
 
-# דוחות: שאילתות SQL בלבד, בלי קריאה למודל
-
-def pending_count(conn):
-    return conn.execute(f"select count(*) from agreements where {PENDING}", (METADATA_VERSION,)).fetchone()[0]
-
-
-def report_expiring(conn, days=90):
-    """מסמכים שכבר פגו, ומסמכים שמסתיימים ב-days הימים הקרובים (לפי שעון ישראל)."""
-    today = "(now() at time zone %s)::date"
-    return _dicts(conn, f"""select file_id, name, url, end_date, metadata->>'doc_type' as doc_type,
-                                   end_date - {today} as days_left
-                            from agreements where end_date <= {today} + %s order by end_date""",
-                  (TZ, TZ, days))
-
-
-def report_index(conn):
-    counts = dict(conn.execute("select status, count(*) from files group by status").fetchall())
-    failed = _dicts(conn, "select file_id, name, error from files where status = 'failed' order by name")
-    return {"counts": counts, "failed": failed, "last_sync": status(conn)["updated_at"]}
-
-
-def report_types(conn):
-    """ספירה לפי סוג מסמך ולפי מספר תוכנית, עם קישורים. רק מסמכים שכבר יש להם נתונים מובנים."""
-    def group(key):
-        return _dicts(conn, f"""select metadata->>'{key}' as value, count(*) as count,
-                                       json_agg(json_build_object('file_id', file_id, 'name', name, 'url', url)
-                                                order by name) as docs
-                                from agreements where metadata->>'{key}' is not null
-                                group by 1 order by 2 desc, 1""")
-    return {"doc_type": group("doc_type"), "plan_number": group("plan_number")}
-
-
 def log_run(conn, stats):
     conn.execute(
         """insert into sync_runs (started_at, finished_at, added, updated, removed, ocr, failed, errors, files)

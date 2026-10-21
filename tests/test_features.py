@@ -11,7 +11,7 @@ import os
 import shutil
 import sys
 import zipfile
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -135,42 +135,38 @@ def test_backfill_selects_only_missing_or_stale():
         assert row == ("תקציר קיים", date(2027, 1, 31), store.METADATA_VERSION)  # התקציר וה-embedding לא משתנים
 
 
-def test_reports_and_files_queries():
+def test_files_panel_queries():
     with postgres() as conn:
         if conn is None:
             return skip("אין py-pglite או Node")
         store.init(conn)
-        today = conn.execute("select (now() at time zone 'Asia/Jerusalem')::date").fetchone()[0]
-        plan = META | {"plan_number": 'תת"ל 120'}
-        _agreement(conn, "expired", "פג.pdf", plan, 1, today - timedelta(days=10))
-        _agreement(conn, "soon", "בקרוב.pdf", plan, 1, today + timedelta(days=30))
-        _agreement(conn, "later", "בעוד שנה.pdf", META | {"doc_type": "כתב התחייבות"}, 1, today + timedelta(days=200))
-        _agreement(conn, "pending", "ממתין.pdf")
-        for fid, status, error in (("expired", "indexed", None), ("soon", "indexed", None),
-                                   ("broken", "failed", "OCR נכשל"), ("heic", "unsupported", "לא נתמך")):
+        _agreement(conn, "doc", "הסכם.pdf", META | {"plan_number": 'תת"ל 120'}, 1)
+        for fid, status, error in (("doc", "indexed", None), ("broken", "failed", "OCR נכשל")):
             conn.execute("insert into files (file_id, name, status, error) values (%s, %s, %s, %s)",
                          (fid, fid + ".pdf", status, error))
         store.add_queued(conn, {"id": "up", "name": "הועלה.pdf", "mimeType": PDF, "size": "99", "modifiedTime": "t"})
 
-        expiring = store.report_expiring(conn)
-        assert [(d["name"], d["days_left"]) for d in expiring] == [("פג.pdf", -10), ("בקרוב.pdf", 30)]
-        index = store.report_index(conn)
-        assert index["counts"] == {"indexed": 2, "failed": 1, "unsupported": 1, "queued": 1}
-        assert [(f["name"], f["error"]) for f in index["failed"]] == [("broken.pdf", "OCR נכשל")]
-        types = store.report_types(conn)
-        assert [(g["value"], g["count"]) for g in types["doc_type"]] == [("הסכם", 2), ("כתב התחייבות", 1)]
-        assert [d["name"] for d in types["plan_number"][0]["docs"]] == ["בקרוב.pdf", "פג.pdf"]
-        assert store.pending_count(conn) == 1
-
         listed = {f["file_id"]: f for f in store.files_list(conn)}
         assert listed["up"]["url"] == "https://drive.google.com/file/d/up/view" and listed["up"]["status"] == "queued"
-        assert listed["soon"]["metadata"]["plan_number"] == 'תת"ל 120' and listed["soon"]["url"] == "https://drive/soon"
+        assert listed["doc"]["metadata"]["plan_number"] == 'תת"ל 120' and listed["doc"]["url"] == "https://drive/doc"
+        assert listed["broken"]["error"] == "OCR נכשל"
         assert store.mark_retry(conn, "broken") == "broken.pdf" and store.mark_retry(conn, "missing") is None
         assert store.retry_ids(conn) == {"broken"}
 
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
-            resp = TestClient(main.app).get("/api/reports/expiring").json()
-        assert resp["pending"] == 1 and resp["rows"][0]["end_date"] == str(today - timedelta(days=10))
+            files = TestClient(main.app).get("/api/files").json()
+        assert [f["name"] for f in files] == ["broken.pdf", "doc.pdf", "הועלה.pdf"]
+
+
+def test_server_start_creates_tables_before_first_sync():
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+            with TestClient(main.app) as c:  # with מריץ את ה-lifespan, כמו הפעלת השרת ב-Render
+                r = c.get("/api/files")
+                assert r.status_code == 200 and r.json() == [], r.text  # "הרשימה תתמלא אחרי הסנכרון הבא"
+                assert c.get("/api/reports/index").status_code == 404  # הדוחות הוסרו
 
 
 def _docx_bytes():

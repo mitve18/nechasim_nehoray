@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import hmac
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -26,7 +27,18 @@ STATIC = Path(__file__).parent / "static"
 PASSWORD = os.environ.get("APP_PASSWORD", "")
 TOKEN = hmac.new(PASSWORD.encode(), b"agreements-drafter-session", hashlib.sha256).hexdigest()
 
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+@asynccontextmanager
+async def lifespan(app):
+    """מיגרציות פעם אחת בהפעלת השרת, כדי שטבלאות חדשות (כמו files) יהיו קיימות עוד לפני הסנכרון הראשון."""
+    try:
+        with store.connect() as conn:
+            store.init(conn)
+    except Exception as e:  # מסד לא זמין לא מונע מהאתר לעלות; הניסוח והייצוא עדיין עובדים
+        print(f"המיגרציות בהפעלת השרת נכשלו: {e}")
+    yield
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")  # לוגו ו-favicon
 
 
@@ -117,18 +129,6 @@ def api_status():
 def api_files():
     with store.connect() as conn:
         return store.files_list(conn)
-
-
-REPORTS = {"expiring": store.report_expiring, "index": store.report_index, "types": store.report_types}
-
-
-@app.get("/api/reports/{kind}")
-def api_report(kind: str):
-    """דוחות מ-SQL בלבד, בלי קריאה למודל."""
-    if kind not in REPORTS:
-        raise HTTPException(404, "דוח לא קיים")
-    with store.connect() as conn:
-        return {"rows": REPORTS[kind](conn), "pending": store.pending_count(conn)}
 
 
 def _sync(defer):

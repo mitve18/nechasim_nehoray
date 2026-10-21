@@ -667,80 +667,6 @@
         margin: 8px 0 0;
       }
 
-      /* דוחות */
-      .reports {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin: 0 0 12px;
-      }
-      .reports button {
-        font-size: 13px;
-        padding: 5px 12px;
-        border-radius: 999px;
-        background: var(--brand-soft);
-        border-color: var(--brand-line);
-        color: var(--brand-dark);
-      }
-      .reports button:hover:not(:disabled) {
-        background: #e2eef8;
-      }
-      .msg.report {
-        align-self: stretch;
-        max-width: 100%;
-        background: #fff;
-        border: 1px solid var(--line);
-        white-space: normal;
-      }
-      .report-h {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 700;
-        color: var(--brand-deep);
-        margin-bottom: 8px;
-      }
-      .free {
-        font-size: 11px;
-        font-weight: 500;
-        color: #1d6b3d;
-        background: #e5f4ea;
-        border-radius: 999px;
-        padding: 0 8px;
-      }
-      .report h4 {
-        margin: 12px 0 4px;
-        font-size: 14px;
-      }
-      .rtable {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-      }
-      .rtable th,
-      .rtable td {
-        text-align: start;
-        padding: 5px 8px;
-        border-bottom: 1px solid var(--line);
-        vertical-align: top;
-      }
-      .rtable th {
-        color: var(--muted);
-        font-weight: 500;
-      }
-      .rtable a {
-        color: var(--brand);
-      }
-      .overdue {
-        color: var(--err);
-        font-weight: 500;
-      }
-      .pending-note {
-        font-size: 12px;
-        color: var(--muted);
-        margin: 8px 0 0;
-      }
-
       /* מסמך בסיס לניסוח */
       .focus {
         display: flex;
@@ -897,13 +823,6 @@
           תאר את ההסכם שאתה צריך: סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם
           יחסרו פרטים מהותיים, המערכת תשאל.
         </p>
-        <div class="reports" role="group" aria-label="דוחות">
-          <button type="button" data-report="expiring">⏳ מסתיימים בקרוב</button>
-          <button type="button" data-report="index">◉ סטטוס אינדקס</button>
-          <button type="button" data-report="types">
-            🗂 לפי סוג מסמך / תוכנית
-          </button>
-        </div>
         <div id="chat" aria-live="polite"></div>
         <form id="form">
           <div class="focus" id="focus-bar" hidden>
@@ -1284,10 +1203,6 @@
           className: "tag tag-" + status,
           textContent: STATUS[status] || status,
         });
-      const link = (d) =>
-        d.url
-          ? el("a", { href: d.url, target: "_blank", rel: "noopener", textContent: d.name })
-          : d.name;
       // תווית סטטוס, גודל ותאריך. כל אחד ב-span משלו, אחרת flex מחבר אותם לטקסט אחד
       const fileMeta = (f) => [
         tag(f.status),
@@ -1390,94 +1305,6 @@
         if (focus) $("input").focus();
       }
       $("focus-clear").onclick = () => setFocus(null);
-
-      // דוחות: נשלפים מ-SQL בשרת, בלי מודל. לא נכנסים להיסטוריית השיחה
-      function table(head, rows) {
-        return el(
-          "table",
-          { className: "rtable" },
-          el("thead", {}, el("tr", {}, ...head.map((h) => el("th", { textContent: h })))),
-          el("tbody", {}, ...rows.map((r) => el("tr", {}, ...r.map((c) => el("td", {}, c))))),
-        );
-      }
-      const note = (text) => el("p", { className: "dialog-note", textContent: text });
-      function groupTable(groups, label) {
-        if (!groups.length) return note("אין נתונים עדיין.");
-        return table(
-          [label, "מספר", "מסמכים"],
-          groups.map((g) => [
-            g.value,
-            String(g.count),
-            el("span", {}, ...g.docs.flatMap((d, i) => [i ? " · " : null, link(d)])),
-          ]),
-        );
-      }
-      const REPORTS = {
-        expiring: (rows) =>
-          rows.length
-            ? [
-                table(
-                  ["מסמך", "סוג", "תאריך סיום", "מצב"],
-                  rows.map((d) => [
-                    link(d),
-                    d.doc_type ?? "",
-                    fmtDate(d.end_date),
-                    d.days_left < 0
-                      ? el("span", { className: "overdue", textContent: `פג לפני ${-d.days_left} ימים` })
-                      : d.days_left === 0
-                        ? "מסתיים היום"
-                        : `בעוד ${d.days_left} ימים`,
-                  ]),
-                ),
-              ]
-            : [note("אין מסמכים שפגו או שמסתיימים ב-90 הימים הקרובים.")],
-        index: (r, pending) => [
-          table(
-            ["סטטוס", "קבצים"],
-            Object.entries(STATUS).map(([k, label]) => [label, String(r.counts[k] ?? 0)]),
-          ),
-          note(`מסמכים בלי נתונים מובנים: ${pending} · סנכרון אחרון: ${r.last_sync ?? "עוד לא רץ"}`),
-          ...(r.failed.length
-            ? [
-                el("h4", { textContent: "קבצים שנכשלו" }),
-                table(["קובץ", "סיבה"], r.failed.map((f) => [f.name, f.error ?? ""])),
-              ]
-            : []),
-        ],
-        types: (r) => [
-          el("h4", { textContent: "לפי סוג מסמך" }),
-          groupTable(r.doc_type, "סוג"),
-          el("h4", { textContent: "לפי תוכנית" }),
-          groupTable(r.plan_number, "תוכנית"),
-        ],
-      };
-      async function report(kind, title) {
-        let data;
-        try {
-          data = await api("/api/reports/" + kind);
-        } catch (e) {
-          add("error", "הדוח נכשל: " + e.message);
-          return;
-        }
-        const box = el(
-          "div",
-          { className: "msg report" },
-          el("div", { className: "report-h" }, title, el("span", { className: "free", textContent: "ללא עלות AI" })),
-          ...REPORTS[kind](data.rows, data.pending),
-        );
-        if (data.pending && kind !== "index")
-          box.append(
-            el("p", {
-              className: "pending-note",
-              textContent: `${data.pending} מסמכים עדיין ממתינים להשלמת נתונים בסנכרון הבא`,
-            }),
-          );
-        $("chat").append(box);
-        $("chat").scrollTop = $("chat").scrollHeight;
-      }
-      document
-        .querySelectorAll("[data-report]")
-        .forEach((b) => b.addEventListener("click", () => report(b.dataset.report, b.textContent.trim())));
 
       // כניסה: רק להעלאה ולסנכרון. בלי APP_PASSWORD בשרת, הכפתור לא מוצג
       async function loadMe() {
