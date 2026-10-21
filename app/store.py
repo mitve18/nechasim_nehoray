@@ -243,16 +243,17 @@ def save_pages(conn, file_id, pages):
 def status_rows(conn):
     """דוח "סטטוס מאגר ההסכמים": שורות של מדד וערך, מ-SQL בלבד. ערך שעוד לא ידוע מוצג "—" ולא 0."""
     total, failed = conn.execute("select count(*), count(*) filter (where status = 'failed') from files").fetchone()
-    # עמודים ידועים רק כשאין PDF או תמונה במאגר שעוד לא נספרו. DOCX ו-Google Docs אין להם עמודים, ולא נספרים
-    pages, ocr_pages, uncounted = conn.execute(
-        """select sum(a.pages), sum(a.pages) filter (where a.method = 'ocr'),
+    # OCR מוחלט לכל הקובץ, ולכן סופרים הסכמים ולא עמודים. method נשמר לכל מסמך, כך שהמספר ידוע תמיד.
+    # עמודים: סכום מה שכבר נספר. PDF או תמונה שעוד לא נספרו מסומנים "(חלקי)". ל-DOCX ול-Google Docs אין עמודים
+    pages, ocr_docs, uncounted = conn.execute(
+        """select sum(a.pages), count(*) filter (where a.method = 'ocr'),
                   count(*) filter (where a.pages is null and (f.mime_type = 'application/pdf'
                                                                or f.mime_type like 'image/%'))
            from agreements a left join files f using (file_id)"""
     ).fetchone()
     s = status(conn)
-    known = pages is not None and not uncounted
     dash = "—"
+    pages_value = None if pages is None else f"{pages:,} (חלקי)" if uncounted else pages
 
     def row(label, value, tone=""):
         return {"label": label, "value": dash if value is None else f"{value:,}" if isinstance(value, int) else value,
@@ -262,8 +263,8 @@ def status_rows(conn):
         row('סה"כ מסמכים בתיקייה', total if total else None),  # טבלה ריקה = הסנכרון עוד לא רץ
         row("מאונדקסים", s["documents"]),
         row("נכשלו", failed if total else None, "bad" if failed else ""),
-        row("עמודים", pages if known else None),
-        row("עמודים שעברו OCR", (ocr_pages or 0) if known else None),
+        row("עמודים", pages_value, "muted" if uncounted else ""),
+        row("הסכמים שעברו OCR", ocr_docs),
         row("אינדוקס אחרון", s["updated_at"]),
     ]
 

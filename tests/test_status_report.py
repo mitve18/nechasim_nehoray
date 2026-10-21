@@ -23,7 +23,7 @@ from app import docx_export, main, store  # noqa: E402
 VEC = "[" + ",".join(["0.1"] * 1536) + "]"
 ROWS = [{"label": 'סה"כ מסמכים בתיקייה', "value": "48", "tone": ""},
         {"label": "עמודים", "value": "1,236", "tone": ""},
-        {"label": "עמודים שעברו OCR", "value": "—", "tone": "muted"},
+        {"label": "הסכמים שעברו OCR", "value": "—", "tone": "muted"},
         {"label": "אינדוקס אחרון", "value": "21/10/2026 07:58", "tone": ""}]
 
 
@@ -53,7 +53,7 @@ def test_status_rows_query():
         store.init(conn)
         before = _values(conn)  # לפני הסנכרון הראשון: לא ידוע = "—", לא 0
         assert before == {'סה"כ מסמכים בתיקייה': ("—", "muted"), "מאונדקסים": ("0", ""), "נכשלו": ("—", "muted"),
-                          "עמודים": ("—", "muted"), "עמודים שעברו OCR": ("—", "muted"),
+                          "עמודים": ("—", "muted"), "הסכמים שעברו OCR": ("0", ""),
                           "אינדוקס אחרון": ("—", "muted")}, before
 
         _doc(conn, "pdf", "application/pdf", "text", 1200)
@@ -64,12 +64,13 @@ def test_status_rows_query():
                      "values ('bad', 'bad', 'image/png', 'failed', 'OCR נכשל')")
         v = _values(conn)
         assert v['סה"כ מסמכים בתיקייה'] == ("5", "") and v["מאונדקסים"] == ("4", "") and v["נכשלו"] == ("1", "bad")
-        assert v["עמודים"] == ("—", "muted") and v["עמודים שעברו OCR"] == ("—", "muted")  # old-scan עוד לא נספר
+        assert v["עמודים"] == ("1,202 (חלקי)", "muted"), v  # old-scan עוד לא נספר: הסכום של מה שכבר נספר
+        assert v["הסכמים שעברו OCR"] == ("2", "")  # הסכמים ולא עמודים, ולא תלוי בספירת העמודים
 
         assert store.missing_pages(conn) == {"word", "old-scan"}
         store.save_pages(conn, "old-scan", 5)  # מה שהסנכרון הבא עושה. DOCX נשאר בלי עמודים ולא חוסם
         v = _values(conn)
-        assert v["עמודים"] == ("1,207", "") and v["עמודים שעברו OCR"] == ("7", ""), v
+        assert v["עמודים"] == ("1,207", "") and v["הסכמים שעברו OCR"] == ("2", ""), v
 
         conn.execute("insert into sync_runs (started_at, finished_at, added, updated, removed, ocr, failed) "
                      "values (now(), now(), 0, 0, 0, 0, 0)")
@@ -96,7 +97,7 @@ def test_fill_pages_counts_existing_pdf_and_images_only():
 
 def test_tsv_format():
     tsv = main.status_tsv(ROWS)
-    assert tsv.split("\n") == ["מדד\tערך", 'סה"כ מסמכים בתיקייה\t48', "עמודים\t1,236", "עמודים שעברו OCR\t—",
+    assert tsv.split("\n") == ["מדד\tערך", 'סה"כ מסמכים בתיקייה\t48', "עמודים\t1,236", "הסכמים שעברו OCR\t—",
                                "אינדוקס אחרון\t21/10/2026 07:58"]
     assert all(line.count("\t") == 1 for line in tsv.split("\n"))  # שתי עמודות בכל שורה באקסל
 
