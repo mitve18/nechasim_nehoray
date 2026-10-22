@@ -1865,7 +1865,7 @@
       async function uploadFiles(list) {
         const all = [...list];
         if (!all.length) return;
-        const done = [], failed = [], syncs = [];
+        const done = [], failed = [], syncs = [], saved = [];
         $("upload-progress").hidden = false;
         $("upload-bar").style.width = "0";
         for (const [i, file] of all.entries()) {
@@ -1884,6 +1884,7 @@
               $("upload-bar").style.width = Math.round(((i + p) / all.length) * 100) + "%";
             });
             done.push(r.renamed ? `${file.name} (נשמר בשם ${r.name})` : r.name);
+            saved.push(r);
             if (r.sync) syncs.push(r.sync);
           } catch (e) {
             failed.push(e.message.includes(file.name) ? e.message : `${file.name}: ${e.message}`);
@@ -1898,6 +1899,12 @@
           if (started && deferred) setTimeout(watchSync, deferred.retry_after * 1000); // גם הסנכרון שתוזמן לקבצים האחרונים
         }
         $("upload-text").textContent = msg.trim();
+        for (const r of saved) {
+          // השרת וידא שהקובץ בתיקייה, בגודל וב-md5 של מה שנשלח
+          const a = document.createElement("a");
+          Object.assign(a, { href: r.webViewLink, target: "_blank", rel: "noopener", textContent: "פתח ב-Drive" });
+          $("upload-text").append(document.createElement("br"), `${r.name}: נשמר ב-Drive ✓ `, a);
+        }
         toast(msg.trim(), 10000);
         loadFiles();
       }

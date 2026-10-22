@@ -59,7 +59,8 @@ def test_sync_summary_and_exit_code():
     logged, downloads = [], []
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "summary.md")
-        with _fake_backends(logged, downloads, path):
+        # מחיקה של 1 מתוך 3 (33%) היא כאן מכוונת, ולכן התקרה מוגבהת
+        with _fake_backends(logged, downloads, path), mock.patch.object(sync, "MAX_REMOVE", 0.5):
             try:
                 sync.main()
                 raise AssertionError("קובץ שנכשל חייב להכשיל את הריצה")
@@ -85,6 +86,29 @@ def test_sync_summary_and_exit_code():
     assert "video" not in downloads and "sc" not in downloads  # סוג לא נתמך לא מורד בכלל
     assert logged[0]["files"] == {"added": ["הסכם חדש.png"], "updated": ["הסכם | ישן.pdf"], "backfilled": []}
     assert logged[0]["ocr"] == 1
+
+
+def test_sync_refuses_mass_delete():
+    """רשימה ריקה מ-Drive, או מחיקה של יותר מ-30% מהמאגר: לא נוגעים במאגר, והריצה נכשלת עם הסבר בסיכום."""
+    for listing in ([], FILES[2:3]):  # ריק, או רק "same": 2 מתוך 3 מסמכים ייעלמו
+        touched, logged = [], []
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "summary.md")
+            with _fake_backends(logged, [], path), \
+                    mock.patch.object(sync.drive, "list_files", lambda svc, folder: listing), \
+                    mock.patch.multiple(store, delete=lambda conn, ids: touched.append(ids),
+                                        save_files=lambda conn, rows: touched.append(rows),
+                                        prune_files=lambda conn, ids: touched.append(ids)):
+                try:
+                    sync.main()
+                    raise AssertionError("מחיקה גורפת חייבת להכשיל את הריצה")
+                except SystemExit as e:
+                    assert e.code == 1
+            md = Path(path).read_text(encoding="utf-8")
+        assert touched == [], listing
+        assert "[!CAUTION]" in md and "הסנכרון נעצר ולא נמחק דבר" in md and "מתוך 3 מסמכים" in md, md
+        assert f"בתיקייה: {len(listing)} קבצים · במאגר אחרי הריצה: 3 מסמכים" in md
+        assert logged[0]["removed"] == 0 and logged[0]["errors"]
 
 
 def test_summary_backfill_line():
@@ -164,6 +188,7 @@ def test_status_and_admin_pages():
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     test_sync_summary_and_exit_code()
+    test_sync_refuses_mass_delete()
     test_summary_backfill_line()
     test_list_files_shortcuts()
     test_status_and_admin_pages()

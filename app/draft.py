@@ -93,7 +93,8 @@ def build_agent(sources, focus=()):
         ) or "לא נמצאו מסמכים דומים במאגר."
 
     return Agent(
-        model=OpenAIResponses(id=MODEL, max_output_tokens=MAX_OUTPUT_TOKENS),
+        # ה-SDK של OpenAI מנסה שוב פעם אחת, עם backoff, על 429, 5xx וניתוק
+        model=OpenAIResponses(id=MODEL, max_output_tokens=MAX_OUTPUT_TOKENS, timeout=120, max_retries=1),
         name=NAME,
         description=DESCRIPTION,
         instructions=INSTRUCTIONS,

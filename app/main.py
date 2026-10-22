@@ -10,6 +10,10 @@ import asyncio
 import hashlib
 import hmac
 import os
+import secrets
+import time
+from collections import defaultdict, deque
+from datetime import date
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, quote
@@ -100,6 +104,9 @@ async def login(request: Request):
     resp = RedirectResponse(target, 303)
     https = request.headers.get("x-forwarded-proto") == "https"
     resp.set_cookie("session", TOKEN, httponly=True, secure=https, samesite="lax", max_age=SESSION_DAYS * 24 * 3600)
+    # מזהה לכל דפדפן, למגבלת הניסוחים. עוגיית session זהה לכולם (סיסמה אחת), ולכן היא לא מבדילה בין משתמשים
+    resp.set_cookie("sid", secrets.token_urlsafe(16), httponly=True, secure=https, samesite="lax",
+                    max_age=SESSION_DAYS * 24 * 3600)
     return resp
 
 
@@ -124,15 +131,44 @@ class DraftRequest(BaseModel):
     focus_file_ids: list[str] = []  # "נסח על בסיס המסמך הזה", אפשר כמה מסמכים
 
 
+DRAFTS_PER_HOUR = 30
+DAILY_DRAFT_LIMIT = int(os.environ.get("DAILY_DRAFT_LIMIT", "200"))
+# ponytail: בזיכרון התהליך, מתאפס בהפעלה מחדש ולא משותף בין תהליכים. מספיק לשרת אחד ב-Render
+_drafts = defaultdict(deque)  # sid ← זמני הניסוחים בשעה האחרונה
+_daily = {"date": None, "count": 0}
+
+
+def _draft_quota(request: Request):
+    """עד DRAFTS_PER_HOUR ניסוחים בשעה לכל דפדפן, ו-DAILY_DRAFT_LIMIT לכל האתר ביום (UTC). מעבר לזה 429."""
+    now, today = time.time(), date.today()
+    if _daily["date"] != today:
+        _daily.update(date=today, count=0)
+    if _daily["count"] >= DAILY_DRAFT_LIMIT:
+        raise HTTPException(429, "הגענו לתקרת הניסוחים היומית של האתר. אפשר לנסות שוב מחר")
+    key = request.cookies.get("sid") or request.headers.get("x-forwarded-for", "").split(",")[0] or request.client.host
+    times = _drafts[key]
+    while times and times[0] <= now - 3600:
+        times.popleft()
+    if len(times) >= DRAFTS_PER_HOUR:
+        wait = int(times[0] + 3600 - now) // 60 + 1
+        raise HTTPException(429, f"הגעת למגבלה של {DRAFTS_PER_HOUR} ניסוחים בשעה. אפשר לנסות שוב בעוד {wait} דקות")
+    times.append(now)
+    _daily["count"] += 1
+
+
 @app.post("/api/draft")
-async def api_draft(req: DraftRequest):
+async def api_draft(req: DraftRequest, request: Request):
     msgs = [m.model_dump() for m in req.messages if m.role in ("user", "assistant")]
     if not msgs or msgs[-1]["role"] != "user":
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
+    _draft_quota(request)
     try:
         return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids)
     except LookupError as e:
         raise HTTPException(404, str(e))
+    except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק
+        print(f"הניסוח נכשל: {e!r}")
+        raise HTTPException(502, "הניסוח נכשל: שירות הניסוח לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
 
 
 class DocxRequest(BaseModel):
@@ -243,13 +279,18 @@ async def api_upload(request: Request, name: str):
         raise HTTPException(400, str(e))
 
     def save():
-        f = drive.upload(drive.service(), clean, data, mime)
-        with store.connect() as conn:
+        svc = drive.service()
+        f = drive.verify_upload(svc, drive.upload(svc, clean, data, mime), data)
+        with store.connect() as conn:  # רק אחרי שווידאנו שהקובץ נשמר בתיקייה, כמו שהוא
             store.add_queued(conn, f)
         return f
 
-    f = await run_in_threadpool(save)
-    return {"name": f["name"], "renamed": f["name"] != clean, "sync": _sync(defer=True)}
+    try:
+        f = await run_in_threadpool(save)
+    except drive.UploadMismatch as e:
+        raise HTTPException(502, str(e))
+    return {"name": f["name"], "renamed": f["name"] != clean, "webViewLink": f["webViewLink"],
+            "sync": _sync(defer=True)}
 
 
 @app.get("/admin/sync", response_class=HTMLResponse)

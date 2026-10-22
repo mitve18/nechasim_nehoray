@@ -1,4 +1,5 @@
 """גישה ל-Google Drive: OAuth 2.0 עם refresh token (offline), הרשאת קריאה וכתיבה (scope: drive)."""
+import hashlib
 import io
 import os
 import re
@@ -174,3 +175,19 @@ def upload(svc, name, data, mime, folder_id=None):
     media = MediaIoBaseUpload(io.BytesIO(data), mimetype=mime, resumable=True)
     return svc.files().create(body={"name": unique_name(name, names), "parents": [folder_id]}, media_body=media,
                               fields=FILE_FIELDS, supportsAllDrives=True).execute()
+
+
+class UploadMismatch(Exception):
+    pass
+
+
+def verify_upload(svc, f, data, folder_id=None):
+    """קורא מ-Drive את הקובץ שנוצר ומוודא שהוא בתיקיית ההסכמים, ושהגודל וה-md5 זהים למה שהתקבל.
+    מחזיר את הקובץ עם webViewLink, או זורק UploadMismatch."""
+    folder_id = folder_id or os.environ["DRIVE_FOLDER_ID"]
+    got = svc.files().get(fileId=f["id"], fields="parents, size, md5Checksum, webViewLink",
+                          supportsAllDrives=True).execute()
+    if (folder_id not in got.get("parents", []) or got.get("size") != str(len(data))
+            or got.get("md5Checksum") != hashlib.md5(data).hexdigest()):
+        raise UploadMismatch("הקובץ לא נשמר בתיקייה כמו שצריך")
+    return f | got

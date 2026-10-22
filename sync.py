@@ -18,6 +18,7 @@ from app import drive, extract, store  # noqa: E402
 ADDED, UPDATED, UNCHANGED, FAILED, UNSUPPORTED = "נוסף", "עודכן", "ללא שינוי", "נכשל", "לא נתמך"
 FILE_STATUS = {ADDED: "indexed", UPDATED: "indexed", UNCHANGED: "indexed", FAILED: "failed",
                UNSUPPORTED: "unsupported"}  # הסטטוס בטבלת files
+MAX_REMOVE = 0.3  # מעל החלק הזה מהמאגר לא מוחקים: כנראה תקלה ב-Drive (תיקייה הוזזה, הרשאה בוטלה), לא מחיקה אמיתית
 
 
 def sync():
@@ -33,13 +34,18 @@ def sync():
         retry = store.retry_ids(conn)
 
         gone = set(known) - {f["id"] for f in files}
-        if gone:
+        if (known and not files) or len(gone) > MAX_REMOVE * len(known):
+            stats["aborted"] = (f"הסנכרון נעצר ולא נמחק דבר: מ-Drive התקבלו {len(files)} קבצים, "
+                                f"והסנכרון היה מוחק {len(gone)} מתוך {len(known)} מסמכים במאגר (מעל {MAX_REMOVE:.0%}). "
+                                "בדוק את התיקייה ואת ההרשאות ב-Drive. אם המחיקה מכוונת, מחק בהדרגה.")
+            stats["errors"].append({"file": "מחיקה גורפת", "error": stats["aborted"]})
+        elif gone:
             store.delete(conn, gone)
             stats["removed"] = len(gone)
 
-        # כל קובץ שנמצא מקבל סטטוס אחד, כך שאין קובץ שנדלג בשקט
+        # כל קובץ שנמצא מקבל סטטוס אחד, כך שאין קובץ שנדלג בשקט. בריצה שנעצרה לא נוגעים בכלום
         rows = []
-        for f in files:
+        for f in [] if stats.get("aborted") else files:
             status, reason, attempted = UNCHANGED, "", False
             if known.get(f["id"]) != f["modifiedTime"] or f["id"] in retry:
                 attempted = True
@@ -70,14 +76,16 @@ def sync():
                          "modified_time": f["modifiedTime"], "status": FILE_STATUS[status],
                          "error": reason or None, "attempted": attempted})
             print(f"{status:9}  {f['mimeType']:<45}  {f['modifiedTime']}  {f['name']}" + (f"  ({reason})" if reason else ""))
-        store.save_files(conn, rows)
-        store.prune_files(conn, [f["id"] for f in files])
-
-        fill_missing(conn, svc, files, stats)
-
-        backfill(conn, stats)
+        if not stats.get("aborted"):
+            store.save_files(conn, rows)
+            store.prune_files(conn, [f["id"] for f in files])
+            fill_missing(conn, svc, files, stats)
+            backfill(conn, stats)
         store.log_run(conn, stats)
+    stats["listed"] = len(files)
     stats["in_db"] = len(known) - stats["removed"] + stats["added"]
+    if stats.get("aborted"):
+        print(stats["aborted"])
     print(f"\nבתיקייה {len(files)} קבצים, במאגר {stats['in_db']}. נוספו {stats['added']}, עודכנו {stats['updated']}, "
           f"הוסרו {stats['removed']}, עברו OCR {stats['ocr']}, לא נתמכו {stats['unsupported']}, "
           f"נכשלו {len(stats['errors'])}, הושלמו נתונים מובנים ל-{len(stats['files']['backfilled'])}")
@@ -133,11 +141,14 @@ def summary(stats):
         return s.replace("|", "\\|").replace("\n", " ")
 
     backfilled = stats["files"]["backfilled"]
-    lines = ["## סנכרון המאגר", "", "| נוספו | עודכנו | הוסרו | לא נתמכו | נכשלו |", "|---|---|---|---|---|",
-             f"| {stats['added']} | {stats['updated']} | {stats['removed']} | {stats['unsupported']} "
-             f"| {len(stats['errors'])} |", "",
-             f"בתיקייה: {len(stats['seen'])} קבצים · במאגר אחרי הריצה: {stats['in_db']} מסמכים", "",
-             f"תיקייה שנסרקה: `{stats['folder']}`"]
+    lines = ["## סנכרון המאגר", ""]
+    if stats.get("aborted"):
+        lines += ["> [!CAUTION]", f"> {stats['aborted']}", ""]
+    lines += ["| נוספו | עודכנו | הוסרו | לא נתמכו | נכשלו |", "|---|---|---|---|---|",
+              f"| {stats['added']} | {stats['updated']} | {stats['removed']} | {stats['unsupported']} "
+              f"| {len(stats['errors'])} |", "",
+              f"בתיקייה: {stats.get('listed', len(stats['seen']))} קבצים · במאגר אחרי הריצה: {stats['in_db']} מסמכים", "",
+              f"תיקייה שנסרקה: `{stats['folder']}`"]
     if backfilled:
         lines += ["", f"**הושלמו נתונים מובנים ל-{len(backfilled)} מסמכים**", *(f"- {esc(n)}" for n in backfilled)]
     counted, scored, failed = stats.get("pages_counted", 0), stats.get("ocr_scored", 0), stats.get("fill_failed", [])

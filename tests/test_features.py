@@ -6,6 +6,7 @@
 python tests/test_features.py   (או pytest)
 """
 import contextlib
+import hashlib
 import io
 import os
 import shutil
@@ -86,7 +87,7 @@ def test_sync_files_table_failed_unsupported_retry():
             {"id": "old", "name": "ישן.pdf", "mimeType": PDF, "modifiedTime": "2"},
         ]
         downloads = []
-        with _sync_fakes(conn, listing, downloads):
+        with _sync_fakes(conn, listing, downloads), mock.patch.object(sync, "MAX_REMOVE", 0.5):  # 1 מתוך 3, מכוון
             stats = sync.sync()
 
         rows = {r["file_id"]: r for r in store._dicts(conn, "select * from files")}
@@ -256,31 +257,89 @@ def test_upload_validation():
     assert drive.unique_name("הסכם.pdf", {"הסכם.pdf", "הסכם (1).pdf"}) == "הסכם (2).pdf"
 
 
-def test_upload_api_requires_password_and_renames():
-    def fake_upload(svc, name, data, mime):
-        return {"id": "x", "name": drive.unique_name(name, {"הסכם.pdf"}), "mimeType": mime, "size": str(len(data))}
+class UploadDrive:
+    """Drive מזויף להעלאה: בתיקייה כבר יש "הסכם.pdf", ו-get מחזיר את מה שנשמר, עם השינויים שב-wrong."""
+    def __init__(self):
+        self.wrong, self.saved = {}, None
 
-    queued = []
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"), mock.patch.dict(os.environ, {"RENDER": ""}):
+    def files(self):
+        return self
+
+    def list(self, **kw):
+        return SimpleNamespace(execute=lambda: {"files": [{"name": "הסכם.pdf"}]})
+
+    def create(self, body, media_body, **kw):
+        data = media_body.getbytes(0, media_body.size())
+        self.saved = {"parents": body["parents"], "size": str(len(data)), "md5Checksum": hashlib.md5(data).hexdigest(),
+                      "webViewLink": "https://drive.google.com/file/d/x/view"}
+        return SimpleNamespace(execute=lambda: {"id": "x", "name": body["name"], "mimeType": PDF})
+
+    def get(self, fileId, fields, **kw):
+        assert fileId == "x" and "md5Checksum" in fields and "parents" in fields
+        return SimpleNamespace(execute=lambda: self.saved | self.wrong)
+
+
+def test_upload_api_requires_password_and_renames():
+    calls = []
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"), mock.patch.dict(os.environ, {"RENDER": ""}), \
+            mock.patch.object(drive, "service", lambda: calls.append("drive")):
         c = TestClient(main.app)  # פיתוח מקומי בלי סיסמה: האתר פתוח, אבל פעולות כתיבה חסומות
         assert c.get("/api/me").json() == {"writer": False, "sync": github.configured()}
         assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 403
         assert c.post("/api/sync").status_code == 403
+    assert calls == []  # לא מחובר: אין קריאה ל-Drive
+
+    queued, fake = [], UploadDrive()
     with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"), \
-            mock.patch.multiple(drive, service=lambda: None, upload=fake_upload), \
+            mock.patch.object(drive, "service", lambda: fake), \
+            mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder"}), \
             mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
                                 add_queued=lambda conn, f: queued.append(f["name"])), \
             mock.patch.object(github, "configured", lambda: False):
         c = TestClient(main.app)
         assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 401  # לא מחובר
+        assert fake.saved is None
         assert c.post("/login", data={"password": "secret"}, follow_redirects=False).status_code == 303
         assert c.get("/api/me").json()["writer"] is True
         r = c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7")
-        assert r.json() == {"name": "הסכם (1).pdf", "renamed": True, "sync": None}, r.text
+        assert r.json() == {"name": "הסכם (1).pdf", "renamed": True, "sync": None,
+                            "webViewLink": "https://drive.google.com/file/d/x/view"}, r.text
+        assert queued == ["הסכם (1).pdf"]
+
+        # מה ש-Drive שמר לא תואם למה שנשלח: שגיאה, ואין שורה בטבלת files
+        for wrong in ({"parents": ["other"]}, {"size": "1"}, {"md5Checksum": "0" * 32}):
+            fake.wrong = wrong
+            r = c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7")
+            assert r.status_code == 502 and r.json()["detail"] == "הקובץ לא נשמר בתיקייה כמו שצריך", (wrong, r.text)
         assert queued == ["הסכם (1).pdf"]
         assert c.post("/api/upload?name=a.pdf", content=b"\x89PNG\r\n\x1a\n").status_code == 400  # תוכן לא תואם
         big = c.post("/api/upload?name=a.pdf", content=b"%PDF-" + b"0" * drive.MAX_UPLOAD)
         assert big.status_code == 413
+
+
+def test_draft_limits_and_errors():
+    ok = {"status": "questions", "questions": ["?"], "title": "", "body": "", "sources": []}
+    body = {"messages": [{"role": "user", "content": "נסח"}]}
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
+                             _drafts=main.defaultdict(main.deque)), \
+            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda m, f: ok):
+        a, b = TestClient(main.app, cookies={"sid": "a"}), TestClient(main.app, cookies={"sid": "b"})
+        assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
+        r = a.post("/api/draft", json=body)
+        assert r.status_code == 429 and "ניסוחים בשעה" in r.json()["detail"]
+        assert all(b.post("/api/draft", json=body).status_code == 200 for _ in range(10))  # דפדפן אחר: מגבלה נפרדת
+        r = b.post("/api/draft", json=body)  # 40 ניסוחים באתר היום
+        assert r.status_code == 429 and "היומית" in r.json()["detail"]
+
+    def boom(m, f):
+        raise RuntimeError("openai 500: secret-internal-detail")
+
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", _daily={"date": None, "count": 0}), \
+            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", boom):
+        r = TestClient(main.app).post("/api/draft", json=body)
+    assert r.status_code == 502 and "הניסוח נכשל" in r.json()["detail"] and "secret" not in r.text
+    model = draft.build_agent([]).model
+    assert (model.timeout, model.max_retries) == (120, 1)
 
 
 def test_whole_site_requires_login():
