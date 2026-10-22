@@ -633,7 +633,10 @@
       .pin {
         border: 0;
         border-inline-start: 1px solid var(--line);
+        /* פינות מעוגלות בצד החיצוני, כמו המסגרת של הקובץ, כדי שהרקע במעבר עכבר לא יבלוט מעליה */
         border-radius: 0;
+        border-start-end-radius: 9px;
+        border-end-end-radius: 9px;
         background: none;
         padding: 0 10px;
         display: flex;
@@ -657,7 +660,8 @@
       .focus .icon {
         color: var(--brand);
       }
-      .pin:hover:not(:disabled) {
+      .pin:hover:not(:disabled),
+      .pin[aria-pressed="true"] {
         background: var(--brand-soft);
       }
       .tag {
@@ -782,7 +786,24 @@
         font-size: 13px;
         margin-bottom: 8px;
       }
-      .focus b {
+      .focus {
+        align-items: flex-start;
+      }
+      #focus-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        flex: 1;
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+      }
+      #focus-list li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #focus-list b {
         flex: 1;
         min-width: 0;
         overflow-wrap: anywhere;
@@ -875,6 +896,25 @@
         font-size: 12px;
         font-weight: 400;
       }
+      .ocr-score {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .ocr-score.good {
+        color: #1d6b3d;
+      }
+      .ocr-score.warn {
+        color: var(--warn);
+      }
+      .ocr-score.bad {
+        color: var(--err);
+      }
+      .ocr-score.pending {
+        color: var(--muted);
+        font-weight: 400;
+      }
       .dialog-error {
         background: var(--err-bg);
         color: var(--err);
@@ -963,7 +1003,7 @@
               id="file-input"
               class="visually-hidden"
               multiple
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.docx"
+              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.heic,.heif,.docx,.doc"
             />
             ⬆ גרור קבצים או לחץ להעלאה
           </label>
@@ -985,10 +1025,8 @@
         <div id="chat" aria-live="polite"></div>
         <form id="form">
           <div class="focus" id="focus-bar" hidden>
-            מבוסס על: <b id="focus-name"></b>
-            <button type="button" id="focus-clear" aria-label="הסרת מסמך הבסיס">
-              ✕
-            </button>
+            <span>מבוסס על:</span>
+            <ul id="focus-list"></ul>
           </div>
           <label for="input" class="hint">ההודעה שלך</label>
           <textarea
@@ -1148,7 +1186,7 @@
                 role,
                 content,
               })),
-              focus_file_id: focus?.id ?? null,
+              focus_file_ids: focus.map((x) => x.id),
             }),
           });
           if (res.status === 401) return toLogin();
@@ -1269,7 +1307,7 @@
         $("chat").replaceChildren();
         $("doc").hidden = true;
         $("placeholder").hidden = false;
-        setFocus(null);
+        setFocus([]);
         $("input").focus();
       });
 
@@ -1333,10 +1371,10 @@
         ["amounts", "סכומים"],
         ["pages", "עמודים"],
       ];
-      const UPLOAD_EXT = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "docx"];
+      const UPLOAD_EXT = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "heic", "heif", "docx", "doc"];
       const MAX_UPLOAD = 20 * 1024 * 1024;
       let files = [];
-      let focus = null; // מסמך הבסיס לניסוח: { id, name }
+      let focus = []; // מסמכי הבסיס לניסוח: [{ id, name }]
       let me = { writer: false, sync: false };
       let syncWatch = null;
 
@@ -1429,18 +1467,7 @@
                 el("span", { className: "file-name", textContent: f.name }),
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
-              f.status === "indexed" &&
-                el(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pin",
-                    title: "נסח על בסיס המסמך הזה",
-                    ariaLabel: "נסח על בסיס " + f.name,
-                    onclick: () => setFocus(f),
-                  },
-                  draftIcon(),
-                ),
+              f.status === "indexed" && pinButton(f),
             ),
           ),
         );
@@ -1450,6 +1477,22 @@
           : "הרשימה תתמלא אחרי הסנכרון הבא.";
       }
       $("files-q").addEventListener("input", renderFiles);
+      function pinButton(f) {
+        const b = el(
+          "button",
+          {
+            type: "button",
+            className: "pin",
+            title: "נסח על בסיס המסמך הזה (לחיצה נוספת מסירה)",
+            ariaLabel: "נסח על בסיס " + f.name,
+            ariaPressed: String(isFocus(f)),
+            onclick: () => toggleFocus(f),
+          },
+          draftIcon(),
+        );
+        b.dataset.id = f.file_id;
+        return b;
+      }
 
       function fmtMeta(key, v) {
         if (key === "amounts")
@@ -1458,6 +1501,14 @@
             .join(" · ");
         if (key.endsWith("_date")) return fmtDate(v);
         return Array.isArray(v) ? v.join(" · ") : String(v);
+      }
+      // ציון איכות ה-OCR (0–100): ממוצע הביטחון של Tesseract בכל מילה שזיהה
+      function ocrScore(q) {
+        if (q == null)
+          return el("span", { className: "ocr-score pending", textContent: "ציון האיכות יחושב בסנכרון הבא" });
+        const [tone, label] =
+          q >= 85 ? ["good", "גבוהה"] : q >= 70 ? ["warn", "בינונית"] : ["bad", "נמוכה, כדאי לבדוק מול הקובץ המקורי"];
+        return el("span", { className: "ocr-score " + tone, textContent: `איכות זיהוי: ${q}/100 · ${label}` });
       }
       function openFile(id) {
         const f = files.find((x) => x.file_id === id);
@@ -1476,6 +1527,7 @@
                     { className: "ocr" },
                     "מסמך סרוק · עבר OCR",
                     el("small", { textContent: "הטקסט זוהה מתמונה." }),
+                    ocrScore(f.ocr_quality),
                   )
                 : el("dd", { textContent: "ישירות מהקובץ" }),
             ];
@@ -1497,9 +1549,10 @@
         $("fd-error").hidden = !f.error;
         $("fd-drive").href = f.url;
         $("fd-pin").hidden = f.status !== "indexed";
+        $("fd-pin").lastChild.nodeValue = isFocus(f) ? "הסרה ממסמכי הבסיס" : "נסח על בסיס המסמך הזה";
         $("fd-pin").onclick = () => {
-          setFocus(f);
           $("file-dialog").close();
+          toggleFocus(f);
         };
         $("fd-retry").hidden = !(me.writer && f.status === "failed");
         $("fd-retry").onclick = () => retry(f);
@@ -1525,14 +1578,38 @@
         { passive: false },
       );
 
-      // "נסח על בסיס המסמך הזה": המסמך נשלח כ-focus_file_id עד שמסירים אותו
-      function setFocus(f) {
-        focus = f ? { id: f.file_id, name: f.name } : null;
-        $("focus-bar").hidden = !focus;
-        $("focus-name").textContent = focus?.name ?? "";
-        if (focus) $("input").focus();
+      // "נסח על בסיס המסמך הזה": אפשר לבחור כמה מסמכים. הם נשלחים כ-focus_file_ids עד שמסירים אותם
+      const isFocus = (f) => focus.some((x) => x.id === f.file_id);
+      function toggleFocus(f) {
+        if (isFocus(f)) return setFocus(focus.filter((x) => x.id !== f.file_id));
+        setFocus([...focus, { id: f.file_id, name: f.name }]);
+        $("input").focus();
       }
-      $("focus-clear").onclick = () => setFocus(null);
+      function setFocus(list) {
+        focus = list;
+        $("focus-bar").hidden = !focus.length;
+        $("focus-list").replaceChildren(
+          ...focus.map((x) =>
+            el(
+              "li",
+              {},
+              el("b", { textContent: x.name }),
+              el("button", {
+                type: "button",
+                textContent: "✕",
+                ariaLabel: "הסרת " + x.name + " ממסמכי הבסיס",
+                onclick: () => {
+                  setFocus(focus.filter((y) => y.id !== x.id));
+                  $("input").focus();
+                },
+              }),
+            ),
+          ),
+        );
+        // מצב הסיכה ברשימת הקבצים, בלי לבנות את הרשימה מחדש (כדי שהמיקוד במקלדת לא יאבד)
+        for (const b of $("files").querySelectorAll(".pin"))
+          b.ariaPressed = String(focus.some((x) => x.id === b.dataset.id));
+      }
 
       // דוח "סטטוס מאגר ההסכמים": נשלף מ-SQL בשרת, בלי מודל. מוצג בצ'אט ולא נשלח לניסוח
       function feedbackButton(label, aria, action) {

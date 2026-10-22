@@ -57,7 +57,7 @@ def _sync_fakes(conn, listing, downloads):
     def fake_extract(f, data):
         if f["id"] == "bad":
             raise RuntimeError("OCR החזיר 3 תווים ל-1 עמודים")
-        return "טקסט", "ocr" if f["mimeType"] == PNG else "text"
+        return ("טקסט", "ocr", 91) if f["mimeType"] == PNG else ("טקסט", "text", None)
 
     env = {k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"} | {"DRIVE_FOLDER_ID": "folder"}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(conn),
@@ -81,7 +81,7 @@ def test_sync_files_table_failed_unsupported_retry():
         listing = [
             {"id": "new", "name": "סריקה.png", "mimeType": PNG, "modifiedTime": "1", "size": "2048"},
             {"id": "bad", "name": "פגום.pdf", "mimeType": PDF, "modifiedTime": "1", "size": "10"},
-            {"id": "heic", "name": "צילום.heic", "mimeType": "image/heic", "modifiedTime": "1"},
+            {"id": "video", "name": "סרטון.mp4", "mimeType": "video/mp4", "modifiedTime": "1"},
             {"id": "same", "name": "ללא שינוי.pdf", "mimeType": PDF, "modifiedTime": "1"},
             {"id": "old", "name": "ישן.pdf", "mimeType": PDF, "modifiedTime": "2"},
         ]
@@ -90,17 +90,18 @@ def test_sync_files_table_failed_unsupported_retry():
             stats = sync.sync()
 
         rows = {r["file_id"]: r for r in store._dicts(conn, "select * from files")}
-        assert set(rows) == {"new", "bad", "heic", "same", "old"}, rows.keys()  # מה שנמחק מ-Drive נמחק מהטבלה
+        assert set(rows) == {"new", "bad", "video", "same", "old"}, rows.keys()  # מה שנמחק מ-Drive נמחק מהטבלה
         assert rows["new"]["status"] == "indexed" and rows["new"]["size_bytes"] == 2048 and rows["new"]["last_attempt_at"]
         assert rows["bad"]["status"] == "failed" and rows["bad"]["error"].startswith("OCR החזיר")
-        assert rows["heic"]["status"] == "unsupported" and rows["heic"]["error"] == "סוג קובץ לא נתמך: image/heic"
+        assert rows["video"]["status"] == "unsupported" and rows["video"]["error"] == "סוג קובץ לא נתמך: video/mp4"
         assert rows["same"]["status"] == "indexed" and rows["same"]["retry_requested"] is False
         assert rows["same"]["last_attempt_at"] is not None
-        assert sorted(downloads) == ["bad", "new", "old", "same"]  # same עובד מחדש בגלל retry; heic לא הורד
+        assert sorted(downloads) == ["bad", "new", "old", "same"]  # same עובד מחדש בגלל retry; סרטון (לא נתמך) לא הורד
         assert [e["file"] for e in stats["errors"]] == ["פגום.pdf"]  # "לא נתמך" אינו שגיאה
         assert stats["unsupported"] == 1 and stats["files"]["added"] == ["סריקה.png"]
-        meta = conn.execute("select metadata->>'pages', end_date from agreements where file_id = 'new'").fetchone()
-        assert meta == ("3", date(2027, 1, 31)), meta  # מספר העמודים האמיתי מהקובץ
+        meta = conn.execute("select metadata->>'pages', end_date, ocr_quality from agreements where file_id = 'new'").fetchone()
+        assert meta == ("3", date(2027, 1, 31), 91), meta  # מספר העמודים האמיתי, וציון ה-OCR נשמר
+        assert conn.execute("select ocr_quality from agreements where file_id = 'old'").fetchone() == (None,)
 
         downloads.clear()
         with _sync_fakes(conn, listing, downloads):
@@ -177,16 +178,73 @@ def _docx_bytes():
     return buf.getvalue()
 
 
+def _heic_bytes(img=None):
+    """תמונת HEIC אמיתית, כמו שאייפון שומר (pillow-heif כותב HEIC)."""
+    from PIL import Image
+    buf = io.BytesIO()
+    (img or Image.new("RGB", (64, 64), "white")).save(buf, "HEIF")
+    return buf.getvalue()
+
+
+def test_old_word_doc_is_converted_through_google_docs():
+    """DOC (Word 97-2003): עותק זמני מומר ל-Google Docs, מייצאים טקסט, והעותק נמחק גם אם הייצוא נכשל."""
+    calls = []
+
+    class Req:
+        def __init__(self, value):
+            self.value = value
+
+        def execute(self):
+            return self.value
+
+    class FakeDrive:
+        def files(self):
+            return self
+
+        def copy(self, fileId, body, **kw):
+            calls.append(("copy", fileId, body["mimeType"], body["parents"]))
+            return Req({"id": "tmp1"})
+
+        def export_media(self, fileId, mimeType):
+            calls.append(("export", fileId, mimeType))
+            return "export-request"
+
+        def delete(self, fileId, **kw):
+            calls.append(("delete", fileId))
+            return Req(None)
+
+    f = {"id": "doc1", "name": "הסכם ישן.doc", "mimeType": extract.DOC}
+    with mock.patch.object(drive, "_fetch", lambda req: "הסכם שכירות ישן".encode()):
+        data = drive.download(FakeDrive(), f)
+    assert calls == [("copy", "doc1", drive.GDOC, ["root"]), ("export", "tmp1", "text/plain"), ("delete", "tmp1")]
+    assert extract.extract(f, data) == ("הסכם שכירות ישן", "text", None)
+
+    calls.clear()
+
+    def failing(req):
+        raise RuntimeError("export failed")
+
+    with mock.patch.object(drive, "_fetch", failing):
+        try:
+            drive.download(FakeDrive(), f)
+            raise AssertionError("היה צריך להיכשל")
+        except RuntimeError:
+            pass
+    assert calls[-1] == ("delete", "tmp1")  # העותק הזמני לא נשאר ב-Drive
+
+
 def test_upload_validation():
     ok = {"a.pdf": b"%PDF-1.7", "a.PNG": b"\x89PNG\r\n\x1a\n...", "a.jpg": b"\xff\xd8\xff\xe0", "a.jpeg": b"\xff\xd8\xff",
-          "a.tif": b"II*\x00..", "a.tiff": b"MM\x00*..", "a.webp": b"RIFF\x00\x00\x00\x00WEBPVP8 ", "a.docx": _docx_bytes()}
+          "a.tif": b"II*\x00..", "a.tiff": b"MM\x00*..", "a.webp": b"RIFF\x00\x00\x00\x00WEBPVP8 ", "a.docx": _docx_bytes(),
+          "a.doc": b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1....", "IMG_1234.HEIC": _heic_bytes(), "a.heif": _heic_bytes()}
     for name, data in ok.items():
         assert drive.check_upload(name, data)[0] == name
     assert drive.check_upload("C:\\Users\\x\\חוזה.pdf", b"%PDF-")[0] == "חוזה.pdf"  # בלי נתיב
     zip_not_docx = io.BytesIO()
     zipfile.ZipFile(zip_not_docx, "w").writestr("x.txt", "x")
     bad = {"a.exe": b"MZ", "a": b"%PDF-", "a.pdf": b"\x89PNG\r\n\x1a\n", "a.png": b"%PDF-", "b.pdf": b"",
-           "big.pdf": b"%PDF-" + b"0" * drive.MAX_UPLOAD, "a.docx": zip_not_docx.getvalue()}
+           "big.pdf": b"%PDF-" + b"0" * drive.MAX_UPLOAD, "a.docx": zip_not_docx.getvalue(),
+           "a.heic": b"\x89PNG\r\n\x1a\n...", "a.doc": b"%PDF-1.7"}
     for name, data in bad.items():
         try:
             drive.check_upload(name, data)
@@ -259,8 +317,8 @@ def test_whole_site_requires_login():
 def test_focus_file_in_agent_context():
     base = {"file_id": "b1", "name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "text": "טקסט הבסיס"}
     sources = []
-    agent = draft.build_agent(sources, base)
-    assert "טקסט הבסיס" in agent.additional_context and "הדוגמה העיקרית" in agent.additional_context
+    agent = draft.build_agent(sources, [base])
+    assert "טקסט הבסיס" in agent.additional_context and "הדוגמאות העיקריות" in agent.additional_context
     assert sources == [{"name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "base": True}]
     found = [base, {"name": "אחר.pdf", "url": "u", "summary": "s", "text": "t"}]
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q: found):
@@ -272,14 +330,19 @@ def test_focus_file_in_agent_context():
         return SimpleNamespace(status=RunStatus.completed,
                                content=draft.Draft(status="agreement", questions=[], title="הסכם", body="גוף"))
 
-    docs = {"b1": base}
+    # כמה מסמכי בסיס: כולם בהקשר ובמקורות, בסדר הבחירה ובלי כפילויות; מעבר ל-3 כל אחד מקוצר
+    docs = {"b1": base, "b2": {**base, "file_id": "b2", "name": "בסיס2.pdf", "text": "טקסט שני"}}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
                              get_doc=lambda conn, fid: docs.get(fid)), mock.patch.object(Agent, "run", fake_run):
-        out = draft.draft([{"role": "user", "content": "נסח"}], "b1")
-        assert out["sources"][0]["base"] is True and out["title"] == "הסכם"
+        out = draft.draft([{"role": "user", "content": "נסח"}], ["b2", "b1", "b2"])
+        assert [(s["name"], s.get("base")) for s in out["sources"]] == [("בסיס2.pdf", True), ("בסיס.pdf", True)]
+        assert out["title"] == "הסכם"
         r = TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
-                                                          "focus_file_id": "missing"})
+                                                          "focus_file_ids": ["b1", "missing"]})
         assert r.status_code == 404 and "לא נמצא" in r.json()["detail"]
+    many = [{**base, "name": f"{i}.pdf", "text": "x" * draft.EXAMPLE_CHARS} for i in range(6)]
+    ctx = draft.build_agent([], many).additional_context
+    assert ctx.count("<מסמך בסיס") == 6 and ctx.count("x") == 6 * (draft.BASE_CHARS // 6)
 
 
 def test_sync_trigger_rate_limit():
@@ -314,9 +377,10 @@ def test_image_ocr_with_tesseract():
     png, tif = io.BytesIO(), io.BytesIO()
     p1.save(png, "PNG")
     p1.save(tif, "TIFF", save_all=True, append_images=[p2])
-    text, method = extract.extract({"mimeType": PNG}, png.getvalue())
+    text, method, quality = extract.extract({"mimeType": PNG}, png.getvalue())
     assert method == "ocr" and "agreement" in text, text
-    text, method = extract.extract({"mimeType": "image/tiff"}, tif.getvalue())
+    assert 60 <= quality <= 100, quality  # טקסט נקי ומודפס: ביטחון גבוה
+    text, method, quality = extract.extract({"mimeType": "image/tiff"}, tif.getvalue())
     assert "agreement" in text and "December" in text, text  # שני העמודים של ה-TIFF
     assert extract.page_count({"mimeType": "image/tiff"}, tif.getvalue()) == 2
 
@@ -352,13 +416,74 @@ def test_pdf_scanned_vs_digital_detection():
     def fake_ocr(images):
         pages = list(images)
         ocr_calls.append(len(pages))
-        return ["טקסט שזוהה מהסריקה, ארוך מספיק כדי לעבור את בדיקת האיכות של 50 תווים לעמוד."] * len(pages)
+        return ["טקסט שזוהה מהסריקה, ארוך מספיק כדי לעבור את בדיקת האיכות של 50 תווים לעמוד."] * len(pages), 77
 
     with mock.patch.object(extract, "ocr", fake_ocr):
-        text, method = extract.extract(pdf, digital)
-        assert method == "text" and "Ministry" in text and ocr_calls == []  # לא נשלח ל-OCR
-        text, method = extract.extract(pdf, scanned.getvalue())
-        assert method == "ocr" and ocr_calls == [1] and "סריקה" in text  # זוהה כסרוק
+        text, method, quality = extract.extract(pdf, digital)
+        assert method == "text" and "Ministry" in text and ocr_calls == [] and quality is None  # לא נשלח ל-OCR
+        text, method, quality = extract.extract(pdf, scanned.getvalue())
+        assert method == "ocr" and ocr_calls == [1] and "סריקה" in text and quality == 77  # זוהה כסרוק
+
+
+def test_iphone_photos_heic_and_rotation():
+    """צילום אייפון: HEIC עובר OCR, ותמונה ששמורה על הצד עם תג סיבוב (EXIF) מסובבת לפני ה-OCR."""
+    if not (shutil.which("tesseract") or Path(extract.WINDOWS_TESSERACT).exists()):
+        return skip("Tesseract לא מותקן")
+    from PIL import Image, ImageDraw, ImageFont
+    try:
+        font = ImageFont.truetype("arial.ttf", 36)
+    except OSError:
+        return skip("אין גופן TrueType לציור טקסט")
+    page = Image.new("RGB", (1400, 360), "white")
+    ImageDraw.Draw(page).multiline_text(
+        (40, 40), "This agreement is made between\nthe Ministry and the Company\nfor the night parking project.",
+        fill="black", font=font, spacing=20)
+
+    text, method, quality = extract.extract({"mimeType": "image/heic"}, _heic_bytes(page))
+    assert method == "ocr" and "agreement" in text and quality >= 70, (text, quality)
+
+    sideways = page.rotate(90, expand=True)  # כמו שהמצלמה שומרת את הפיקסלים
+    exif = Image.Exif()
+    exif[0x0112] = 6  # Orientation: להציג מסובב 90° עם כיוון השעון
+    jpg = io.BytesIO()
+    sideways.save(jpg, "JPEG", exif=exif, quality=95)
+    raw_text, _ = extract.ocr([sideways])
+    assert "agreement" not in " ".join(raw_text)  # בלי הסיבוב ה-OCR באמת נכשל, כך שהבדיקה משמעותית
+    text, method, quality = extract.extract({"mimeType": "image/jpeg"}, jpg.getvalue())
+    assert "agreement" in text and "Ministry" in text, text
+
+
+def test_docx_with_scanned_pages_goes_through_ocr():
+    """Word עם טקסט נקרא ישירות. Word שבתוכו רק עמוד סרוק כתמונה עובר OCR על התמונה ומקבל ציון."""
+    import docx
+    from PIL import Image
+    mime = {"mimeType": extract.DOCX}
+
+    def build(paragraph, with_image):
+        d, buf = docx.Document(), io.BytesIO()
+        d.add_paragraph(paragraph)
+        if with_image:
+            img = io.BytesIO()
+            Image.new("RGB", (800, 1100), "white").save(img, "PNG")
+            img.seek(0)
+            d.add_picture(img)
+        d.save(buf)
+        return buf.getvalue()
+
+    ocr_calls = []
+
+    def fake_ocr(images):
+        ocr_calls.append(len(images))
+        return ["הסכם שכירות בין המשכיר לבין השוכר, לתקופה של שנתיים, כפי שזוהה מהעמוד הסרוק."], 82
+
+    with mock.patch.object(extract, "ocr", fake_ocr):
+        text, method, quality = extract.extract(mime, build("הסכם שכירות. " * 30, with_image=True))
+        assert method == "docx" and quality is None and ocr_calls == []  # יש מספיק טקסט: לא מריצים OCR
+        text, method, quality = extract.extract(mime, build("נספח א", with_image=True))
+        assert method == "ocr" and quality == 82 and ocr_calls == [1], (method, ocr_calls)
+        assert text.startswith("נספח א") and "המשכיר" in text  # הטקסט מהקובץ ואחריו הטקסט מהסריקה
+        text, method, quality = extract.extract(mime, build("מכתב קצר", with_image=False))
+        assert method == "docx" and text == "מכתב קצר"  # טקסט קצר בלי תמונות: כמו שהוא
 
 
 def _font_exists(image_font, name):

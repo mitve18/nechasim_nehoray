@@ -121,7 +121,7 @@ class Message(BaseModel):
 
 class DraftRequest(BaseModel):
     messages: list[Message]
-    focus_file_id: str | None = None  # "נסח על בסיס המסמך הזה"
+    focus_file_ids: list[str] = []  # "נסח על בסיס המסמך הזה", אפשר כמה מסמכים
 
 
 @app.post("/api/draft")
@@ -130,7 +130,7 @@ async def api_draft(req: DraftRequest):
     if not msgs or msgs[-1]["role"] != "user":
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
     try:
-        return await run_in_threadpool(draft.draft, msgs, req.focus_file_id)
+        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids)
     except LookupError as e:
         raise HTTPException(404, str(e))
 

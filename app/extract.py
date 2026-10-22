@@ -10,15 +10,20 @@ import re
 import shutil
 from collections import Counter
 
+import pillow_heif
 from pypdf import PdfReader
 
+pillow_heif.register_heif_opener()  # תמונות HEIC/HEIF מאייפון נפתחות כמו כל תמונה
+
 MIN_CHARS_PER_PAGE = 50  # פחות מזה בממוצע = סריקה בלי שכבת טקסט
+DOCX_MIN_TEXT = 200  # מסמך Word עם פחות טקסט מזה ועם תמונות = עמודים סרוקים שהודבקו, ועוברים OCR
 OCR_LANG = "heb+eng"
 OCR_DPI = 300
 WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/tiff"}
+IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/tiff", "image/heic", "image/heif"}
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 GDOC = "application/vnd.google-apps.document"
+DOC = "application/msword"  # Word 97-2003. Drive ממיר אותו לטקסט בהורדה (drive.download)
 
 
 class Unsupported(ValueError):
@@ -27,11 +32,12 @@ class Unsupported(ValueError):
 
 def supported(mime):
     """האם אפשר לחלץ טקסט מהסוג הזה. נבדק לפני ההורדה, כדי שסוג לא נתמך ייכשל עם סיבה ברורה."""
-    return mime in ("application/pdf", DOCX, GDOC) or mime in IMAGE_TYPES or mime.startswith("text/")
+    return mime in ("application/pdf", DOCX, GDOC, DOC) or mime in IMAGE_TYPES or mime.startswith("text/")
 
 
 def extract(f, data):
-    """מחזיר (טקסט נקי, שיטה). f הוא ה-dict מ-drive.list_files, data הם ה-bytes של הקובץ."""
+    """מחזיר (טקסט נקי, שיטה, איכות OCR). f הוא ה-dict מ-drive.list_files, data הם ה-bytes של הקובץ.
+    איכות OCR: 0–100 כשהטקסט זוהה מתמונה, ו-None כשהוא נקרא ישירות מהקובץ."""
     mime = f["mimeType"]
     if not supported(mime):
         # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
@@ -40,20 +46,45 @@ def extract(f, data):
         pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages]
         # ponytail: החלטה לכל הקובץ לפי ממוצע; עמודים סרוקים בודדים בתוך PDF טקסטואלי לא יעברו OCR
         if sum(len(p.strip()) for p in pages) >= MIN_CHARS_PER_PAGE * len(pages):
-            return clean(pages), "text"
-        return _checked(clean(ocr(_pdf_images(data))), len(pages)), "ocr"
+            return clean(pages), "text", None
+        text, quality = ocr(_pdf_images(data))
+        return _checked(clean(text), len(pages)), "ocr", quality
     if mime in IMAGE_TYPES:
         frames = _image_frames(data)  # TIFF סרוק יכול להכיל כמה עמודים
-        return _checked(clean(ocr(frames)), len(frames)), "ocr"
+        text, quality = ocr(frames)
+        return _checked(clean(text), len(frames)), "ocr", quality
     if mime == DOCX:
         import docx
-        return clean(["\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)]), "docx"
-    return clean([data.decode("utf-8-sig")]), "text"  # GDOC או text/*
+        d = docx.Document(io.BytesIO(data))
+        text = clean(["\n".join(p.text for p in d.paragraphs)])
+        images = _docx_images(d) if len(text) < DOCX_MIN_TEXT else []
+        if not images:
+            return text, "docx", None
+        # מסמך Word שבתוכו עמודים סרוקים כתמונות, וכמעט בלי טקסט: הטקסט מזוהה מהתמונות
+        ocr_text, quality = ocr(images)
+        return _checked(clean([text, *ocr_text]), len(images)), "ocr", quality
+    return clean([data.decode("utf-8-sig")]), "text", None  # GDOC, DOC (כבר הומר לטקסט) או text/*
+
+
+def _docx_images(d):
+    """התמונות שבמסמך Word (למשל עמודים סרוקים שהודבקו), לפי הסדר במסמך."""
+    from docx.oxml.ns import qn
+    from PIL import Image
+    images = []
+    for blip in d.element.body.iter(qn("a:blip")):
+        part = d.part.related_parts.get(blip.get(qn("r:embed")))
+        try:
+            images.append(Image.open(io.BytesIO(part.blob)).convert("RGB"))
+        except Exception:  # ציור וקטורי (EMF/WMF) או תמונה מקושרת מבחוץ
+            continue
+    return images
 
 
 def _image_frames(data):
-    from PIL import Image, ImageSequence
-    return [frame.convert("RGB") for frame in ImageSequence.Iterator(Image.open(io.BytesIO(data)))]
+    """עמודי התמונה, מסובבים לפי תג הסיבוב של המצלמה (EXIF). אייפון שומר תמונה עומדת כשוכבת + תג,
+    ובלי הסיבוב ה-OCR קורא טקסט על הצד."""
+    from PIL import Image, ImageOps, ImageSequence
+    return [ImageOps.exif_transpose(frame).convert("RGB") for frame in ImageSequence.Iterator(Image.open(io.BytesIO(data)))]
 
 
 def countable(mime):
@@ -87,12 +118,26 @@ def _pdf_images(data):
 
 
 def ocr(images):
-    """תמלול סריקה עם Tesseract. מחזיר רשימת עמודים."""
+    """תמלול סריקה עם Tesseract. מחזיר (רשימת עמודים, ציון איכות 0–100).
+
+    הציון הוא ממוצע הביטחון של Tesseract בכל מילה שזיהה, משוקלל לפי אורך המילה.
+    הטקסט והציון מגיעים מאותה הרצה (txt ו-tsv), כך שהציון לא מאריך את ה-OCR.
+    """
     import pytesseract
     # ב-Linux tesseract ב-PATH; ב-Windows ה-installer לא מוסיף אותו ל-PATH, ולכן נופלים לנתיב ברירת המחדל
     cmd = os.environ.get("TESSERACT_CMD") or shutil.which("tesseract") or WINDOWS_TESSERACT
     pytesseract.pytesseract.tesseract_cmd = cmd
-    return [pytesseract.image_to_string(img, lang=OCR_LANG) for img in images]
+    pages, weighted, letters = [], 0.0, 0
+    for img in images:
+        text, tsv = pytesseract.run_and_get_multiple_output(img, extensions=["txt", "tsv"], lang=OCR_LANG)
+        pages.append(text)
+        for row in tsv.splitlines()[1:]:  # עמודות: ... conf, text
+            cols = row.split("\t")
+            word = cols[-1].strip()
+            if len(cols) == 12 and word and cols[10] != "-1":
+                weighted += float(cols[10]) * len(word)
+                letters += len(word)
+    return pages, round(weighted / letters) if letters else 0
 
 
 PAGE_NUM = re.compile(r"^\s*[-–]?\s*(עמוד|page)?\s*\d+\s*((מתוך|of|/)\s*\d+)?\s*[-–]?\s*$", re.I)
@@ -148,7 +193,7 @@ if __name__ == "__main__":
         sys.exit()
     for f in files:
         try:
-            text, method = extract(f, drive.download(svc, f))
+            text, method, _ = extract(f, drive.download(svc, f))
             sample = next((l for l in text.splitlines() if len(l) > 30), "")[:70]
             print(f"{method:5} | {len(text):6} | {f['name'][:45]} | {sample}")
         except Exception as e:

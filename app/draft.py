@@ -17,6 +17,7 @@ from app import store
 MODEL = "gpt-4o"
 MAX_OUTPUT_TOKENS = 16384  # התקרה של gpt-4o; הסכם עברי ארוך במיוחד ייחתך ויחזיר שגיאה ברורה
 EXAMPLE_CHARS = 40000  # לכל מסמך מהמאגר, כדי ששלוש דוגמאות + השיחה ייכנסו בחלון של 128K טוקנים
+BASE_CHARS = 3 * EXAMPLE_CHARS  # לכל מסמכי הבסיס יחד, כמה שלא יהיו
 
 # השדות של Agno Agent. name לא נכנס לפרומפט (add_name_to_context כבוי); description פותח את הודעת המערכת
 NAME = "מנסח ההסכמים"
@@ -61,18 +62,20 @@ class Draft(BaseModel):
     body: str
 
 
-def build_agent(sources, focus=None):
+def build_agent(sources, focus=()):
     """Agent חדש לכל בקשה. ה-tool ממלא את sources במסמכים ששלף, כדי להחזיר אותם לממשק.
 
-    focus: מסמך שהעובד בחר ("נסח על בסיס המסמך הזה"). הוא נכנס להקשר כדוגמה העיקרית ומופיע ראשון במקורות,
-    ותוצאות החיפוש משמשות רק כדוגמאות משניות.
+    focus: המסמכים שהעובד בחר ("נסח על בסיס המסמך הזה"), בלי הגבלה על הכמות. הם נכנסים להקשר כדוגמאות
+    העיקריות ומופיעים ראשונים במקורות, ותוצאות החיפוש משמשות רק כדוגמאות משניות.
     """
     context = None
     if focus:
-        sources.append({"name": focus["name"], "url": focus["url"], "summary": focus["summary"], "base": True})
-        context = (f"העובד בחר מסמך בסיס. זו הדוגמה העיקרית: אמץ את המבנה, סדר הסעיפים והנוסח שלו, "
-                   f"והתאם אותו לבקשה. מסמכים שתמצא בחיפוש הם דוגמאות משניות בלבד.\n"
-                   f"<מסמך בסיס name=\"{focus['name']}\">\n{focus['text'][:EXAMPLE_CHARS]}\n</מסמך בסיס>")
+        # תקציב תווים משותף: עד 3 מסמכי בסיס כל אחד באורך מלא, ומעבר לזה כל מסמך מקוצר כדי להישאר בחלון ההקשר
+        chars = min(EXAMPLE_CHARS, BASE_CHARS // len(focus))
+        sources.extend({"name": f["name"], "url": f["url"], "summary": f["summary"], "base": True} for f in focus)
+        context = ("העובד בחר מסמכי בסיס. הם הדוגמאות העיקריות: אמץ את המבנה, סדר הסעיפים והנוסח שלהם, "
+                   "שלב ביניהם לפי הצורך, והתאם לבקשה. מסמכים שתמצא בחיפוש הם דוגמאות משניות בלבד.\n"
+                   + "\n".join(f"<מסמך בסיס name=\"{f['name']}\">\n{f['text'][:chars]}\n</מסמך בסיס>" for f in focus))
 
     def search_agreements(query: str) -> str:
         """חיפוש סמנטי במאגר ההסכמים של החברה. מחזיר עד 3 מסמכים דומים, לשימוש כדוגמאות לנוסח.
@@ -102,15 +105,17 @@ def build_agent(sources, focus=None):
     )
 
 
-def draft(messages, focus_file_id=None):
+def draft(messages, focus_file_ids=()):
     """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources.
-    focus_file_id: מסמך בסיס מהמאגר (אופציונלי). LookupError אם הוא לא במאגר."""
-    focus = None
-    if focus_file_id:
+    focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError אם אחד מהם לא במאגר."""
+    focus = []
+    if focus_file_ids:
         with store.connect() as conn:
-            focus = store.get_doc(conn, focus_file_id)
-        if not focus:
-            raise LookupError("מסמך הבסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
+            for fid in dict.fromkeys(focus_file_ids):  # בלי כפילויות, בסדר שבו נבחרו
+                doc = store.get_doc(conn, fid)
+                if not doc:
+                    raise LookupError("מסמך בסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
+                focus.append(doc)
     sources = []
     result = build_agent(sources, focus).run(messages)
     if result.status != RunStatus.completed:

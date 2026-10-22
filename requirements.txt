@@ -12,3 +12,4 @@ uvicorn
 pytesseract
 pypdfium2
 Pillow
+pillow-heif

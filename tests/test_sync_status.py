@@ -26,7 +26,7 @@ FILES = [
     {"id": "old", "name": "הסכם | ישן.pdf", "mimeType": PDF, "modifiedTime": "2"},
     {"id": "same", "name": "לא השתנה.pdf", "mimeType": PDF, "modifiedTime": "1"},
     {"id": "bad", "name": "סריקה פגומה.pdf", "mimeType": PDF, "modifiedTime": "1"},
-    {"id": "heic", "name": "צילום.heic", "mimeType": "image/heic", "modifiedTime": "1"},
+    {"id": "video", "name": "סרטון.mp4", "mimeType": "video/mp4", "modifiedTime": "1"},
     {"id": "sc", "name": "קיצור", "mimeType": SHORTCUT, "modifiedTime": "1",
      "error": "קיצור דרך לקובץ שאין אליו גישה (404)"},
 ]
@@ -38,7 +38,7 @@ def _fake_backends(logged, downloads, summary_path):
     def fake_extract(f, data):
         if f["id"] == "bad":
             raise RuntimeError("OCR נכשל")
-        return "t", "ocr" if f["mimeType"] == PNG else "text"
+        return ("t", "ocr", 88) if f["mimeType"] == PNG else ("t", "text", None)
 
     with mock.patch.multiple(sync.drive, service=lambda: None, list_files=lambda svc, folder: FILES,
                              download=lambda svc, f: downloads.append(f["id"]) or b""), \
@@ -46,9 +46,9 @@ def _fake_backends(logged, downloads, summary_path):
             mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
                                 indexed=lambda conn: {"old": "1", "same": "1", "gone": "1"},
                                 retry_ids=lambda conn: set(), delete=lambda conn, ids: None,
-                                upsert=lambda conn, f, method, text, pages=None: None,
+                                upsert=lambda conn, f, method, text, pages=None, quality=None: None,
                                 save_files=lambda conn, rows: None, prune_files=lambda conn, ids: None,
-                                pending_metadata=lambda conn: [], missing_pages=lambda conn: set(),
+                                pending_metadata=lambda conn: [], missing_pages=lambda conn: set(), missing_quality=lambda conn: set(),
                                 log_run=lambda conn, stats: logged.append(stats)), \
             mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder-123", "GITHUB_STEP_SUMMARY": summary_path}), \
             mock.patch.object(sys, "argv", ["sync.py"]):
@@ -75,14 +75,14 @@ def test_sync_summary_and_exit_code():
     block = md.split("<details>")[1]
     assert "| הסכם חדש.png | image/png | 2026-10-21 08:12 | נוסף |" in block
     assert "| לא השתנה.pdf | application/pdf | 1 | ללא שינוי |" in block
-    assert "| צילום.heic | image/heic | 1 | לא נתמך: סוג קובץ לא נתמך: image/heic |" in block
+    assert "| סרטון.mp4 | video/mp4 | 1 | לא נתמך: סוג קובץ לא נתמך: video/mp4 |" in block
     assert "| קיצור |" in block and "נכשל: קיצור דרך לקובץ שאין אליו גישה (404)" in block
     assert (block.index("נכשל") < block.index("| לא נתמך") < block.index("נוסף") < block.index("עודכן")
             < block.index("ללא שינוי"))
     assert md.rstrip().endswith("</details>")
     assert "הושלמו נתונים מובנים" not in md  # אין מסמכים להשלמה, אין שורה
 
-    assert "heic" not in downloads and "sc" not in downloads  # סוג לא נתמך לא מורד בכלל
+    assert "video" not in downloads and "sc" not in downloads  # סוג לא נתמך לא מורד בכלל
     assert logged[0]["files"] == {"added": ["הסכם חדש.png"], "updated": ["הסכם | ישן.pdf"], "backfilled": []}
     assert logged[0]["ocr"] == 1
 

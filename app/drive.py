@@ -14,7 +14,14 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
 FILE_FIELDS = "id, name, mimeType, modifiedTime, webViewLink, size"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+DOC = "application/msword"
+GDOC = "application/vnd.google-apps.document"
 MAX_UPLOAD = 20 * 1024 * 1024
+
+
+def _is_heif(d):
+    """תמונת HEIC/HEIF (אייפון): בתים 4–8 הם "ftyp", ואחריהם סוג התמונה."""
+    return d[4:8] == b"ftyp" and d[8:12] in {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1"}
 
 
 def _is_docx(d):
@@ -34,6 +41,9 @@ UPLOAD_TYPES = {
     "tiff": ("image/tiff", lambda d: d[:4] in (b"II*\x00", b"MM\x00*")),
     "webp": ("image/webp", lambda d: d[:4] == b"RIFF" and d[8:12] == b"WEBP"),
     "docx": (DOCX, _is_docx),
+    "doc": (DOC, lambda d: d.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")),  # קובץ OLE של Office ישן
+    "heic": ("image/heic", _is_heif),
+    "heif": ("image/heif", _is_heif),
 }
 
 
@@ -96,11 +106,24 @@ def _shortcut_target(svc, f):
 
 
 def download(svc, f):
-    """תוכן הקובץ כ-bytes. מסמכי Google Docs מיוצאים כטקסט רגיל."""
-    if f["mimeType"] == "application/vnd.google-apps.document":
-        req = svc.files().export_media(fileId=f["id"], mimeType="text/plain")
-    else:
-        req = svc.files().get_media(fileId=f["id"], supportsAllDrives=True)
+    """תוכן הקובץ כ-bytes. מסמכי Google Docs מיוצאים כטקסט רגיל.
+
+    Word 97-2003 (.doc): Drive יוצר עותק זמני שמומר ל-Google Docs, מייצא ממנו טקסט ומוחק אותו.
+    כך אין צורך ב-LibreOffice, ו-Google מטפל היטב בעברית. העותק נוצר ב"האחסון שלי" של החשבון,
+    מחוץ לתיקיית ההסכמים, ולכן הסנכרון לא רואה אותו."""
+    if f["mimeType"] == DOC:
+        tmp = svc.files().copy(fileId=f["id"], supportsAllDrives=True,
+                               body={"name": f"tmp-convert {f['name']}", "mimeType": GDOC, "parents": ["root"]}).execute()
+        try:
+            return _fetch(svc.files().export_media(fileId=tmp["id"], mimeType="text/plain"))
+        finally:
+            svc.files().delete(fileId=tmp["id"], supportsAllDrives=True).execute()
+    if f["mimeType"] == GDOC:
+        return _fetch(svc.files().export_media(fileId=f["id"], mimeType="text/plain"))
+    return _fetch(svc.files().get_media(fileId=f["id"], supportsAllDrives=True))
+
+
+def _fetch(req):
     buf = io.BytesIO()
     dl = MediaIoBaseDownload(buf, req)
     done = False

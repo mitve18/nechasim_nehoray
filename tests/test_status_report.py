@@ -77,7 +77,7 @@ def test_status_rows_query():
         assert re.fullmatch(r"\d\d/\d\d/\d{4} \d\d:\d\d", _values(conn)["אינדוקס אחרון"][0])
 
 
-def test_fill_pages_counts_existing_pdf_and_images_only():
+def test_fill_missing_pages_and_ocr_quality_for_existing_docs():
     with postgres() as conn:
         if conn is None:
             return skip("אין py-pglite או Node")
@@ -86,28 +86,39 @@ def test_fill_pages_counts_existing_pdf_and_images_only():
         _doc(conn, "done", "application/pdf", "text", 4)
         _doc(conn, "word", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx", None)
         _doc(conn, "broken", "application/pdf", "text", None)
+        _doc(conn, "scan", "image/png", "ocr", 2)  # סרוק בלי ציון: מקבל ציון, העמודים כבר ידועים
+        _doc(conn, "scored", "image/png", "ocr", 1)
+        store.save_quality(conn, "scored", 90)  # כבר יש ציון: לא מריצים OCR שוב
         listing = [{"id": i, "name": i, "mimeType": m} for i, m in
                    (("pdf", "application/pdf"), ("done", "application/pdf"), ("word", "application/msword"),
-                    ("broken", "application/pdf"))]
-        downloads = []
+                    ("broken", "application/pdf"), ("scan", "image/png"), ("scored", "image/png"))]
+        downloads, ocr_runs = [], []
 
         def fake_count(f, data):
             if f["id"] == "broken":
                 raise ValueError("EOF marker not found")
             return 9
 
-        stats = {"pages_counted": 0, "pages_failed": []}
-        with mock.patch.object(sync.drive, "download", lambda svc, f: downloads.append(f["id"]) or b"x"), \
-                mock.patch.object(sync.extract, "page_count", fake_count):
-            sync.fill_pages(conn, None, listing, stats)
-        assert downloads == ["pdf", "broken"]  # מה שכבר נספר, ו-DOCX, לא מורדים
-        assert dict(conn.execute("select file_id, pages from agreements").fetchall()) == {
-            "pdf": 9, "done": 4, "word": None, "broken": None}  # broken ייספר שוב בריצה הבאה
-        assert stats == {"pages_counted": 1, "pages_failed": ["broken: EOF marker not found"]}
+        def fake_extract(f, data):
+            ocr_runs.append(f["id"])
+            return "טקסט", "ocr", 73
 
-        md = sync.summary({"added": 0, "updated": 0, "removed": 0, "unsupported": 0, "errors": [], "in_db": 4,
+        stats = {"pages_counted": 0, "ocr_scored": 0, "fill_failed": []}
+        with mock.patch.object(sync.drive, "download", lambda svc, f: downloads.append(f["id"]) or b"x"), \
+                mock.patch.object(sync.extract, "page_count", fake_count), \
+                mock.patch.object(sync.extract, "extract", fake_extract):
+            sync.fill_missing(conn, None, listing, stats)
+        assert downloads == ["pdf", "broken", "scan"]  # מה שכבר הושלם, ו-DOCX, לא מורדים
+        assert ocr_runs == ["scan"]
+        rows = {r[0]: r[1:] for r in conn.execute("select file_id, pages, ocr_quality from agreements").fetchall()}
+        assert rows == {"pdf": (9, None), "done": (4, None), "word": (None, None), "broken": (None, None),
+                        "scan": (2, 73), "scored": (1, 90)}, rows  # broken יושלם בריצה הבאה
+        assert stats == {"pages_counted": 1, "ocr_scored": 1, "fill_failed": ["broken: EOF marker not found"]}
+
+        md = sync.summary({"added": 0, "updated": 0, "removed": 0, "unsupported": 0, "errors": [], "in_db": 6,
                            "folder": "f", "seen": [], "files": {"added": [], "updated": [], "backfilled": []}} | stats)
-        assert "**נספרו עמודים ל-1 מסמכים**\nלא נספרו (1, ינוסו שוב בריצה הבאה):\n- broken: EOF marker not found" in md
+        assert ("**נספרו עמודים ל-1 מסמכים · חושב ציון איכות OCR ל-1 מסמכים**\n"
+                "לא הושלמו (1, ינוסו שוב בריצה הבאה):\n- broken: EOF marker not found") in md, md
 
 
 def test_tsv_format():

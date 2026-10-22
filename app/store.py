@@ -44,6 +44,8 @@ alter table agreements add column if not exists end_date date;
 alter table agreements add column if not exists metadata_version int;
 -- מספר העמודים האמיתי מהקובץ (PDF ותמונות). null = עוד לא נספר; הסנכרון הבא סופר למסמכים הקיימים
 alter table agreements add column if not exists pages int;
+-- איכות ה-OCR (0–100) למסמכים סרוקים. null במסמך דיגיטלי, או בסרוק שעוד לא קיבל ציון (הסנכרון הבא משלים)
+alter table agreements add column if not exists ocr_quality int;
 create table if not exists files (
     file_id text primary key,
     name text not null,
@@ -129,21 +131,23 @@ def indexed(conn):
     return dict(conn.execute("select file_id, modified_time from agreements").fetchall())
 
 
-def upsert(conn, f, method, text, pages=None):
+def upsert(conn, f, method, text, pages=None, ocr_quality=None):
     summary, meta = analyze(f["name"], text)
     if pages:  # מספר העמודים האמיתי מהקובץ עדיף על מה שכתוב בטקסט
         meta["pages"] = pages
     conn.execute(
         """insert into agreements (file_id, name, url, modified_time, method, summary, text, embedding,
-                                   metadata, end_date, metadata_version, pages)
-           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s)
+                                   metadata, end_date, metadata_version, pages, ocr_quality)
+           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
            on conflict (file_id) do update set name=excluded.name, url=excluded.url,
              modified_time=excluded.modified_time, method=excluded.method, summary=excluded.summary,
              text=excluded.text, embedding=excluded.embedding, metadata=excluded.metadata,
              end_date=excluded.end_date, metadata_version=excluded.metadata_version, pages=excluded.pages,
+             ocr_quality=excluded.ocr_quality,
              indexed_at=now()""",
         (f["id"], f["name"], f.get("webViewLink"), f["modifiedTime"], method, summary, text,
-         embed(f"{f['name']}\n{summary}"), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages),
+         embed(f"{f['name']}\n{summary}"), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages,
+         ocr_quality),
     )
 
 
@@ -227,7 +231,7 @@ def files_list(conn):
     return _dicts(conn, """select f.file_id, f.name, f.mime_type, f.size_bytes, f.modified_time, f.status, f.error,
                                   f.last_attempt_at, f.retry_requested,
                                   coalesce(a.url, 'https://drive.google.com/file/d/' || f.file_id || '/view') as url,
-                                  a.summary, a.metadata, a.method
+                                  a.summary, a.metadata, a.method, a.ocr_quality
                            from files f left join agreements a using (file_id) order by f.name""")
 
 
@@ -238,6 +242,16 @@ def missing_pages(conn):
 
 def save_pages(conn, file_id, pages):
     conn.execute("update agreements set pages = %s where file_id = %s", (pages, file_id))
+
+
+def missing_quality(conn):
+    """מסמכים סרוקים שעברו OCR לפני שנשמר ציון איכות."""
+    return {r[0] for r in conn.execute(
+        "select file_id from agreements where method = 'ocr' and ocr_quality is null").fetchall()}
+
+
+def save_quality(conn, file_id, quality):
+    conn.execute("update agreements set ocr_quality = %s where file_id = %s", (quality, file_id))
 
 
 def status_rows(conn):

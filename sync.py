@@ -23,7 +23,7 @@ FILE_STATUS = {ADDED: "indexed", UPDATED: "indexed", UNCHANGED: "indexed", FAILE
 def sync():
     stats = {"started_at": datetime.now(timezone.utc), "added": 0, "updated": 0, "removed": 0, "ocr": 0, "errors": [],
              "unsupported": 0, "files": {"added": [], "updated": [], "backfilled": []},
-             "pages_counted": 0, "pages_failed": [],
+             "pages_counted": 0, "ocr_scored": 0, "fill_failed": [],
              "folder": os.environ["DRIVE_FOLDER_ID"], "seen": []}
     svc = drive.service()
     files = drive.list_files(svc, stats["folder"])
@@ -49,8 +49,8 @@ def sync():
                     if not extract.supported(f["mimeType"]):
                         raise extract.Unsupported(f"סוג קובץ לא נתמך: {f['mimeType']}")
                     data = drive.download(svc, f)
-                    text, method = extract.extract(f, data)
-                    store.upsert(conn, f, method, text, extract.page_count(f, data))
+                    text, method, quality = extract.extract(f, data)
+                    store.upsert(conn, f, method, text, extract.page_count(f, data), quality)
                 except extract.Unsupported as e:  # לא תקלה: מסומן "לא נתמך" ולא מכשיל את הריצה
                     status, reason = UNSUPPORTED, str(e)
                     stats["unsupported"] += 1
@@ -73,7 +73,7 @@ def sync():
         store.save_files(conn, rows)
         store.prune_files(conn, [f["id"] for f in files])
 
-        fill_pages(conn, svc, files, stats)
+        fill_missing(conn, svc, files, stats)
 
         backfill(conn, stats)
         store.log_run(conn, stats)
@@ -87,21 +87,29 @@ def sync():
     return stats
 
 
-def fill_pages(conn, svc, files, stats):
-    """מספר עמודים למסמכים שאונדקסו לפני שהוא נשמר: הורדה וספירה בלבד, בלי OCR ובלי מודל.
-    קורה פעם אחת לכל מסמך. כישלון לא מכשיל את הריצה, והמסמך ייספר בריצה הבאה."""
-    missing = store.missing_pages(conn)
+def fill_missing(conn, svc, files, stats):
+    """משלים למסמכים קיימים מה שעוד לא נשמר: מספר עמודים, וציון איכות OCR למסמך סרוק.
+    הורדה אחת לכל מסמך, בלי מודל. ציון ה-OCR דורש להריץ OCR שוב, ולכן הוא לוקח זמן ב-Actions בלבד.
+    קורה פעם אחת לכל מסמך. כישלון לא מכשיל את הריצה, והמסמך יושלם בריצה הבאה."""
+    no_pages, no_quality = store.missing_pages(conn), store.missing_quality(conn)
     for f in files:
-        if f["id"] not in missing or not extract.countable(f["mimeType"]):
+        pages = f["id"] in no_pages and extract.countable(f["mimeType"])
+        quality = f["id"] in no_quality
+        if not (pages or quality):
             continue
         try:
-            store.save_pages(conn, f["id"], extract.page_count(f, drive.download(svc, f)))
+            data = drive.download(svc, f)
+            if pages:
+                store.save_pages(conn, f["id"], extract.page_count(f, data))
+                stats["pages_counted"] += 1
+            if quality:
+                store.save_quality(conn, f["id"], extract.extract(f, data)[2])
+                stats["ocr_scored"] += 1
         except Exception as e:
-            stats["pages_failed"].append(f"{f['name']}: {str(e)[:200]}")
-            print(f"ספירת עמודים נכשלה  {f['name']}  ({e})")
+            stats["fill_failed"].append(f"{f['name']}: {str(e)[:200]}")
+            print(f"השלמה נכשלה  {f['name']}  ({e})")
             continue
-        stats["pages_counted"] += 1
-        print(f"נספרו עמודים  {f['name']}")
+        print(f"הושלם  {f['name']}" + ("  · עמודים" if pages else "") + ("  · ציון OCR" if quality else ""))
 
 
 def backfill(conn, stats):
@@ -132,11 +140,11 @@ def summary(stats):
              f"תיקייה שנסרקה: `{stats['folder']}`"]
     if backfilled:
         lines += ["", f"**הושלמו נתונים מובנים ל-{len(backfilled)} מסמכים**", *(f"- {esc(n)}" for n in backfilled)]
-    counted, not_counted = stats.get("pages_counted", 0), stats.get("pages_failed", [])
-    if counted or not_counted:  # ספירת עמודים למסמכים ותיקים: קורית פעם אחת לכל מסמך
-        lines += ["", f"**נספרו עמודים ל-{counted} מסמכים**"]
-        if not_counted:
-            lines += [f"לא נספרו ({len(not_counted)}, ינוסו שוב בריצה הבאה):", *(f"- {esc(n)}" for n in not_counted)]
+    counted, scored, failed = stats.get("pages_counted", 0), stats.get("ocr_scored", 0), stats.get("fill_failed", [])
+    if counted or scored or failed:  # השלמות למסמכים ותיקים: קורות פעם אחת לכל מסמך
+        lines += ["", f"**נספרו עמודים ל-{counted} מסמכים · חושב ציון איכות OCR ל-{scored} מסמכים**"]
+        if failed:
+            lines += [f"לא הושלמו ({len(failed)}, ינוסו שוב בריצה הבאה):", *(f"- {esc(n)}" for n in failed)]
     for title, names in (("נוספו", stats["files"]["added"]), ("עודכנו", stats["files"]["updated"])):
         if names:
             lines += ["", f"### {title}", *(f"- {esc(n)}" for n in names)]

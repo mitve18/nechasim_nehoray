@@ -135,7 +135,11 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
   **Additional language data → Hebrew**. הקוד מחפש את `tesseract` ב-PATH, ואחר כך ב-`C:\Program Files\Tesseract-OCR\tesseract.exe`.
   נתיב אחר: מגדירים `TESSERACT_CMD`. בדיקה: `python -m app.extract --ocr scan.pdf`.
 - קובץ שנכשל בחילוץ או ב-OCR לא נכנס למאגר, ולכן ינוסה שוב בריצת הסנכרון הבאה.
-- תמונות (png, jpg, tif, webp) עוברות OCR כמו PDF סרוק, כולל TIFF עם כמה עמודים.
+- תמונות (png, jpg, tif, webp, ותמונות HEIC מאייפון) עוברות OCR כמו PDF סרוק, כולל TIFF עם כמה עמודים.
+  צילום טלפון מסובב לפי תג הסיבוב שלו (EXIF) לפני ה-OCR.
+- Word: DOCX נקרא ישירות; DOCX עם עמודים סרוקים כתמונות וכמעט בלי טקסט עובר OCR על התמונות.
+  DOC ישן (Word 97-2003) מומר לטקסט דרך Google Drive: עותק זמני ב-Google Docs, ייצוא טקסט ומחיקת העותק.
+- לכל מסמך שעבר OCR נשמר ציון איכות (0–100): ממוצע הביטחון של Tesseract במילים שזיהה. מוצג בחלון הפרטים של הקובץ.
 
 ### פאנל הקבצים ונתונים מובנים
 - **טבלת `files`:** הסנכרון רושם כל קובץ שהוא רואה ב-Drive עם סטטוס: `indexed` (מאונדקס), `failed` (נכשל, עם הסיבה),
