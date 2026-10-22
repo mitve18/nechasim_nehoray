@@ -21,7 +21,7 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      # העלאה, "נסה שוב" וסנכרון מהאתר: זמינים רק כשהסיסמה מוגדרת והמשתמש מחובר
+      # חובה: כל האתר מאחורי הסיסמה הזו. בלעדיה האתר מציג "לא מוגדר" ולא נפתח לאף אחד
       - key: APP_PASSWORD
         sync: false
       # כפתור הסנכרון: fine-grained token רק ל-repo הזה, Actions: Read and write

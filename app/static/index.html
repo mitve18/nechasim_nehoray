@@ -91,9 +91,6 @@
         font-size: 14px;
         font-weight: 500;
         border-bottom: 1px solid #f0d9a8;
-        position: sticky;
-        top: 0;
-        z-index: 5;
       }
       main {
         max-width: 1560px;
@@ -814,6 +811,12 @@
         width: min(560px, calc(100vw - 32px));
         max-height: calc(100vh - 48px);
         color: var(--text);
+        overflow-y: auto;
+        overscroll-behavior: contain; /* בסוף התוכן של החלון הגלילה לא עוברת לדף */
+      }
+      /* כל עוד חלון פתוח, הדף שמאחוריו לא נגלל */
+      html:has(dialog[open]) {
+        overflow: hidden;
       }
       dialog::backdrop {
         background: rgba(14, 47, 76, 0.45);
@@ -883,14 +886,6 @@
         color: var(--muted);
         font-size: 14px;
       }
-      #login-dialog input {
-        width: 100%;
-        font: inherit;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin: 6px 0 12px;
-      }
       #toast {
         position: fixed;
         bottom: 20px;
@@ -936,7 +931,6 @@
         </div>
         <div class="actions">
           <button type="button" id="sync-btn" hidden>⟳ סנכרון</button>
-          <button type="button" id="login-btn" hidden>כניסה</button>
         </div>
       </div>
     </header>
@@ -1062,27 +1056,6 @@
       </div>
     </dialog>
 
-    <dialog id="login-dialog" aria-labelledby="login-h">
-      <form id="login-form">
-        <h3 id="login-h">כניסה</h3>
-        <p class="dialog-note">
-          הכניסה נדרשת להעלאת קבצים ולהפעלת סנכרון. הניסוח זמין גם בלי כניסה.
-        </p>
-        <label for="login-pw" class="hint">סיסמה</label>
-        <input
-          id="login-pw"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-        <p class="dialog-error" id="login-error" hidden></p>
-        <div class="row">
-          <button class="primary">כניסה</button>
-          <button type="button" id="login-cancel">ביטול</button>
-        </div>
-      </form>
-    </dialog>
-
     <div id="toast" role="status" aria-live="polite" hidden>
       <span id="toast-text"></span>
       <button type="button" id="toast-close" aria-label="סגירת ההודעה">✕</button>
@@ -1178,6 +1151,7 @@
               focus_file_id: focus?.id ?? null,
             }),
           });
+          if (res.status === 401) return toLogin();
           if (!res.ok) {
             const d = (await res.json().catch(() => ({}))).detail;
             throw new Error(
@@ -1363,7 +1337,7 @@
       const MAX_UPLOAD = 20 * 1024 * 1024;
       let files = [];
       let focus = null; // מסמך הבסיס לניסוח: { id, name }
-      let me = { login: false, writer: false, sync: false };
+      let me = { writer: false, sync: false };
       let syncWatch = null;
 
       // יוצר אלמנט. טקסט נכנס תמיד כ-textContent, כך ששמות קבצים לא יכולים להזריק HTML
@@ -1379,6 +1353,7 @@
             ? { headers: { "Content-Type": "application/json" }, ...opts }
             : opts,
         );
+        if (res.status === 401) toLogin();
         const data = await res.json().catch(() => ({}));
         if (!res.ok)
           throw new Error(
@@ -1539,6 +1514,16 @@
         const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
         if (outside) e.currentTarget.close();
       });
+      // גלגלת העכבר מעל הרקע גוללת את החלון עצמו, ולא את הדף שמאחוריו
+      $("file-dialog").addEventListener(
+        "wheel",
+        (e) => {
+          if (e.target !== e.currentTarget) return; // מעל התוכן: הגלילה הרגילה של החלון
+          e.preventDefault();
+          e.currentTarget.scrollBy({ top: e.deltaY });
+        },
+        { passive: false },
+      );
 
       // "נסח על בסיס המסמך הזה": המסמך נשלח כ-focus_file_id עד שמסירים אותו
       function setFocus(f) {
@@ -1622,39 +1607,18 @@
         $("status-box").hidden = false;
       }
 
-      // כניסה: רק להעלאה ולסנכרון. בלי APP_PASSWORD בשרת, הכפתור לא מוצג
+      // העלאה וכפתור הסנכרון: למי שמחובר (הכניסה עצמה במסך /login, לפני האתר)
       async function loadMe() {
         try {
           me = await api("/api/me");
         } catch {
           return;
         }
-        $("login-btn").hidden = !me.login || me.writer;
         $("sync-btn").hidden = !(me.writer && me.sync);
         $("dropzone").hidden = !me.writer;
       }
-      $("login-btn").onclick = () => {
-        $("login-error").hidden = true;
-        $("login-dialog").showModal();
-      };
-      $("login-cancel").onclick = () => $("login-dialog").close();
-      $("login-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        try {
-          await api("/api/login", {
-            method: "POST",
-            body: JSON.stringify({ password: $("login-pw").value }),
-          });
-        } catch (err) {
-          $("login-error").textContent = err.message;
-          $("login-error").hidden = false;
-          return;
-        }
-        $("login-pw").value = "";
-        $("login-dialog").close();
-        await loadMe();
-        toast("מחובר. אפשר להעלות קבצים ולהפעיל סנכרון.");
-      });
+      // הכניסה פגה (אחרי 30 יום, או שהסיסמה הוחלפה) בזמן שהאתר פתוח: חוזרים למסך הכניסה
+      const toLogin = () => location.assign("/login?next=" + encodeURIComponent(location.pathname));
 
       // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת.
       // ההודעה "הסנכרון הושלם" מגיעה מ-loadStatus, כשזמן הסנכרון האחרון משתנה
@@ -1733,6 +1697,7 @@
             try {
               d = JSON.parse(x.responseText);
             } catch {}
+            if (x.status === 401) toLogin();
             if (x.status < 300) resolve(d);
             else reject(new Error(typeof d.detail === "string" ? d.detail : "שגיאת שרת (" + x.status + ")"));
           };

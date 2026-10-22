@@ -203,10 +203,10 @@ def test_upload_api_requires_password_and_renames():
         return {"id": "x", "name": drive.unique_name(name, {"הסכם.pdf"}), "mimeType": mime, "size": str(len(data))}
 
     queued = []
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"):
-        c = TestClient(main.app)
-        assert c.get("/api/me").json() == {"login": False, "writer": False, "sync": github.configured()}
-        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 403  # בלי APP_PASSWORD
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"), mock.patch.dict(os.environ, {"RENDER": ""}):
+        c = TestClient(main.app)  # פיתוח מקומי בלי סיסמה: האתר פתוח, אבל פעולות כתיבה חסומות
+        assert c.get("/api/me").json() == {"writer": False, "sync": github.configured()}
+        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 403
         assert c.post("/api/sync").status_code == 403
     with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"), \
             mock.patch.multiple(drive, service=lambda: None, upload=fake_upload), \
@@ -214,9 +214,8 @@ def test_upload_api_requires_password_and_renames():
                                 add_queued=lambda conn, f: queued.append(f["name"])), \
             mock.patch.object(github, "configured", lambda: False):
         c = TestClient(main.app)
-        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 403  # לא מחובר
-        assert c.post("/api/login", json={"password": "wrong"}).status_code == 401
-        assert c.post("/api/login", json={"password": "secret"}).status_code == 200
+        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 401  # לא מחובר
+        assert c.post("/login", data={"password": "secret"}, follow_redirects=False).status_code == 303
         assert c.get("/api/me").json()["writer"] is True
         r = c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7")
         assert r.json() == {"name": "הסכם (1).pdf", "renamed": True, "sync": None}, r.text
@@ -224,6 +223,37 @@ def test_upload_api_requires_password_and_renames():
         assert c.post("/api/upload?name=a.pdf", content=b"\x89PNG\r\n\x1a\n").status_code == 400  # תוכן לא תואם
         big = c.post("/api/upload?name=a.pdf", content=b"%PDF-" + b"0" * drive.MAX_UPLOAD)
         assert big.status_code == 413
+
+
+def test_whole_site_requires_login():
+    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"):
+        c = TestClient(main.app, follow_redirects=False)
+        r = c.get("/")
+        assert r.status_code == 303 and r.headers["location"] == "/login?next=/"  # מסך כניסה בפעם הראשונה
+        for path in ("/api/files", "/api/status", "/api/status/docx", "/admin/sync"):
+            assert c.get(path).status_code == 401, path
+        assert c.post("/api/draft", json={"messages": [{"role": "user", "content": "x"}]}).status_code == 401
+        assert c.get("/healthz").status_code == 200  # בדיקת התקינות של Render
+        assert c.get("/static/logo.png").status_code == 200 and c.get("/static/favicon.png").status_code == 200
+        assert "סיסמה" in c.get("/login").text
+
+        wrong = c.post("/login", data={"password": "nope", "next": "/admin/sync"})
+        assert wrong.status_code == 303 and wrong.headers["location"] == "/login?error=1&next=/admin/sync"
+        assert "session" not in c.cookies
+        for evil in ("//evil.com", "https://evil.com", "/\\evil.com"):  # לא מפנים לאתר אחר אחרי הכניסה
+            assert c.post("/login", data={"password": "secret", "next": evil}).headers["location"] == "/"
+        ok = c.post("/login", data={"password": "secret", "next": "/admin/sync"})
+        assert ok.status_code == 303 and ok.headers["location"] == "/admin/sync"
+        cookie = ok.headers["set-cookie"].lower()
+        assert "max-age=2592000" in cookie and "httponly" in cookie  # 30 יום
+        assert c.get("/").status_code == 200
+
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"):
+        with mock.patch.dict(os.environ, {"RENDER": "true"}):  # ב-Render בלי סיסמה: חסום, לא פתוח לכולם
+            c = TestClient(main.app, follow_redirects=False)
+            assert c.get("/").status_code == 503 and c.get("/healthz").status_code == 200
+        with mock.patch.dict(os.environ, {"RENDER": ""}):  # פיתוח מקומי: פתוח
+            assert TestClient(main.app).get("/").status_code == 200
 
 
 def test_focus_file_in_agent_context():

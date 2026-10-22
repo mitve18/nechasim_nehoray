@@ -1,6 +1,8 @@
-"""שרת הווב: ניסוח הסכמים, ייצוא ל-Word, פאנל קבצים ודוחות. האתר פתוח לכל מי שיש לו את הקישור.
+"""שרת הווב: ניסוח הסכמים, ייצוא ל-Word, פאנל קבצים ודוחות.
 
-העלאת קבצים, "נסה שוב" והפעלת סנכרון דורשים כניסה עם APP_PASSWORD. בלי APP_PASSWORD הם חסומים (403).
+כל האתר מאחורי סיסמה (APP_PASSWORD): מסך כניסה בפעם הראשונה, ועוגייה שזוכרת את המשתמש ל-30 יום.
+פתוחים בלי כניסה רק /login, /healthz (בדיקת התקינות של Render) והקבצים הסטטיים (לוגו ו-favicon למסך הכניסה).
+בלי APP_PASSWORD: ב-Render האתר חסום ("לא מוגדר"), כדי שלא ייפתח לכולם בטעות. במחשב מקומי הוא פתוח לפיתוח.
 
 uvicorn app.main:app --reload
 """
@@ -10,12 +12,12 @@ import hmac
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -42,19 +44,63 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
 app.mount("/static", StaticFiles(directory=STATIC), name="static")  # לוגו ו-favicon
 
 
+SESSION_DAYS = 30
+
+
 def is_writer(request: Request):
+    """מחובר: APP_PASSWORD מוגדר ובדפדפן יש את עוגיית הכניסה."""
     return bool(PASSWORD) and hmac.compare_digest(request.cookies.get("session", ""), TOKEN)
 
 
 def writer(request: Request):
-    """תנאי לפעולות שכותבות ל-Drive או מפעילות סנכרון: APP_PASSWORD מוגדר והמשתמש מחובר."""
+    """תנאי לפעולות שכותבות ל-Drive או מפעילות סנכרון. כשהאתר פתוח במחשב מקומי (בלי סיסמה) הן חסומות."""
     if not is_writer(request):
         raise HTTPException(403, "הפעולה זמינה רק אחרי כניסה עם סיסמה")
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if path in ("/login", "/healthz") or path.startswith("/static/"):  # כל השאר דורש כניסה
+        return await call_next(request)
+    if not PASSWORD:
+        if os.environ.get("RENDER"):  # Render מגדיר את המשתנה הזה. בלי סיסמה לא פותחים את האתר לכולם בטעות
+            return HTMLResponse("<h1 dir='rtl'>האתר לא מוגדר: חסר APP_PASSWORD ב-Render ← Environment</h1>", 503)
+        return await call_next(request)  # פיתוח מקומי
+    if is_writer(request):
+        return await call_next(request)
+    if path.startswith(("/api/", "/admin/")):
+        return JSONResponse({"detail": "נדרשת כניסה"}, 401)
+    return RedirectResponse("/login?next=" + quote(path), 303)
+
+
+def _safe_next(target):
+    """חזרה לדף שביקשו, רק בתוך האתר: לא "//אתר-אחר" ולא כתובת מלאה."""
+    return target if target.startswith("/") and not target.startswith("//") and "\\" not in target else "/"
 
 
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(STATIC / "login.html")
+
+
+@app.post("/login")
+async def login(request: Request):
+    """טופס HTML רגיל (בלי תלות ב-python-multipart): password ו-next."""
+    form = parse_qs((await request.body()).decode())
+    password, target = form.get("password", [""])[0], _safe_next(form.get("next", ["/"])[0])
+    if not PASSWORD or not hmac.compare_digest(password.encode(), PASSWORD.encode()):
+        await asyncio.sleep(1)  # מאט ניחוש סיסמאות
+        return RedirectResponse("/login?error=1&next=" + quote(target), 303)
+    resp = RedirectResponse(target, 303)
+    https = request.headers.get("x-forwarded-proto") == "https"
+    resp.set_cookie("session", TOKEN, httponly=True, secure=https, samesite="lax", max_age=SESSION_DAYS * 24 * 3600)
+    return resp
 
 
 @app.get("/")
@@ -64,22 +110,8 @@ def index():
 
 @app.get("/api/me")
 def me(request: Request):
-    """מה הממשק מציג: כפתור כניסה, העלאה, סנכרון."""
-    return {"login": bool(PASSWORD), "writer": is_writer(request), "sync": github.configured()}
-
-
-class Login(BaseModel):
-    password: str
-
-
-@app.post("/api/login")
-async def login(req: Login, request: Request, response: Response):
-    if not PASSWORD or not hmac.compare_digest(req.password.encode(), PASSWORD.encode()):
-        await asyncio.sleep(1)  # מאט ניחוש סיסמאות
-        raise HTTPException(401, "סיסמה שגויה")
-    https = request.headers.get("x-forwarded-proto") == "https"
-    response.set_cookie("session", TOKEN, httponly=True, secure=https, samesite="lax", max_age=30 * 24 * 3600)
-    return {"ok": True}
+    """מה הממשק מציג: העלאה וסנכרון (רק למחובר, ורק כשהסנכרון מהאתר מוגדר)."""
+    return {"writer": is_writer(request), "sync": github.configured()}
 
 
 class Message(BaseModel):

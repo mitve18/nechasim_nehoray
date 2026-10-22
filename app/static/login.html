@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>כניסה · מנסח ההסכמים</title>
+    <meta name="theme-color" content="#0e2f4c" />
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* אותה פלטה כמו באתר (index.html) */
+      :root {
+        --text: #1f2933;
+        --muted: #5f6b7a;
+        --line: #dce3ea;
+        --brand: #1c5d8e;
+        --brand-dark: #164a72;
+        --brand-deep: #0e2f4c;
+        --accent: #2f8fd0;
+        --ring: rgba(47, 143, 208, 0.25);
+        --err-bg: #fdecee;
+        --err: #9b1c2c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        font-family: "Heebo", system-ui, "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        background: linear-gradient(135deg, var(--brand-deep), var(--brand));
+      }
+      form {
+        width: min(380px, 100%);
+        background: #fff;
+        border-radius: 16px;
+        border-top: 4px solid var(--accent);
+        padding: 32px 28px 24px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+      }
+      .logo {
+        display: block;
+        width: 70px;
+        height: 70px;
+        padding: 7px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 18px;
+        margin: 0 auto 14px;
+        box-shadow:
+          0 0 0 1px var(--line),
+          0 4px 12px rgba(14, 47, 76, 0.15);
+      }
+      h1 {
+        margin: 0;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 800;
+        color: var(--brand-deep);
+      }
+      .sub {
+        margin: 4px 0 22px;
+        text-align: center;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      input {
+        width: 100%;
+        font: inherit;
+        padding: 11px 13px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin-bottom: 16px;
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      button {
+        width: 100%;
+        font: inherit;
+        font-weight: 700;
+        padding: 11px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--brand);
+        color: #fff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--brand-dark);
+      }
+      button:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
+      .err {
+        margin: 0 0 14px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: var(--err-bg);
+        color: var(--err);
+        font-size: 14px;
+      }
+      .note {
+        margin: 16px 0 0;
+        text-align: center;
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <form method="post" action="/login">
+      <img class="logo" src="/static/logo.png" alt="" width="70" height="70" />
+      <h1>מנסח ההסכמים</h1>
+      <p class="sub">כלי פנימי לניסוח טיוטות הסכמים</p>
+      <p class="err" id="err" role="alert" hidden>סיסמה שגויה. נסה שוב.</p>
+      <label for="pw">סיסמה</label>
+      <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus />
+      <input type="hidden" name="next" id="next" value="/" />
+      <button>כניסה</button>
+      <p class="note">אחרי הכניסה האתר זוכר אותך ל-30 יום</p>
+    </form>
+    <script>
+      const q = new URLSearchParams(location.search);
+      document.getElementById("err").hidden = !q.has("error");
+      document.getElementById("next").value = q.get("next") || "/"; // השרת מוודא שזו כתובת בתוך האתר
+    </script>
+  </body>
+</html>
