@@ -140,10 +140,40 @@
         min-width: 0;
         position: relative;
       }
+      /* במסך רחב: הכותרת והבאנר נשארים למעלה, והשיחה ננעלת בדיוק במקום שבו היא מתחילה,
+         כך שהיא לא זזה בכלל בגלילה. --topbar-h נמדד ב-JS, כי גובה הכותרת תלוי ברוחב */
       @media (min-width: 901px) {
+        .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 6;
+        }
+        .topbar .banner {
+          position: static;
+        }
         #chat-panel {
           position: sticky;
-          top: 56px;
+          top: calc(var(--topbar-h, 150px) + 20px);
+          /* לא גבוה מהמקום שנשאר בחלון, כדי שתיבת הכתיבה וכפתור השליחה תמיד יהיו גלויים.
+             אם בכל זאת לא נכנס (חלון נמוך מאוד), הפאנל נגלל בתוך עצמו */
+          max-height: calc(100vh - var(--topbar-h, 150px) - 40px);
+          overflow-y: auto;
+        }
+        #chat {
+          max-height: none;
+          flex: 1 1 auto;
+          min-height: min(200px, 15vh); /* ההודעות נגללות בתוך האזור הזה */
+        }
+      }
+      @media (min-width: 901px) and (max-height: 760px) {
+        #chat-panel > p.hint {
+          display: none; /* במסך נמוך: מקום לתיבת הכתיבה במקום שורת ההסבר */
+        }
+        #chat {
+          min-height: 10vh;
+        }
+        #input {
+          height: 84px;
         }
       }
       h2 {
@@ -901,6 +931,7 @@
     </style>
   </head>
   <body>
+    <div class="topbar" id="topbar">
     <header>
       <div class="top">
         <img class="logo" src="/static/logo.png" alt="" width="70" height="70" />
@@ -918,9 +949,10 @@
       ⚠️ ההסכמים נוצרים על ידי בינה מלאכותית ומהווים טיוטה בלבד. יש לבדוק כל
       הסכם לפני שימוש.
     </div>
+    </div>
     <main>
       <section id="files-panel" aria-labelledby="files-h">
-        <details class="status-card fold" id="status-box" open hidden>
+        <details class="status-card fold" id="status-box" hidden>
           <summary>
             <h3 class="sc-title" id="sc-title">סטטוס מאגר ההסכמים</h3>
           </summary>
@@ -1391,12 +1423,13 @@
       const draftIcon = () => $("icon-draft").content.firstElementChild.cloneNode(true);
       $("fd-pin").prepend(draftIcon());
       $("focus-bar").prepend(draftIcon());
-      const fileMeta = (f) => [
-        newIds.has(f.file_id) && el("span", { className: "tag tag-new", textContent: "חדש" }),
-        tag(f.status),
-        el("span", { textContent: fmtSize(f.size_bytes) }),
-        el("span", { textContent: fmtDate(f.modified_time) }),
-      ];
+      const fileMeta = (f) =>
+        [
+          newIds.has(f.file_id) && el("span", { className: "tag tag-new", textContent: "חדש" }),
+          tag(f.status),
+          el("span", { textContent: fmtSize(f.size_bytes) }),
+          el("span", { textContent: fmtDate(f.modified_time) }),
+        ].filter(Boolean); // בלי זה, קובץ שאינו חדש הציג "false" בחלון הפרטים
 
       // פאנל הקבצים. החיפוש מסנן בצד הלקוח, בלי קריאה לשרת
       async function loadFiles() {
@@ -1471,7 +1504,7 @@
                     "dd",
                     { className: "ocr" },
                     "מסמך סרוק · עבר OCR",
-                    el("small", { textContent: "הטקסט זוהה מתמונה, ולכן ייתכנו בו שגיאות." }),
+                    el("small", { textContent: "הטקסט זוהה מתמונה." }),
                   )
                 : el("dd", { textContent: "ישירות מהקובץ" }),
             ];
@@ -1758,8 +1791,13 @@
         uploadFiles(e.dataTransfer.files);
       });
 
-      // במסך צר שני החלקים בפאנל מתחילים מקופלים, כדי שהצ'אט לא ירד לתחתית הדף
-      $("files-box").open = $("status-box").open = matchMedia("(min-width: 1201px)").matches;
+      // גובה הכותרת העליונה, כדי שהשיחה תינעל בדיוק מתחתיה (ראה #chat-panel ב-CSS)
+      new ResizeObserver(([e]) =>
+        document.documentElement.style.setProperty("--topbar-h", e.target.offsetHeight + "px"),
+      ).observe($("topbar"));
+
+      // "סטטוס מאגר ההסכמים" מתחיל מקופל תמיד. רשימת הקבצים פתוחה במסך רחב, ומקופלת במסך צר
+      $("files-box").open = matchMedia("(min-width: 1201px)").matches;
       loadStatus();
       loadMe();
       loadFiles();
