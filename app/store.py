@@ -227,7 +227,7 @@ def files_list(conn):
     return _dicts(conn, """select f.file_id, f.name, f.mime_type, f.size_bytes, f.modified_time, f.status, f.error,
                                   f.last_attempt_at, f.retry_requested,
                                   coalesce(a.url, 'https://drive.google.com/file/d/' || f.file_id || '/view') as url,
-                                  a.summary, a.metadata
+                                  a.summary, a.metadata, a.method
                            from files f left join agreements a using (file_id) order by f.name""")
 
 

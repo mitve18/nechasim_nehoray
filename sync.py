@@ -23,6 +23,7 @@ FILE_STATUS = {ADDED: "indexed", UPDATED: "indexed", UNCHANGED: "indexed", FAILE
 def sync():
     stats = {"started_at": datetime.now(timezone.utc), "added": 0, "updated": 0, "removed": 0, "ocr": 0, "errors": [],
              "unsupported": 0, "files": {"added": [], "updated": [], "backfilled": []},
+             "pages_counted": 0, "pages_failed": [],
              "folder": os.environ["DRIVE_FOLDER_ID"], "seen": []}
     svc = drive.service()
     files = drive.list_files(svc, stats["folder"])
@@ -72,7 +73,7 @@ def sync():
         store.save_files(conn, rows)
         store.prune_files(conn, [f["id"] for f in files])
 
-        fill_pages(conn, svc, files)
+        fill_pages(conn, svc, files, stats)
 
         backfill(conn, stats)
         store.log_run(conn, stats)
@@ -86,7 +87,7 @@ def sync():
     return stats
 
 
-def fill_pages(conn, svc, files):
+def fill_pages(conn, svc, files, stats):
     """מספר עמודים למסמכים שאונדקסו לפני שהוא נשמר: הורדה וספירה בלבד, בלי OCR ובלי מודל.
     קורה פעם אחת לכל מסמך. כישלון לא מכשיל את הריצה, והמסמך ייספר בריצה הבאה."""
     missing = store.missing_pages(conn)
@@ -96,8 +97,10 @@ def fill_pages(conn, svc, files):
         try:
             store.save_pages(conn, f["id"], extract.page_count(f, drive.download(svc, f)))
         except Exception as e:
+            stats["pages_failed"].append(f"{f['name']}: {str(e)[:200]}")
             print(f"ספירת עמודים נכשלה  {f['name']}  ({e})")
             continue
+        stats["pages_counted"] += 1
         print(f"נספרו עמודים  {f['name']}")
 
 
@@ -129,6 +132,11 @@ def summary(stats):
              f"תיקייה שנסרקה: `{stats['folder']}`"]
     if backfilled:
         lines += ["", f"**הושלמו נתונים מובנים ל-{len(backfilled)} מסמכים**", *(f"- {esc(n)}" for n in backfilled)]
+    counted, not_counted = stats.get("pages_counted", 0), stats.get("pages_failed", [])
+    if counted or not_counted:  # ספירת עמודים למסמכים ותיקים: קורית פעם אחת לכל מסמך
+        lines += ["", f"**נספרו עמודים ל-{counted} מסמכים**"]
+        if not_counted:
+            lines += [f"לא נספרו ({len(not_counted)}, ינוסו שוב בריצה הבאה):", *(f"- {esc(n)}" for n in not_counted)]
     for title, names in (("נוספו", stats["files"]["added"]), ("עודכנו", stats["files"]["updated"])):
         if names:
             lines += ["", f"### {title}", *(f"- {esc(n)}" for n in names)]

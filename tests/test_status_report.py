@@ -85,14 +85,29 @@ def test_fill_pages_counts_existing_pdf_and_images_only():
         _doc(conn, "pdf", "application/pdf", "text", None)
         _doc(conn, "done", "application/pdf", "text", 4)
         _doc(conn, "word", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx", None)
+        _doc(conn, "broken", "application/pdf", "text", None)
         listing = [{"id": i, "name": i, "mimeType": m} for i, m in
-                   (("pdf", "application/pdf"), ("done", "application/pdf"), ("word", "application/msword"))]
+                   (("pdf", "application/pdf"), ("done", "application/pdf"), ("word", "application/msword"),
+                    ("broken", "application/pdf"))]
         downloads = []
+
+        def fake_count(f, data):
+            if f["id"] == "broken":
+                raise ValueError("EOF marker not found")
+            return 9
+
+        stats = {"pages_counted": 0, "pages_failed": []}
         with mock.patch.object(sync.drive, "download", lambda svc, f: downloads.append(f["id"]) or b"x"), \
-                mock.patch.object(sync.extract, "page_count", lambda f, data: 9):
-            sync.fill_pages(conn, None, listing)
-        assert downloads == ["pdf"]  # מה שכבר נספר, ו-DOCX, לא מורדים
-        assert dict(conn.execute("select file_id, pages from agreements").fetchall()) == {"pdf": 9, "done": 4, "word": None}
+                mock.patch.object(sync.extract, "page_count", fake_count):
+            sync.fill_pages(conn, None, listing, stats)
+        assert downloads == ["pdf", "broken"]  # מה שכבר נספר, ו-DOCX, לא מורדים
+        assert dict(conn.execute("select file_id, pages from agreements").fetchall()) == {
+            "pdf": 9, "done": 4, "word": None, "broken": None}  # broken ייספר שוב בריצה הבאה
+        assert stats == {"pages_counted": 1, "pages_failed": ["broken: EOF marker not found"]}
+
+        md = sync.summary({"added": 0, "updated": 0, "removed": 0, "unsupported": 0, "errors": [], "in_db": 4,
+                           "folder": "f", "seen": [], "files": {"added": [], "updated": [], "backfilled": []}} | stats)
+        assert "**נספרו עמודים ל-1 מסמכים**\nלא נספרו (1, ינוסו שוב בריצה הבאה):\n- broken: EOF marker not found" in md
 
 
 def test_tsv_format():

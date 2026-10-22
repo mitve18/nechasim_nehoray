@@ -63,7 +63,7 @@
       .logo {
         width: 70px;
         height: 70px;
-        padding: 4px;
+        padding: 7px;
         object-fit: contain;
         background: #fff;
         border-radius: 18px;
@@ -125,7 +125,7 @@
         .logo {
           width: 56px;
           height: 56px;
-          padding: 3px;
+          padding: 5px;
           border-radius: 15px;
         }
       }
@@ -623,10 +623,14 @@
       }
       .file-meta {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 8px;
+        gap: 2px 8px;
         font-size: 12px;
         color: var(--muted);
+      }
+      .file-meta > span {
+        white-space: nowrap; /* "500 KB" לא נשבר לשתי שורות */
       }
       .pin {
         border: 0;
@@ -832,6 +836,16 @@
       .meta dd {
         margin: 0;
       }
+      .meta dd.ocr {
+        color: var(--warn);
+        font-weight: 500;
+      }
+      .meta dd.ocr small {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+      }
       .dialog-error {
         background: var(--err-bg);
         color: var(--err);
@@ -862,8 +876,27 @@
         border-radius: 10px;
         box-shadow: var(--shadow);
         z-index: 20;
-        max-width: calc(100vw - 32px);
+        max-width: min(640px, calc(100vw - 32px));
         font-size: 14px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      #toast-close {
+        flex: none;
+        padding: 0 4px;
+        border: 0;
+        background: none;
+        color: inherit;
+        opacity: 0.8;
+      }
+      #toast-close:hover:not(:disabled) {
+        background: none;
+        opacity: 1;
+      }
+      .tag-new {
+        background: var(--accent);
+        color: #fff;
       }
     </style>
   </head>
@@ -1023,7 +1056,10 @@
       </form>
     </dialog>
 
-    <div id="toast" role="status" aria-live="polite" hidden></div>
+    <div id="toast" role="status" aria-live="polite" hidden>
+      <span id="toast-text"></span>
+      <button type="button" id="toast-close" aria-label="סגירת ההודעה">✕</button>
+    </div>
 
     <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
     <template id="icon-draft">
@@ -1235,13 +1271,47 @@
         $("input").focus();
       });
 
-      // טבלת הסטטוס בפאנל הצדדי. אם המסד לא זמין, היא פשוט לא מוצגת
-      function loadStatus() {
-        fetch("/api/status")
-          .then((res) => (res.ok ? res.json() : null))
-          .then((s) => s && renderStatus(s))
-          .catch(() => {});
+      // טבלת הסטטוס בפאנל הצדדי. אם המסד לא זמין, היא פשוט לא מוצגת.
+      // זמן הסנכרון האחרון משמש גם לזיהוי שסנכרון הסתיים, בין אם הופעל מהאתר, מ-GitHub או בלילה
+      let lastSync; // undefined עד הבדיקה הראשונה
+      async function loadStatus() {
+        let s = null;
+        try {
+          const res = await fetch("/api/status");
+          s = res.ok ? await res.json() : null;
+        } catch {}
+        if (!s) return null;
+        renderStatus(s);
+        if (lastSync !== undefined && s.updated_at && s.updated_at !== lastSync) await syncFinished(s);
+        lastSync = s.updated_at;
+        return s;
       }
+
+      // סנכרון הסתיים: רענון הרשימה, סימון מה שנכנס למאגר, והודעה שנשארת עד שסוגרים אותה
+      const newIds = new Set();
+      async function syncFinished(s) {
+        const before = new Map(files.map((f) => [f.file_id, f.status]));
+        await loadFiles();
+        const indexed = files.filter((f) => f.status === "indexed" && before.get(f.file_id) !== "indexed");
+        const failed = files.filter((f) => f.status === "failed" && before.get(f.file_id) !== "failed");
+        indexed.forEach((f) => newIds.add(f.file_id));
+        renderFiles();
+        let text = `✓ הסנכרון הושלם (${s.updated_at}).`;
+        text += indexed.length
+          ? ` נוספו למאגר ${indexed.length}: ${indexed.map((f) => f.name).join(", ")}.`
+          : " לא נוספו קבצים חדשים.";
+        if (failed.length) text += ` נכשלו ${failed.length}: ${failed.map((f) => f.name).join(", ")}.`;
+        toast(text, 0);
+        if (indexed.length) $("files-box").open = true;
+        if (document.hidden) document.title = "✓ " + TITLE; // מסומן בלשונית עד שחוזרים אליה
+      }
+      const TITLE = document.title;
+      // חזרה ללשונית: בדיקה אחת אם סנכרון הסתיים בינתיים. בלי בדיקה תקופתית, כדי לא להעיר את המסד כל הזמן
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) return;
+        document.title = TITLE;
+        loadStatus();
+      });
 
       // ---- פאנל קבצים, דוחות, מסמך בסיס, כניסה, סנכרון והעלאה ----
       const STATUS = {
@@ -1290,12 +1360,14 @@
           );
         return data;
       }
+      // הודעה בתחתית המסך. ms = 0: נשארת עד שסוגרים אותה (למשל "הסנכרון הושלם")
       function toast(text, ms = 7000) {
-        $("toast").textContent = text;
+        $("toast-text").textContent = text;
         $("toast").hidden = false;
         clearTimeout(toast.timer);
-        toast.timer = setTimeout(() => ($("toast").hidden = true), ms);
+        if (ms) toast.timer = setTimeout(() => ($("toast").hidden = true), ms);
       }
+      $("toast-close").onclick = () => ($("toast").hidden = true);
       const fmtDate = (d) =>
         d
           ? new Date(d.length === 10 ? d + "T12:00:00Z" : d).toLocaleDateString(
@@ -1320,6 +1392,7 @@
       $("fd-pin").prepend(draftIcon());
       $("focus-bar").prepend(draftIcon());
       const fileMeta = (f) => [
+        newIds.has(f.file_id) && el("span", { className: "tag tag-new", textContent: "חדש" }),
         tag(f.status),
         el("span", { textContent: fmtSize(f.size_bytes) }),
         el("span", { textContent: fmtDate(f.modified_time) }),
@@ -1388,7 +1461,22 @@
         const m = f.metadata;
         $("fd-name").textContent = f.name;
         $("fd-sub").replaceChildren(...fileMeta(f));
+        // איך הטקסט חולץ: מסמך סרוק עובר OCR, והטקסט שלו עלול להיות פחות מדויק מקובץ דיגיטלי
+        const extraction = !f.method
+          ? []
+          : [
+              el("dt", { textContent: "חילוץ טקסט" }),
+              f.method === "ocr"
+                ? el(
+                    "dd",
+                    { className: "ocr" },
+                    "מסמך סרוק · עבר OCR",
+                    el("small", { textContent: "הטקסט זוהה מתמונה, ולכן ייתכנו בו שגיאות." }),
+                  )
+                : el("dd", { textContent: "ישירות מהקובץ" }),
+            ];
         $("fd-meta").replaceChildren(
+          ...extraction,
           ...(m
             ? META.filter(([k]) => m[k] != null && !(Array.isArray(m[k]) && !m[k].length)).flatMap(
                 ([k, label]) => [el("dt", { textContent: label }), el("dd", { textContent: fmtMeta(k, m[k]) })],
@@ -1531,14 +1619,20 @@
         toast("מחובר. אפשר להעלות קבצים ולהפעיל סנכרון.");
       });
 
-      // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת
+      // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת.
+      // ההודעה "הסנכרון הושלם" מגיעה מ-loadStatus, כשזמן הסנכרון האחרון משתנה
+      function setSyncRunning(on) {
+        $("sync-btn").disabled = on;
+        $("sync-btn").textContent = on ? "⟳ מסנכרן…" : "⟳ סנכרון";
+      }
       function watchSync() {
         if (syncWatch) return;
-        const start = Date.now();
+        const start = Date.now(), startSync = lastSync;
         let seen = false;
+        setSyncRunning(true);
         syncWatch = setInterval(async () => {
+          await loadStatus();
           loadFiles();
-          loadStatus();
           let running = true;
           try {
             running = (await api("/api/sync")).running;
@@ -1548,9 +1642,10 @@
           if (done || Date.now() - start > 30 * 60000) {
             clearInterval(syncWatch);
             syncWatch = null;
-            loadFiles();
-            loadStatus();
-            if (done) toast("הסנכרון הסתיים. רשימת הקבצים עודכנה.");
+            setSyncRunning(false);
+            const s = await loadStatus();
+            if (s && s.updated_at === startSync)
+              toast("הריצה ב-GitHub הסתיימה, אבל לא נרשם סנכרון חדש. ייתכן שהיא נכשלה; הפרטים ב-GitHub Actions.", 0);
           }
         }, 30000);
       }

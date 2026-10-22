@@ -149,6 +149,7 @@ def test_files_panel_queries():
         listed = {f["file_id"]: f for f in store.files_list(conn)}
         assert listed["up"]["url"] == "https://drive.google.com/file/d/up/view" and listed["up"]["status"] == "queued"
         assert listed["doc"]["metadata"]["plan_number"] == 'תת"ל 120' and listed["doc"]["url"] == "https://drive/doc"
+        assert listed["doc"]["method"] == "text" and listed["up"]["method"] is None  # לחלון הפרטים: OCR או ישירות
         assert listed["broken"]["error"] == "OCR נכשל"
         assert store.mark_retry(conn, "broken") == "broken.pdf" and store.mark_retry(conn, "missing") is None
         assert store.retry_ids(conn) == {"broken"}
@@ -288,6 +289,46 @@ def test_image_ocr_with_tesseract():
     text, method = extract.extract({"mimeType": "image/tiff"}, tif.getvalue())
     assert "agreement" in text and "December" in text, text  # שני העמודים של ה-TIFF
     assert extract.page_count({"mimeType": "image/tiff"}, tif.getvalue()) == 2
+
+
+def _text_pdf(text):
+    """PDF דיגיטלי מינימלי עם שכבת טקסט אמיתית (כמו קובץ שנוצר מ-Word)."""
+    stream = f"BT /F1 11 Tf 40 750 Td ({text}) Tj ET".encode()
+    objs = [b"<</Type/Catalog/Pages 2 0 R>>", b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+            b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>",
+            b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+            b"<</Length %d>>stream\n" % len(stream) + stream + b"\nendstream"]
+    out, offsets = io.BytesIO(b"%PDF-1.4\n"), []
+    out.seek(0, 2)
+    for i, obj in enumerate(objs, 1):
+        offsets.append(out.tell())
+        out.write(b"%d 0 obj\n" % i + obj + b"\nendobj\n")
+    xref = out.tell()
+    out.write(b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % o for o in offsets))
+    out.write(b"trailer<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref))
+    return out.getvalue()
+
+
+def test_pdf_scanned_vs_digital_detection():
+    """PDF עם שכבת טקסט נקרא ישירות, בלי OCR. PDF שהוא רק תמונה (סריקה פיזית) מזוהה ועובר OCR."""
+    from PIL import Image
+    pdf = {"mimeType": PDF}
+    digital = _text_pdf("This agreement is made between the Ministry and the Company for the night parking project.")
+    scanned = io.BytesIO()
+    Image.new("RGB", (1240, 1754), "white").save(scanned, "PDF")  # עמוד סרוק: תמונה בלבד, אין טקסט לסמן
+
+    ocr_calls = []
+
+    def fake_ocr(images):
+        pages = list(images)
+        ocr_calls.append(len(pages))
+        return ["טקסט שזוהה מהסריקה, ארוך מספיק כדי לעבור את בדיקת האיכות של 50 תווים לעמוד."] * len(pages)
+
+    with mock.patch.object(extract, "ocr", fake_ocr):
+        text, method = extract.extract(pdf, digital)
+        assert method == "text" and "Ministry" in text and ocr_calls == []  # לא נשלח ל-OCR
+        text, method = extract.extract(pdf, scanned.getvalue())
+        assert method == "ocr" and ocr_calls == [1] and "סריקה" in text  # זוהה כסרוק
 
 
 def _font_exists(image_font, name):
