@@ -853,6 +853,31 @@
         color: var(--brand-deep);
         overflow-wrap: anywhere;
       }
+      /* ✕ בפינה העליונה של חלון הפרטים */
+      .dialog-x {
+        position: absolute;
+        top: 12px;
+        inset-inline-end: 12px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        background: none;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1;
+      }
+      .dialog-x:hover:not(:disabled) {
+        background: var(--brand-soft);
+        color: var(--brand-deep);
+      }
+      #fd-name {
+        padding-inline-end: 36px; /* שם ארוך לא נכנס מתחת ל-✕ */
+      }
+      #fd-name:focus {
+        outline: none; /* החלון נפתח עם הפוקוס על שם הקובץ, בלי טבעת על ה-✕ */
+      }
       .meta {
         display: grid;
         grid-template-columns: max-content 1fr;
@@ -1054,7 +1079,8 @@
     </main>
 
     <dialog id="file-dialog" aria-labelledby="fd-name">
-      <h3 id="fd-name"></h3>
+      <button type="button" class="dialog-x" id="fd-x" aria-label="סגירת החלון">✕</button>
+      <h3 id="fd-name" tabindex="-1" autofocus></h3>
       <div class="file-meta" id="fd-sub"></div>
       <dl class="meta" id="fd-meta"></dl>
       <p class="dialog-note" id="fd-summary"></p>
@@ -1534,7 +1560,15 @@
         $("fd-retry").onclick = () => retry(f);
         $("file-dialog").showModal();
       }
-      $("fd-close").onclick = () => $("file-dialog").close();
+      $("fd-close").onclick = $("fd-x").onclick = () => $("file-dialog").close();
+      // לחיצה מחוץ לחלון סוגרת אותו. לחיצה על הרקע מגיעה לאלמנט ה-dialog עצמו; בודקים גם את המיקום,
+      // כי לחיצה על השוליים הפנימיים של החלון מגיעה לאותו אלמנט
+      $("file-dialog").addEventListener("click", (e) => {
+        if (e.target !== e.currentTarget) return; // כפתור או קישור בתוך החלון, כולל הפעלה מהמקלדת
+        const r = e.currentTarget.getBoundingClientRect();
+        const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+        if (outside) e.currentTarget.close();
+      });
 
       // "נסח על בסיס המסמך הזה": המסמך נשלח כ-focus_file_id עד שמסירים אותו
       function setFocus(f) {
