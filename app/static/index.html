@@ -16,9 +16,10 @@
     <style>
       :root {
         /* פלטה לפי הלוגו: הכחול והשחור שלו, ותכלת בהיר להדגשות */
-        --bg: #f3f6f9;
+        /* רקע בגוון נייר חם, שמשלים את הכחול של המותג במקום להתחרות בו */
+        --bg: #f5f4f1;
         --card: #fff;
-        --line: #dce3ea;
+        --line: #e0e2e3;
         --text: #1f2933;
         --muted: #5f6b7a;
         --brand: #1c5d8e;
@@ -33,8 +34,10 @@
         --err-bg: #fdecee;
         --err: #9b1c2c;
         --radius: 14px;
+        /* צל בשכבות: קרוב וחד + רחוק ורך, כמו אור אמיתי. נותן עומק בלי להכביד */
         --shadow:
-          0 1px 2px rgba(14, 47, 76, 0.06), 0 8px 24px rgba(14, 47, 76, 0.07);
+          0 1px 2px rgba(14, 47, 76, 0.05), 0 10px 28px -12px rgba(14, 47, 76, 0.1);
+        --lift: 0 3px 8px -3px rgba(14, 47, 76, 0.12);
       }
       * {
         box-sizing: border-box;
@@ -796,12 +799,22 @@
         flex: 1;
         min-width: 0;
         display: grid;
-        gap: 2px;
       }
       #focus-list li {
         display: flex;
         align-items: center;
         gap: 6px;
+        padding: 6px 0;
+      }
+      #focus-list li:first-child {
+        padding-top: 0;
+      }
+      #focus-list li:last-child {
+        padding-bottom: 0;
+      }
+      /* קו הפרדה בין המסמכים, כדי ששמות ארוכים לא יתמזגו זה בזה */
+      #focus-list li + li {
+        border-top: 1px solid var(--brand-line);
       }
       #focus-list b {
         flex: 1;
@@ -958,6 +971,83 @@
       .tag-new {
         background: var(--accent);
         color: #fff;
+      }
+
+      /* עומק ותאורה: שכבה עדינה מעל העיצוב הבסיסי */
+      body {
+        background:
+          radial-gradient(1100px 520px at 100% -10%, rgba(47, 143, 208, 0.035), transparent 65%),
+          radial-gradient(900px 480px at 0% 110%, rgba(200, 150, 90, 0.045), transparent 65%),
+          var(--bg);
+        background-attachment: fixed;
+      }
+      header {
+        position: relative;
+        z-index: 1;
+        box-shadow: 0 4px 14px -6px rgba(14, 47, 76, 0.25);
+      }
+      section {
+        border-color: rgba(14, 47, 76, 0.08);
+      }
+      textarea:not(:focus),
+      input[type="text"]:not(:focus),
+      #files-q:not(:focus) {
+        box-shadow: inset 0 1px 2px rgba(14, 47, 76, 0.035);
+      }
+      .row button {
+        box-shadow: 0 1px 2px rgba(14, 47, 76, 0.06);
+        transition:
+          background 0.15s,
+          transform 0.15s,
+          box-shadow 0.15s;
+      }
+      .row button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: var(--lift);
+      }
+      .row button:active:not(:disabled) {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(14, 47, 76, 0.1);
+      }
+      .row button.primary {
+        background: linear-gradient(180deg, #23669a, var(--brand));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.12),
+          0 1px 3px rgba(28, 93, 142, 0.22);
+      }
+      .row button.primary:hover:not(:disabled) {
+        background: var(--brand-dark);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.12),
+          0 4px 10px -3px rgba(28, 93, 142, 0.3);
+      }
+      .user {
+        box-shadow: 0 2px 6px -2px rgba(28, 93, 142, 0.25);
+      }
+      .file {
+        box-shadow: 0 1px 1px rgba(14, 47, 76, 0.03);
+        transition:
+          box-shadow 0.15s,
+          border-color 0.15s;
+      }
+      .file:hover {
+        box-shadow: var(--lift);
+      }
+      /* מקום לצל ולהרמה בתוך הרשימה הנגללת, בלי להזיז את היישור שלה */
+      #files {
+        padding: 3px 4px 10px 8px;
+        margin: -3px -4px -10px;
+      }
+      #sources li {
+        box-shadow: 0 1px 2px rgba(14, 47, 76, 0.04);
+      }
+      dialog::backdrop {
+        backdrop-filter: blur(2px);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .row button:hover:not(:disabled) {
+          transform: none;
+        }
       }
     </style>
   </head>
