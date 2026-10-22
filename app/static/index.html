@@ -36,7 +36,8 @@
         --radius: 14px;
         /* צל בשכבות: קרוב וחד + רחוק ורך, כמו אור אמיתי. נותן עומק בלי להכביד */
         --shadow:
-          0 1px 2px rgba(14, 47, 76, 0.05), 0 10px 28px -12px rgba(14, 47, 76, 0.1);
+          0 1px 2px rgba(14, 47, 76, 0.05),
+          0 10px 28px -12px rgba(14, 47, 76, 0.1);
         --lift: 0 3px 8px -3px rgba(14, 47, 76, 0.12);
       }
       * {
@@ -976,8 +977,16 @@
       /* עומק ותאורה: שכבה עדינה מעל העיצוב הבסיסי */
       body {
         background:
-          radial-gradient(1100px 520px at 100% -10%, rgba(47, 143, 208, 0.035), transparent 65%),
-          radial-gradient(900px 480px at 0% 110%, rgba(200, 150, 90, 0.045), transparent 65%),
+          radial-gradient(
+            1100px 520px at 100% -10%,
+            rgba(47, 143, 208, 0.035),
+            transparent 65%
+          ),
+          radial-gradient(
+            900px 480px at 0% 110%,
+            rgba(200, 150, 90, 0.045),
+            transparent 65%
+          ),
           var(--bg);
         background-attachment: fixed;
       }
@@ -1044,7 +1053,13 @@
   <body>
     <header>
       <div class="top">
-        <img class="logo" src="/static/logo.png" alt="" width="70" height="70" />
+        <img
+          class="logo"
+          src="/static/logo.png"
+          alt=""
+          width="70"
+          height="70"
+        />
         <div>
           <h1>מנסח ההסכמים</h1>
           <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
@@ -1160,7 +1175,9 @@
     </main>
 
     <dialog id="file-dialog" aria-labelledby="fd-name">
-      <button type="button" class="dialog-x" id="fd-x" aria-label="סגירת החלון">✕</button>
+      <button type="button" class="dialog-x" id="fd-x" aria-label="סגירת החלון">
+        ✕
+      </button>
       <h3 id="fd-name" tabindex="-1" autofocus></h3>
       <div class="file-meta" id="fd-sub"></div>
       <dl class="meta" id="fd-meta"></dl>
@@ -1176,7 +1193,9 @@
 
     <div id="toast" role="status" aria-live="polite" hidden>
       <span id="toast-text"></span>
-      <button type="button" id="toast-close" aria-label="סגירת ההודעה">✕</button>
+      <button type="button" id="toast-close" aria-label="סגירת ההודעה">
+        ✕
+      </button>
     </div>
 
     <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
@@ -1402,28 +1421,28 @@
         } catch {}
         if (!s) return null;
         renderStatus(s);
-        if (lastSync !== undefined && s.updated_at && s.updated_at !== lastSync) await syncFinished(s);
+        if (lastSync !== undefined && s.updated_at && s.updated_at !== lastSync)
+          await syncFinished(s);
         lastSync = s.updated_at;
         return s;
       }
 
-      // סנכרון הסתיים: רענון הרשימה, סימון מה שנכנס למאגר, והודעה שנשארת עד שסוגרים אותה
+      // סנכרון הסתיים
       const newIds = new Set();
       async function syncFinished(s) {
         const before = new Map(files.map((f) => [f.file_id, f.status]));
         await loadFiles();
-        const indexed = files.filter((f) => f.status === "indexed" && before.get(f.file_id) !== "indexed");
-        const failed = files.filter((f) => f.status === "failed" && before.get(f.file_id) !== "failed");
+        const indexed = files.filter(
+          (f) => f.status === "indexed" && before.get(f.file_id) !== "indexed",
+        );
+        const failed = files.filter(
+          (f) => f.status === "failed" && before.get(f.file_id) !== "failed",
+        );
         indexed.forEach((f) => newIds.add(f.file_id));
         renderFiles();
-        let text = `✓ הסנכרון הושלם (${s.updated_at}).`;
-        text += indexed.length
-          ? ` נוספו למאגר ${indexed.length}: ${indexed.map((f) => f.name).join(", ")}.`
-          : " לא נוספו קבצים חדשים.";
-        if (failed.length) text += ` נכשלו ${failed.length}: ${failed.map((f) => f.name).join(", ")}.`;
-        toast(text, 0);
+        toast(`✓ הסנכרון הושלם (${s.updated_at}).`, 0);
         if (indexed.length) $("files-box").open = true;
-        if (document.hidden) document.title = "✓ " + TITLE; // מסומן בלשונית עד שחוזרים אליה
+        if (document.hidden) document.title = "✓ " + TITLE;
       }
       const TITLE = document.title;
       // חזרה ללשונית: בדיקה אחת אם סנכרון הסתיים בינתיים. בלי בדיקה תקופתית, כדי לא להעיר את המסד כל הזמן
@@ -1451,7 +1470,19 @@
         ["amounts", "סכומים"],
         ["pages", "עמודים"],
       ];
-      const UPLOAD_EXT = ["pdf", "png", "jpg", "jpeg", "tif", "tiff", "webp", "heic", "heif", "docx", "doc"];
+      const UPLOAD_EXT = [
+        "pdf",
+        "png",
+        "jpg",
+        "jpeg",
+        "tif",
+        "tiff",
+        "webp",
+        "heic",
+        "heif",
+        "docx",
+        "doc",
+      ];
       const MAX_UPLOAD = 20 * 1024 * 1024;
       let files = [];
       let focus = []; // מסמכי הבסיס לניסוח: [{ id, name }]
@@ -1509,12 +1540,14 @@
           textContent: STATUS[status] || status,
         });
       // תווית סטטוס, גודל ותאריך. כל אחד ב-span משלו, אחרת flex מחבר אותם לטקסט אחד
-      const draftIcon = () => $("icon-draft").content.firstElementChild.cloneNode(true);
+      const draftIcon = () =>
+        $("icon-draft").content.firstElementChild.cloneNode(true);
       $("fd-pin").prepend(draftIcon());
       $("focus-bar").prepend(draftIcon());
       const fileMeta = (f) =>
         [
-          newIds.has(f.file_id) && el("span", { className: "tag tag-new", textContent: "חדש" }),
+          newIds.has(f.file_id) &&
+            el("span", { className: "tag tag-new", textContent: "חדש" }),
           tag(f.status),
           el("span", { textContent: fmtSize(f.size_bytes) }),
           el("span", { textContent: fmtDate(f.modified_time) }),
@@ -1535,7 +1568,8 @@
         const q = $("files-q").value.trim().toLowerCase();
         const shown = files.filter((f) => f.name.toLowerCase().includes(q));
         const failed = files.filter((f) => f.status === "failed").length;
-        $("files-count").textContent = `${files.length} מסמכים · ${failed} נכשלו`;
+        $("files-count").textContent =
+          `${files.length} מסמכים · ${failed} נכשלו`;
         $("files").replaceChildren(
           ...shown.map((f) =>
             el(
@@ -1543,7 +1577,12 @@
               { className: "file" },
               el(
                 "button",
-                { type: "button", className: "file-open", title: f.name, onclick: () => openFile(f.file_id) },
+                {
+                  type: "button",
+                  className: "file-open",
+                  title: f.name,
+                  onclick: () => openFile(f.file_id),
+                },
                 el("span", { className: "file-name", textContent: f.name }),
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
@@ -1577,7 +1616,11 @@
       function fmtMeta(key, v) {
         if (key === "amounts")
           return v
-            .map((a) => [a.amount?.toLocaleString("he-IL"), a.currency].filter(Boolean).join(" "))
+            .map((a) =>
+              [a.amount?.toLocaleString("he-IL"), a.currency]
+                .filter(Boolean)
+                .join(" "),
+            )
             .join(" · ");
         if (key.endsWith("_date")) return fmtDate(v);
         return Array.isArray(v) ? v.join(" · ") : String(v);
@@ -1585,10 +1628,20 @@
       // ציון איכות ה-OCR (0–100): ממוצע הביטחון של Tesseract בכל מילה שזיהה
       function ocrScore(q) {
         if (q == null)
-          return el("span", { className: "ocr-score pending", textContent: "ציון האיכות יחושב בסנכרון הבא" });
+          return el("span", {
+            className: "ocr-score pending",
+            textContent: "ציון האיכות יחושב בסנכרון הבא",
+          });
         const [tone, label] =
-          q >= 85 ? ["good", "גבוהה"] : q >= 70 ? ["warn", "בינונית"] : ["bad", "נמוכה, כדאי לבדוק מול הקובץ המקורי"];
-        return el("span", { className: "ocr-score " + tone, textContent: `איכות זיהוי: ${q}/100 · ${label}` });
+          q >= 85
+            ? ["good", "גבוהה"]
+            : q >= 70
+              ? ["warn", "בינונית"]
+              : ["bad", "נמוכה, כדאי לבדוק מול הקובץ המקורי"];
+        return el("span", {
+          className: "ocr-score " + tone,
+          textContent: `איכות זיהוי: ${q}/100 · ${label}`,
+        });
       }
       function openFile(id) {
         const f = files.find((x) => x.file_id === id);
@@ -1614,9 +1667,12 @@
         $("fd-meta").replaceChildren(
           ...extraction,
           ...(m
-            ? META.filter(([k]) => m[k] != null && !(Array.isArray(m[k]) && !m[k].length)).flatMap(
-                ([k, label]) => [el("dt", { textContent: label }), el("dd", { textContent: fmtMeta(k, m[k]) })],
-              )
+            ? META.filter(
+                ([k]) => m[k] != null && !(Array.isArray(m[k]) && !m[k].length),
+              ).flatMap(([k, label]) => [
+                el("dt", { textContent: label }),
+                el("dd", { textContent: fmtMeta(k, m[k]) }),
+              ])
             : f.status === "indexed"
               ? [
                   el("dt", { textContent: "נתונים מובנים" }),
@@ -1629,7 +1685,9 @@
         $("fd-error").hidden = !f.error;
         $("fd-drive").href = f.url;
         $("fd-pin").hidden = f.status !== "indexed";
-        $("fd-pin").lastChild.nodeValue = isFocus(f) ? "הסרה ממסמכי הבסיס" : "נסח על בסיס המסמך הזה";
+        $("fd-pin").lastChild.nodeValue = isFocus(f)
+          ? "הסרה ממסמכי הבסיס"
+          : "נסח על בסיס המסמך הזה";
         $("fd-pin").onclick = () => {
           $("file-dialog").close();
           toggleFocus(f);
@@ -1638,13 +1696,18 @@
         $("fd-retry").onclick = () => retry(f);
         $("file-dialog").showModal();
       }
-      $("fd-close").onclick = $("fd-x").onclick = () => $("file-dialog").close();
+      $("fd-close").onclick = $("fd-x").onclick = () =>
+        $("file-dialog").close();
       // לחיצה מחוץ לחלון סוגרת אותו. לחיצה על הרקע מגיעה לאלמנט ה-dialog עצמו; בודקים גם את המיקום,
       // כי לחיצה על השוליים הפנימיים של החלון מגיעה לאותו אלמנט
       $("file-dialog").addEventListener("click", (e) => {
         if (e.target !== e.currentTarget) return; // כפתור או קישור בתוך החלון, כולל הפעלה מהמקלדת
         const r = e.currentTarget.getBoundingClientRect();
-        const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+        const outside =
+          e.clientX < r.left ||
+          e.clientX > r.right ||
+          e.clientY < r.top ||
+          e.clientY > r.bottom;
         if (outside) e.currentTarget.close();
       });
       // גלגלת העכבר מעל הרקע גוללת את החלון עצמו, ולא את הדף שמאחוריו
@@ -1661,7 +1724,8 @@
       // "נסח על בסיס המסמך הזה": אפשר לבחור כמה מסמכים. הם נשלחים כ-focus_file_ids עד שמסירים אותם
       const isFocus = (f) => focus.some((x) => x.id === f.file_id);
       function toggleFocus(f) {
-        if (isFocus(f)) return setFocus(focus.filter((x) => x.id !== f.file_id));
+        if (isFocus(f))
+          return setFocus(focus.filter((x) => x.id !== f.file_id));
         setFocus([...focus, { id: f.file_id, name: f.name }]);
         $("input").focus();
       }
@@ -1693,7 +1757,11 @@
 
       // דוח "סטטוס מאגר ההסכמים": נשלף מ-SQL בשרת, בלי מודל. מוצג בצ'אט ולא נשלח לניסוח
       function feedbackButton(label, aria, action) {
-        const b = el("button", { type: "button", className: "sc-btn", textContent: label });
+        const b = el("button", {
+          type: "button",
+          className: "sc-btn",
+          textContent: label,
+        });
         b.setAttribute("aria-label", aria);
         b.onclick = async () => {
           b.disabled = true;
@@ -1712,7 +1780,10 @@
       async function downloadStatusDocx(title) {
         const res = await fetch("/api/status/docx");
         if (!res.ok) throw new Error();
-        const a = el("a", { href: URL.createObjectURL(await res.blob()), download: title + ".docx" });
+        const a = el("a", {
+          href: URL.createObjectURL(await res.blob()),
+          download: title + ".docx",
+        });
         a.click();
         URL.revokeObjectURL(a.href);
         return "הורד ✓";
@@ -1726,7 +1797,12 @@
           el(
             "thead",
             {},
-            el("tr", {}, el("th", { scope: "col", textContent: "מדד" }), el("th", { scope: "col", textContent: "ערך" })),
+            el(
+              "tr",
+              {},
+              el("th", { scope: "col", textContent: "מדד" }),
+              el("th", { scope: "col", textContent: "ערך" }),
+            ),
           ),
           el(
             "tbody",
@@ -1737,7 +1813,11 @@
                 {},
                 el("th", { scope: "row", textContent: r.label }),
                 // ערכים מספריים ותאריך מוצגים משמאל לימין, כמו "21/10/2026 07:58"
-                el("td", { className: r.tone ? "tone-" + r.tone : "" }, el("bdi", { dir: "ltr", textContent: r.value })),
+                el(
+                  "td",
+                  { className: r.tone ? "tone-" + r.tone : "" },
+                  el("bdi", { dir: "ltr", textContent: r.value }),
+                ),
               ),
             ),
           ),
@@ -1746,20 +1826,29 @@
         $("status-body").replaceChildren(
           table,
           el(
+            "div",
+            { className: "sc-foot" },
+            el("span", {
+              className: "sc-cost",
+              textContent: "0 טוקנים · ישירות ממסד הנתונים",
+            }),
+            el(
               "div",
-              { className: "sc-foot" },
-              el("span", { className: "sc-cost", textContent: "0 טוקנים · ישירות ממסד הנתונים" }),
-              el(
-                "div",
-                { className: "sc-actions" },
-                // טבלה מופרדת בטאבים: נדבקת כטבלה באקסל, וכשורות קריאות בכל מקום אחר
-                feedbackButton("העתקה", "העתקת הטבלה, אפשר להדביק גם באקסל", async () => {
+              { className: "sc-actions" },
+              // טבלה מופרדת בטאבים: נדבקת כטבלה באקסל, וכשורות קריאות בכל מקום אחר
+              feedbackButton(
+                "העתקה",
+                "העתקת הטבלה, אפשר להדביק גם באקסל",
+                async () => {
                   await navigator.clipboard.writeText(s.tsv);
                   return "הועתק ✓";
-                }),
-                feedbackButton("Word", "הורדת הדוח כקובץ Word", () => downloadStatusDocx(s.title)),
+                },
+              ),
+              feedbackButton("Word", "הורדת הדוח כקובץ Word", () =>
+                downloadStatusDocx(s.title),
               ),
             ),
+          ),
         );
         $("status-box").hidden = false;
       }
@@ -1775,7 +1864,8 @@
         $("dropzone").hidden = !me.writer;
       }
       // הכניסה פגה (אחרי 30 יום, או שהסיסמה הוחלפה) בזמן שהאתר פתוח: חוזרים למסך הכניסה
-      const toLogin = () => location.assign("/login?next=" + encodeURIComponent(location.pathname));
+      const toLogin = () =>
+        location.assign("/login?next=" + encodeURIComponent(location.pathname));
 
       // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת.
       // ההודעה "הסנכרון הושלם" מגיעה מ-loadStatus, כשזמן הסנכרון האחרון משתנה
@@ -1785,7 +1875,8 @@
       }
       function watchSync() {
         if (syncWatch) return;
-        const start = Date.now(), startSync = lastSync;
+        const start = Date.now(),
+          startSync = lastSync;
         let seen = false;
         setSyncRunning(true);
         syncWatch = setInterval(async () => {
@@ -1803,7 +1894,10 @@
             setSyncRunning(false);
             const s = await loadStatus();
             if (s && s.updated_at === startSync)
-              toast("הריצה ב-GitHub הסתיימה, אבל לא נרשם סנכרון חדש. ייתכן שהיא נכשלה; הפרטים ב-GitHub Actions.", 0);
+              toast(
+                "הריצה ב-GitHub הסתיימה, אבל לא נרשם סנכרון חדש. ייתכן שהיא נכשלה; הפרטים ב-GitHub Actions.",
+                0,
+              );
           }
         }, 30000);
       }
@@ -1825,7 +1919,9 @@
         try {
           const s = await api("/api/sync", { method: "POST" });
           if (!s.started)
-            return toast(`סנכרון כבר הופעל לאחרונה. אפשר להפעיל שוב בעוד ${mins(s.retry_after)}.`);
+            return toast(
+              `סנכרון כבר הופעל לאחרונה. אפשר להפעיל שוב בעוד ${mins(s.retry_after)}.`,
+            );
           toast("הסנכרון התחיל, יסתיים בעוד כמה דקות");
           watchSync();
         } catch (e) {
@@ -1834,7 +1930,10 @@
       };
       async function retry(f) {
         try {
-          const r = await api(`/api/files/${encodeURIComponent(f.file_id)}/retry`, { method: "POST" });
+          const r = await api(
+            `/api/files/${encodeURIComponent(f.file_id)}/retry`,
+            { method: "POST" },
+          );
           $("file-dialog").close();
           toast(`"${r.name}" יעובד מחדש.` + afterSync(r.sync));
           loadFiles();
@@ -1848,7 +1947,8 @@
         return new Promise((resolve, reject) => {
           const x = new XMLHttpRequest();
           x.open("POST", "/api/upload?name=" + encodeURIComponent(file.name));
-          x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+          x.upload.onprogress = (e) =>
+            e.lengthComputable && onProgress(e.loaded / e.total);
           x.onload = () => {
             let d = {};
             try {
@@ -1856,7 +1956,14 @@
             } catch {}
             if (x.status === 401) toLogin();
             if (x.status < 300) resolve(d);
-            else reject(new Error(typeof d.detail === "string" ? d.detail : "שגיאת שרת (" + x.status + ")"));
+            else
+              reject(
+                new Error(
+                  typeof d.detail === "string"
+                    ? d.detail
+                    : "שגיאת שרת (" + x.status + ")",
+                ),
+              );
           };
           x.onerror = () => reject(new Error("שגיאת רשת"));
           x.send(file);
@@ -1865,12 +1972,18 @@
       async function uploadFiles(list) {
         const all = [...list];
         if (!all.length) return;
-        const done = [], failed = [], syncs = [], saved = [];
+        const done = [],
+          failed = [],
+          syncs = [],
+          saved = [];
         $("upload-progress").hidden = false;
         $("upload-bar").style.width = "0";
         for (const [i, file] of all.entries()) {
-          $("upload-text").textContent = `מעלה ${i + 1} מתוך ${all.length}: ${file.name}`;
-          const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+          $("upload-text").textContent =
+            `מעלה ${i + 1} מתוך ${all.length}: ${file.name}`;
+          const ext = file.name.includes(".")
+            ? file.name.split(".").pop().toLowerCase()
+            : "";
           if (!UPLOAD_EXT.includes(ext)) {
             failed.push(`${file.name}: סוג קובץ לא מותר`);
             continue;
@@ -1881,29 +1994,47 @@
           }
           try {
             const r = await sendFile(file, (p) => {
-              $("upload-bar").style.width = Math.round(((i + p) / all.length) * 100) + "%";
+              $("upload-bar").style.width =
+                Math.round(((i + p) / all.length) * 100) + "%";
             });
             done.push(r.renamed ? `${file.name} (נשמר בשם ${r.name})` : r.name);
             saved.push(r);
             if (r.sync) syncs.push(r.sync);
           } catch (e) {
-            failed.push(e.message.includes(file.name) ? e.message : `${file.name}: ${e.message}`);
+            failed.push(
+              e.message.includes(file.name)
+                ? e.message
+                : `${file.name}: ${e.message}`,
+            );
           }
         }
         $("upload-bar").style.width = "100%";
-        let msg = done.length ? `הועלו ${done.length} קבצים: ${done.join(", ")}.` : "";
+        let msg = done.length
+          ? `הועלו ${done.length} קבצים: ${done.join(", ")}.`
+          : "";
         if (failed.length) msg += ` לא הועלו: ${failed.join("; ")}.`;
         if (done.length) {
-          const started = syncs.find((s) => s.started), deferred = syncs.find((s) => s.deferred);
+          const started = syncs.find((s) => s.started),
+            deferred = syncs.find((s) => s.deferred);
           msg += afterSync(started || deferred || syncs[0]);
-          if (started && deferred) setTimeout(watchSync, deferred.retry_after * 1000); // גם הסנכרון שתוזמן לקבצים האחרונים
+          if (started && deferred)
+            setTimeout(watchSync, deferred.retry_after * 1000); // גם הסנכרון שתוזמן לקבצים האחרונים
         }
         $("upload-text").textContent = msg.trim();
         for (const r of saved) {
           // השרת וידא שהקובץ בתיקייה, בגודל וב-md5 של מה שנשלח
           const a = document.createElement("a");
-          Object.assign(a, { href: r.webViewLink, target: "_blank", rel: "noopener", textContent: "פתח ב-Drive" });
-          $("upload-text").append(document.createElement("br"), `${r.name}: נשמר ב-Drive ✓ `, a);
+          Object.assign(a, {
+            href: r.webViewLink,
+            target: "_blank",
+            rel: "noopener",
+            textContent: "פתח ב-Drive",
+          });
+          $("upload-text").append(
+            document.createElement("br"),
+            `${r.name}: נשמר ב-Drive ✓ `,
+            a,
+          );
         }
         toast(msg.trim(), 10000);
         loadFiles();
@@ -1917,7 +2048,9 @@
         e.preventDefault();
         dropzone.classList.add("over");
       });
-      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
+      dropzone.addEventListener("dragleave", () =>
+        dropzone.classList.remove("over"),
+      );
       dropzone.addEventListener("drop", (e) => {
         e.preventDefault();
         dropzone.classList.remove("over");
