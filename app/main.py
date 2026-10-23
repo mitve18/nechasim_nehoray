@@ -35,13 +35,20 @@ TOKEN = hmac.new(PASSWORD.encode(), b"agreements-drafter-session", hashlib.sha25
 
 @asynccontextmanager
 async def lifespan(app):
-    """מיגרציות פעם אחת בהפעלת השרת, כדי שטבלאות חדשות (כמו files) יהיו קיימות עוד לפני הסנכרון הראשון."""
+    """מיגרציות פעם אחת בהפעלת השרת, כדי שטבלאות חדשות (כמו files) יהיו קיימות עוד לפני הסנכרון הראשון.
+    רצות ברקע: uvicorn פותח את הפורט רק אחרי ה-startup, ומסד איטי או נעול חסם את העלייה ב-Render (Port scan timeout)."""
+    task = asyncio.create_task(asyncio.to_thread(_migrate))
+    yield
+    task.cancel()
+
+
+def _migrate():
     try:
         with store.connect() as conn:
             store.init(conn)
+        print("המיגרציות הסתיימו")
     except Exception as e:  # מסד לא זמין לא מונע מהאתר לעלות; הניסוח והייצוא עדיין עובדים
         print(f"המיגרציות בהפעלת השרת נכשלו: {e}")
-    yield
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)

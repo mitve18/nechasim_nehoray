@@ -82,20 +82,29 @@ create table if not exists api_usage (
     cost_usd numeric(12, 6) not null,
     conversation text
 );
--- 'ask': שאלות על המסמכים. ה-constraint מוגדר מחדש בכל הפעלה, כדי שמסד ישן יקבל את הסוגים החדשים
-alter table api_usage drop constraint if exists api_usage_kind_check;
-alter table api_usage add constraint api_usage_kind_check check (kind in ('draft', 'sync', 'ask'));
+-- 'ask': שאלות על המסמכים. מסד שנוצר לפני כן מקבל את הסוג החדש בבלוק הבא
+-- רק כשה-constraint עוד ישן: alter table נועל את הטבלה, ולא צריך לנעול אותה בכל הפעלה
+do $$ begin
+    if not exists (select 1 from pg_constraint
+                   where conname = 'api_usage_kind_check' and pg_get_constraintdef(oid) like '%ask%') then
+        alter table api_usage drop constraint if exists api_usage_kind_check;
+        alter table api_usage add constraint api_usage_kind_check check (kind in ('draft', 'sync', 'ask'));
+    end if;
+end $$;
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
 
 
 def connect():
-    return psycopg.connect(os.environ["DATABASE_URL"], autocommit=True)
+    return psycopg.connect(os.environ["DATABASE_URL"], autocommit=True, connect_timeout=15)
 
 
 def init(conn):
+    # בלי זה מיגרציה שמחכה לנעילה (שרת ישן, סנכרון באמצע) מחכה לנצח. כך היא נכשלת, נרשמת בלוג, ותרוץ בהפעלה הבאה
+    conn.execute("set lock_timeout = '10s'")
     conn.execute(SCHEMA)
+    conn.execute("set lock_timeout = 0")
 
 
 def _dicts(conn, sql, params=()):

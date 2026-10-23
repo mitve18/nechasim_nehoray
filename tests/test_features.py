@@ -11,6 +11,8 @@ import io
 import os
 import shutil
 import sys
+import threading
+import time
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -306,9 +308,43 @@ def test_server_start_creates_tables_before_first_sync():
             return skip("אין py-pglite או Node")
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
             with TestClient(main.app) as c:  # with מריץ את ה-lifespan, כמו הפעלת השרת ב-Render
+                for _ in range(100):  # המיגרציות רצות ברקע, אחרי שהשרת כבר עונה
+                    if conn.execute("select to_regclass('files')").fetchone()[0]:
+                        break
+                    time.sleep(0.1)
                 r = c.get("/api/files")
                 assert r.status_code == 200 and r.json() == [], r.text  # "הרשימה תתמלא אחרי הסנכרון הבא"
                 assert c.get("/api/reports/index").status_code == 404  # הדוחות הוסרו
+
+
+def test_server_answers_before_slow_migrations_and_constraint_upgrades_once():
+    # מסד שלא עונה: השרת עונה מיד, והמיגרציות נכשלות ברקע (ב-Render: "Port scan timeout")
+    started = threading.Event()
+
+    def hang():
+        started.set()
+        time.sleep(3)
+        raise OSError("connection timeout expired")
+
+    with mock.patch.object(store, "connect", hang), mock.patch.dict(os.environ, {"RENDER": ""}):
+        t0 = time.monotonic()
+        with TestClient(main.app) as c:
+            assert c.get("/healthz").json() == {"ok": True} and time.monotonic() - t0 < 2
+        assert started.is_set()
+
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        # מסד מלפני 'ask': ה-constraint הישן מוחלף פעם אחת, ואחר כך init לא נוגע בו
+        conn.execute("alter table api_usage drop constraint api_usage_kind_check")
+        conn.execute("alter table api_usage add constraint api_usage_kind_check check (kind in ('draft', 'sync'))")
+        store.init(conn)
+        store.log_usage(conn, "ask", [("gpt-4o", 1, 0, 1)])
+        oid = conn.execute("select oid from pg_constraint where conname = 'api_usage_kind_check'").fetchone()[0]
+        store.init(conn)
+        assert conn.execute("select oid from pg_constraint where conname = 'api_usage_kind_check'").fetchone()[0] == oid
+        assert conn.execute("show lock_timeout").fetchone()[0] == "0"  # רק למיגרציות, לא לשאר החיבור
 
 
 def _docx_bytes():
