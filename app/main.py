@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from app import docx_export, draft, drive, github, store  # noqa: E402
+from app import ask, docx_export, draft, drive, github, store  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
 PASSWORD = os.environ.get("APP_PASSWORD", "")
@@ -130,6 +130,8 @@ class DraftRequest(BaseModel):
     messages: list[Message]
     focus_file_ids: list[str] = []  # "נסח על בסיס המסמך הזה", אפשר כמה מסמכים
     conversation: str | None = Field(None, max_length=64)  # מזהה השיחה, לחיבור העלות לטיוטה
+    web_check: bool = False  # "בדיקת דרישות חוק עדכניות באינטרנט"
+    deep_review: bool = False  # "בדיקה משפטית מעמיקה"
 
 
 DRAFTS_PER_HOUR = 30
@@ -164,12 +166,32 @@ async def api_draft(req: DraftRequest, request: Request):
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
     _draft_quota(request)
     try:
-        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids, req.conversation)
+        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids, req.conversation, req.web_check,
+                                       req.deep_review)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק
         print(f"הניסוח נכשל: {e!r}")
         raise HTTPException(502, "הניסוח נכשל: שירות הניסוח לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
+
+
+class AskRequest(BaseModel):
+    messages: list[Message] = Field(max_length=40)
+    conversation: str | None = Field(None, max_length=64)
+
+
+@app.post("/api/ask")
+async def api_ask(req: AskRequest, request: Request):
+    """עמוד "שאלו על המסמכים". אותה מכסה כמו הניסוח, כי גם כאן כל שאלה היא קריאה למודל."""
+    msgs = [m.model_dump() for m in req.messages if m.role in ("user", "assistant")]
+    if not msgs or msgs[-1]["role"] != "user":
+        raise HTTPException(400, "ההודעה האחרונה חייבת להיות שאלה")
+    _draft_quota(request)
+    try:
+        return await run_in_threadpool(ask.ask, msgs, req.conversation)
+    except Exception as e:
+        print(f"התשובה נכשלה: {e!r}")
+        raise HTTPException(502, "לא הצלחתי לענות: שירות המודל לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
 
 
 class DocxRequest(BaseModel):

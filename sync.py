@@ -24,7 +24,7 @@ MAX_REMOVE = 0.3  # מעל החלק הזה מהמאגר לא מוחקים: כנ�
 def sync():
     stats = {"started_at": datetime.now(timezone.utc), "added": 0, "updated": 0, "removed": 0, "ocr": 0, "errors": [],
              "unsupported": 0, "files": {"added": [], "updated": [], "backfilled": []},
-             "pages_counted": 0, "ocr_scored": 0, "fill_failed": [],
+             "pages_counted": 0, "ocr_scored": 0, "pages_marked": 0, "fill_failed": [],
              "folder": os.environ["DRIVE_FOLDER_ID"], "seen": []}
     svc = drive.service()
     files = drive.list_files(svc, stats["folder"])
@@ -96,28 +96,35 @@ def sync():
 
 
 def fill_missing(conn, svc, files, stats):
-    """משלים למסמכים קיימים מה שעוד לא נשמר: מספר עמודים, וציון איכות OCR למסמך סרוק.
+    """משלים למסמכים קיימים מה שעוד לא נשמר: מספר עמודים, ציון איכות OCR למסמך סרוק, וסימוני עמודים בטקסט.
     הורדה אחת לכל מסמך, בלי מודל. ציון ה-OCR דורש להריץ OCR שוב, ולכן הוא לוקח זמן ב-Actions בלבד.
     קורה פעם אחת לכל מסמך. כישלון לא מכשיל את הריצה, והמסמך יושלם בריצה הבאה."""
-    no_pages, no_quality = store.missing_pages(conn), store.missing_quality(conn)
+    no_pages, no_quality, no_marks = store.missing_pages(conn), store.missing_quality(conn), store.missing_page_marks(conn)
     for f in files:
         pages = f["id"] in no_pages and extract.countable(f["mimeType"])
         quality = f["id"] in no_quality
-        if not (pages or quality):
+        marks = f["id"] in no_marks and extract.countable(f["mimeType"])
+        if not (pages or quality or marks):
             continue
         try:
             data = drive.download(svc, f)
             if pages:
                 store.save_pages(conn, f["id"], extract.page_count(f, data))
                 stats["pages_counted"] += 1
-            if quality:
-                store.save_quality(conn, f["id"], extract.extract(f, data)[2])
-                stats["ocr_scored"] += 1
+            if quality or marks:  # חילוץ אחד לשניהם: במסמך סרוק זה OCR מלא
+                text, _, score = extract.extract(f, data)
+                if quality:
+                    store.save_quality(conn, f["id"], score)
+                    stats["ocr_scored"] += 1
+                if marks:
+                    store.save_text(conn, f["id"], text)
+                    stats["pages_marked"] += 1
         except Exception as e:
             stats["fill_failed"].append(f"{f['name']}: {str(e)[:200]}")
             print(f"השלמה נכשלה  {f['name']}  ({e})")
             continue
-        print(f"הושלם  {f['name']}" + ("  · עמודים" if pages else "") + ("  · ציון OCR" if quality else ""))
+        print(f"הושלם  {f['name']}" + ("  · עמודים" if pages else "") + ("  · ציון OCR" if quality else "")
+              + ("  · סימוני עמודים" if marks else ""))
 
 
 def backfill(conn, stats):

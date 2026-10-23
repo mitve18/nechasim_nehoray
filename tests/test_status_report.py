@@ -35,9 +35,9 @@ def skip(reason):
         print("SKIP:", reason)
 
 
-def _doc(conn, file_id, mime, method, pages, status="indexed"):
+def _doc(conn, file_id, mime, method, pages, status="indexed", text="[עמוד 1]\n\nt"):
     conn.execute("""insert into agreements (file_id, name, modified_time, method, summary, text, embedding, pages)
-                    values (%s, %s, '1', %s, 's', 't', %s::vector, %s)""", (file_id, file_id, method, VEC, pages))
+                    values (%s, %s, '1', %s, 's', %s, %s::vector, %s)""", (file_id, file_id, method, text, VEC, pages))
     conn.execute("insert into files (file_id, name, mime_type, status) values (%s, %s, %s, %s)",
                  (file_id, file_id, mime, status))
 
@@ -119,6 +119,31 @@ def test_fill_missing_pages_and_ocr_quality_for_existing_docs():
                            "folder": "f", "seen": [], "files": {"added": [], "updated": [], "backfilled": []}} | stats)
         assert ("**נספרו עמודים ל-1 מסמכים · חושב ציון איכות OCR ל-1 מסמכים**\n"
                 "לא הושלמו (1, ינוסו שוב בריצה הבאה):\n- broken: EOF marker not found") in md, md
+
+
+def test_fill_page_marks_for_existing_docs():
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        _doc(conn, "old", "application/pdf", "text", 3, text="טקסט מלפני סימוני העמודים")
+        _doc(conn, "one", "application/pdf", "text", 1, text="עמוד יחיד, בלי סימון")
+        _doc(conn, "word", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx", None,
+             text="Word בלי עמודים")
+        store.save_quality(conn, "old", 0)  # כדי שרק סימוני העמודים יחסרו
+        listing = [{"id": i, "name": i, "mimeType": m} for i, m in conn.execute(
+            "select file_id, mime_type from files").fetchall()]
+        stats = {"pages_counted": 0, "ocr_scored": 0, "pages_marked": 0, "fill_failed": []}
+        with mock.patch.object(sync.drive, "download", lambda svc, f: b"x"), \
+                mock.patch.object(sync.extract, "extract", lambda f, data: ("[עמוד 1]\n\nא\n\n[עמוד 2]\n\nב", "text", None)):
+            sync.fill_missing(conn, None, listing, stats)
+        texts = dict(conn.execute("select file_id, text from agreements").fetchall())
+        assert texts["old"].startswith("[עמוד 1]") and stats["pages_marked"] == 1
+        assert texts["one"] == "עמוד יחיד, בלי סימון" and texts["word"] == "Word בלי עמודים"
+        downloads = []  # הריצה הבאה לא מורידה שוב: Word לא נספר (countable), והשאר כבר מסומנים או בעמוד אחד
+        with mock.patch.object(sync.drive, "download", lambda svc, f: downloads.append(f["id"]) or b"x"):
+            sync.fill_missing(conn, None, listing, stats)
+        assert downloads == []
 
 
 def test_tsv_format():

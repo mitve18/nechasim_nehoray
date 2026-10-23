@@ -58,7 +58,8 @@ def _sync_fakes(conn, listing, downloads):
     def fake_extract(f, data):
         if f["id"] == "bad":
             raise RuntimeError("OCR החזיר 3 תווים ל-1 עמודים")
-        return ("טקסט", "ocr", 91) if f["mimeType"] == PNG else ("טקסט", "text", None)
+        text = "[עמוד 1]\n\nטקסט\n\n[עמוד 2]\n\nהמשך"  # כמו extract האמיתי במסמך של כמה עמודים
+        return (text, "ocr", 91) if f["mimeType"] == PNG else (text, "text", None)
 
     env = {k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"} | {"DRIVE_FOLDER_ID": "folder"}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(conn),
@@ -236,6 +237,69 @@ def test_costs_per_draft_and_week_total():
         assert conn.execute("select count(*) from api_usage where conversation = 'conv-b'").fetchone()[0] == 1
 
 
+def test_ask_cites_only_documents_the_tools_returned():
+    from app import ask
+    doc = {"file_id": "d1", "name": "הסכם.pdf", "url": "https://drive/d1", "summary": "s",
+           "text": "[עמוד 1]\n\nמבוא\n\n[עמוד 2]\n\n7.2 הסודיות תחול 5 שנים"}
+    logged = []
+
+    def fake_run(self, messages):
+        self.tools[0]("סודיות")  # search_documents: המודל "ראה" את d1
+        assert "[עמוד 2]" in self.tools[2]("d1") and self.tools[2]("nope") == "אין מסמך עם המזהה הזה."
+        answer = ask.Answer(answer="הסודיות היא 5 שנים [1]. וגם [2]", citations=[
+            ask.Citation(n=1, file_id="d1", section="סעיף 7.2", page=2, quote="הסודיות תחול 5 שנים"),
+            ask.Citation(n=2, file_id="invented", section="", page=None, quote="x")])
+        return SimpleNamespace(status=RunStatus.completed, content=answer, metrics=SimpleNamespace(
+            input_tokens=1000, cache_read_tokens=0, output_tokens=100))
+
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
+                             search=lambda conn, q, k=3, usage=None: [doc], get_doc=lambda conn, fid: doc if fid == "d1" else None,
+                             record=lambda kind, usage, conv=None: logged.append((kind, usage, conv))), \
+            mock.patch.object(Agent, "run", fake_run):
+        r = TestClient(main.app).post("/api/ask", json={"messages": [{"role": "user", "content": "כמה זמן הסודיות?"}],
+                                                        "conversation": "q1"}).json()
+    assert r["citations"] == [{"n": 1, "file_id": "d1", "section": "סעיף 7.2", "page": 2,
+                               "quote": "הסודיות תחול 5 שנים", "name": "הסכם.pdf", "url": "https://drive/d1"}]
+    assert logged == [("ask", [("gpt-4o", 1000, 0, 100)], "q1")]
+
+
+def test_draft_web_check_and_deep_review():
+    calls, logged = [], []
+    reviewed = {"ok": True}
+
+    def fake_run(self, messages):
+        model = self.model.id
+        calls.append((model, [t for t in self.tools if isinstance(t, dict)] if self.tools else []))
+        m = SimpleNamespace(input_tokens=100, cache_read_tokens=0, output_tokens=10)
+        if model == draft.REVIEW_MODEL:
+            if not reviewed["ok"]:
+                raise TimeoutError("timeout")
+            assert "<טיוטה>" in messages and "נטיית הניסוח" in messages
+            return SimpleNamespace(status=RunStatus.completed, metrics=m,
+                                   content=draft.Review(title="הסכם", body="גוף מתוקן", notes=["הוסף סעיף שיפוי"]))
+        assert ("דרישות חוק" in (self.additional_context or "")) == bool(calls[-1][1])
+        return SimpleNamespace(status=RunStatus.completed, metrics=m,
+                               content=draft.Draft(status="agreement", questions=[], title="הסכם", body="גוף"))
+
+    msgs = [{"role": "user", "content": "סוג החוזה: הסכם שירותים\n\nנטיית הניסוח: מאוזנת"}]
+    with mock.patch.object(Agent, "run", fake_run), \
+            mock.patch.object(store, "record", lambda kind, usage, conv=None: logged.append(usage)):
+        out = draft.draft(msgs, web=True, review=True)
+        assert out["body"] == "גוף מתוקן" and out["review_notes"] == ["הוסף סעיף שיפוי"]
+        assert calls == [("gpt-4o", [{"type": "web_search"}]), ("gpt-5.5", [])]
+        assert [u[0] for u in logged[-1]] == ["gpt-4o", "web_search", "gpt-5.5"]
+        assert round(store.cost("web_search", 1), 4) == 0.025
+
+        reviewed["ok"] = False  # הבדיקה נכשלה: הטיוטה המקורית חוזרת עם הערה, והעלות של הניסוח עדיין נרשמת
+        out = draft.draft(msgs, review=True)
+        assert out["body"] == "גוף" and "נכשלה" in out["review_notes"][0]
+        assert [u[0] for u in logged[-1]] == ["gpt-4o"]
+
+        calls.clear()
+        draft.draft(msgs)  # בלי האפשרויות: בלי חיפוש באינטרנט ובלי בדיקה
+        assert calls == [("gpt-4o", [])]
+
+
 def test_server_start_creates_tables_before_first_sync():
     with postgres() as conn:
         if conn is None:
@@ -397,7 +461,7 @@ def test_draft_limits_and_errors():
     body = {"messages": [{"role": "user", "content": "נסח"}]}
     with mock.patch.multiple(main, PASSWORD="", TOKEN="t", DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
                              _drafts=main.defaultdict(main.deque)), \
-            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda m, f, c=None: ok):
+            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda *a: ok):
         a, b = TestClient(main.app, cookies={"sid": "a"}), TestClient(main.app, cookies={"sid": "b"})
         assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
         r = a.post("/api/draft", json=body)

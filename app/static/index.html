@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@700&family=Heebo:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@700&family=Rubik:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -45,7 +45,7 @@
       }
       body {
         margin: 0;
-        font-family: "Heebo", system-ui, "Segoe UI", Arial, sans-serif;
+        font-family: "Rubik", system-ui, "Segoe UI", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
         line-height: 1.55;
@@ -282,10 +282,7 @@
       #chat:empty {
         display: none;
       }
-      #chat:not(:empty) ~ .examples {
-        display: none;
-      }
-      /* דוגמאות לפתיחת שיחה: מוצגות רק כשהשיחה ריקה */
+      /* שאלות לדוגמה בדף הבית */
       .examples {
         list-style: none;
         margin: 0 0 16px;
@@ -504,6 +501,453 @@
         color: var(--muted);
         font-size: 13px;
         margin-inline-start: auto;
+      }
+
+      /* דף הבית: שאלות על המסמכים. כותרת גדולה ודוגמאות, ושורת השאלה צמודה לתחתית */
+      .ask {
+        min-height: calc(100dvh - 70px);
+        display: flex;
+        flex-direction: column;
+        max-width: 1100px;
+      }
+      .ask-hero {
+        flex: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 40px;
+        align-items: center;
+        padding-bottom: 24px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .pill .dot {
+        width: 6px;
+        height: 6px;
+        background: var(--brand);
+      }
+      .ask-hero h1 {
+        margin: 18px 0 0;
+        font-family: "Frank Ruhl Libre", serif;
+        font-size: clamp(36px, 5vw, 56px);
+        line-height: 1.1;
+        color: var(--brand-deep);
+      }
+      .ask-hero h1:focus {
+        outline: none;
+      }
+      .hero-p {
+        max-width: 560px;
+        margin: 16px 0 34px;
+        color: var(--muted);
+        font-size: 16.5px;
+        line-height: 1.7;
+      }
+      .hero-art {
+        display: grid;
+        place-items: center;
+        position: relative;
+      }
+      .hero-art::before {
+        content: "";
+        position: absolute;
+        inset: 10% -10%;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(47, 143, 208, 0.22), transparent);
+        filter: blur(20px);
+      }
+      .hero-art img {
+        position: relative;
+        width: 260px;
+        height: auto;
+        padding: 22px;
+        border-radius: 48px;
+        background: #fff;
+        box-shadow: 0 30px 50px -20px rgba(14, 47, 76, 0.35);
+      }
+      @media (max-width: 1100px) {
+        .ask-hero {
+          grid-template-columns: 1fr;
+        }
+        .hero-art {
+          display: none;
+        }
+      }
+      .thread {
+        flex: 1;
+        display: grid;
+        gap: 16px;
+        align-content: start;
+        max-width: 820px;
+        padding-bottom: 20px;
+      }
+      .thread:empty {
+        display: none;
+      }
+      .q-bubble {
+        justify-self: start;
+        max-width: 85%;
+        padding: 10px 16px;
+        border-radius: 16px 16px 4px 16px;
+        background: var(--brand);
+        color: #fff;
+        white-space: pre-wrap;
+      }
+      .a {
+        padding: 18px 20px;
+        border: 1px solid rgba(14, 47, 76, 0.08);
+        border-radius: var(--radius);
+        background: var(--card);
+        box-shadow: var(--shadow);
+      }
+      .a.typing {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+      }
+      .a-text {
+        margin: 0;
+        white-space: pre-wrap;
+        line-height: 1.8;
+      }
+      .ref {
+        display: inline-grid;
+        place-items: center;
+        min-width: 20px;
+        height: 20px;
+        margin: 0 2px;
+        padding: 0 5px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        font-size: 12px;
+        font-weight: 600;
+        vertical-align: 2px;
+      }
+      .ref:hover:not(:disabled) {
+        background: var(--brand-line);
+      }
+      .cites {
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 14px 0 0;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 12px;
+        font-size: 14px;
+      }
+      .cites li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        scroll-margin: 80px;
+      }
+      .cite-n {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .cite-doc {
+        font-weight: 600;
+        color: var(--brand-dark);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+      a.cite-doc:hover {
+        text-decoration: underline;
+      }
+      .cite-loc {
+        margin-inline-start: 8px;
+        color: var(--muted);
+      }
+      .cites q {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+      }
+      .ask-dock {
+        position: sticky;
+        bottom: 0;
+        padding: 16px 0 6px;
+        background: linear-gradient(to top, var(--bg) 70%, transparent);
+        max-width: 820px;
+      }
+      .ask-form {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .ask-form:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      .ask-form textarea,
+      .ask-form textarea:focus {
+        flex: 1;
+        min-height: 44px;
+        max-height: 180px;
+        border: 0;
+        box-shadow: none;
+        resize: none;
+        padding: 10px 8px;
+        font-size: 15.5px;
+      }
+      .send {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        padding: 0;
+        border: 0;
+        border-radius: 12px;
+        background: var(--brand);
+        color: #fff;
+      }
+      .send:hover:not(:disabled) {
+        background: var(--brand-dark);
+      }
+      .send:disabled {
+        opacity: 0.3;
+      }
+      .ask-note {
+        margin: 8px 0 0;
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .ghost {
+        border-color: transparent;
+        background: none;
+        color: var(--muted);
+        padding: 6px 10px;
+      }
+      .ghost:hover:not(:disabled) {
+        background: var(--card);
+        color: var(--brand-deep);
+      }
+      #ask-new {
+        margin-bottom: 8px;
+      }
+
+      /* טופס "הסכם חדש": רצף אחד של שדות, בלי כרטיסים */
+      .brief {
+        max-width: 860px;
+      }
+      #brief {
+        display: grid;
+        gap: 36px;
+      }
+      #brief fieldset {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        min-width: 0;
+        display: grid;
+        gap: 18px;
+      }
+      #brief legend {
+        margin-bottom: 14px;
+        padding: 0;
+        font-family: "Frank Ruhl Libre", serif;
+        font-size: 23px;
+        font-weight: 700;
+        color: var(--brand-deep);
+      }
+      .two {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 1fr 1fr;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+      .lbl {
+        font-size: 14.5px;
+        font-weight: 500;
+      }
+      .lbl small {
+        margin-inline-start: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+      }
+      #brief input:not([type="radio"], [type="checkbox"]),
+      #brief select,
+      #brief textarea {
+        width: 100%;
+        margin: 0;
+        padding: 10px 12px;
+        font: inherit;
+        font-size: 15px;
+        font-weight: 400;
+        color: inherit;
+        border: 1px solid #cfd5db;
+        border-radius: 10px;
+        background: #fff;
+        resize: vertical;
+      }
+      #brief input:focus,
+      #brief select:focus,
+      #brief textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      #brief ::placeholder {
+        color: #8a95a1;
+      }
+      .party {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr) 160px 44px;
+        gap: 10px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .party + .party {
+        margin-top: 12px;
+      }
+      .p-x {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--muted);
+      }
+      .p-x:hover:not(:disabled) {
+        background: var(--card);
+        color: var(--err);
+      }
+      .p-x:disabled {
+        opacity: 0.3;
+      }
+      #add-party {
+        justify-self: start;
+        margin-inline-start: -10px;
+      }
+      .seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        justify-self: start;
+        gap: 2px;
+        padding: 4px;
+        border: 1px solid #cfd5db;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .seg label {
+        position: relative;
+      }
+      .seg input {
+        position: absolute;
+        opacity: 0;
+        inset: 0;
+        cursor: pointer;
+      }
+      .seg span {
+        display: block;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: background 0.15s;
+      }
+      .seg label:hover span {
+        background: var(--bg);
+      }
+      .seg input:checked + span {
+        background: var(--brand);
+        color: #fff;
+      }
+      .seg input:focus-visible + span {
+        outline: 3px solid var(--ring);
+      }
+      .opts {
+        padding-top: 22px !important;
+        border-top: 1px solid var(--line) !important;
+        gap: 14px !important;
+      }
+      .opt {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        cursor: pointer;
+      }
+      .opt input {
+        margin-top: 4px;
+        width: 17px;
+        height: 17px;
+        accent-color: var(--brand);
+      }
+      .opt b {
+        display: block;
+        font-weight: 500;
+      }
+      .opt small {
+        display: block;
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+      .submit-row {
+        margin: 0;
+        gap: 16px;
+      }
+      button.big {
+        padding: 11px 28px;
+        font-size: 15.5px;
+      }
+      #brief .focus {
+        margin: 0;
+      }
+      .result-h {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      #input {
+        min-height: 90px;
+      }
+      @media (max-width: 700px) {
+        .two {
+          grid-template-columns: 1fr;
+        }
+        .party {
+          grid-template-columns: minmax(0, 1fr) 44px;
+        }
+        .party input:first-child {
+          grid-column: 1 / -1;
+        }
+        .party .p-x {
+          grid-column: 2;
+          grid-row: 2 / span 2;
+        }
       }
 
       /* עמוד העלויות */
@@ -1381,7 +1825,7 @@
   <body>
     <div class="shell">
       <aside class="side">
-        <a class="brand" href="#draft">
+        <a class="brand" href="#ask">
           <img class="logo" src="/static/logo.png" alt="" width="54" height="54" />
           <span>
             <b>מנסח ההסכמים</b>
@@ -1389,6 +1833,7 @@
           </span>
         </a>
         <nav class="nav" aria-label="ניווט ראשי">
+          <a href="#ask"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>שאלו על המסמכים</a>
           <a href="#draft"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>ניסוח הסכם<span class="nav-n" id="nav-focus" title="מסמכי בסיס שנבחרו" hidden></span></a>
           <a href="#drafts"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>טיוטות</a>
           <a href="#agreements"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>הסכמים</a>
@@ -1402,45 +1847,167 @@
       </aside>
 
       <main>
-        <div class="page" id="page-draft">
-          <header class="page-h">
-            <h1 tabindex="-1">ניסוח הסכם</h1>
-            <p>
-              תאר את ההסכם שאתה צריך, והמערכת תנסח טיוטה על בסיס ההסכמים הדומים
-              במאגר.
-            </p>
-            <span class="chip" role="note">
-              ⚠️ טיוטה שנוצרה בבינה מלאכותית. יש לבדוק כל הסכם לפני שימוש.
-            </span>
-          </header>
-          <div class="draft-grid">
-            <section id="chat-panel" aria-labelledby="chat-h">
-              <h2 id="chat-h">שיחה</h2>
-              <p class="hint">
-                ציין את סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם יחסרו פרטים
-                מהותיים, המערכת תשאל.
+        <div class="page ask" id="page-ask" hidden>
+          <div class="ask-hero" id="ask-hero">
+            <div>
+              <span class="pill"><span class="dot" aria-hidden="true"></span>מנסח ההסכמים, מאגר ההסכמים של המשרד</span>
+              <h1 tabindex="-1">מה תרצו לדעת על ההסכמים?</h1>
+              <p class="hero-p">
+                שאלו בשפה חופשית. כל תשובה נשענת על המסמכים במאגר, ולכל טענה יש
+                הפניה למסמך, לסעיף ולעמוד שממנו היא נלקחה.
               </p>
-              <div id="chat" aria-live="polite"></div>
-              <ul class="examples" id="examples" aria-label="דוגמאות">
-                <li><button type="button">כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים</button></li>
-                <li><button type="button">הסכם שירותי ייעוץ תכנוני עם אבני דרך ותנאי תשלום לפי שלבים</button></li>
-                <li><button type="button">הסכם הרשאה לשימוש זמני במקרקעין לתקופה של שנתיים</button></li>
+              <ul class="examples" id="ask-examples" aria-label="שאלות לדוגמה">
+                <li><button type="button">מה תקופת הסודיות המקובלת בהסכמים שלנו?</button></li>
+                <li><button type="button">אילו הסכמים כוללים פיצוי מוסכם, ובאיזה סכום?</button></li>
+                <li><button type="button">אילו התחייבויות מסתיימות השנה, ומי הצדדים בהן?</button></li>
+                <li><button type="button">מה נדרש בדרך כלל מקבלן לגבי ביטוח ואחריות?</button></li>
               </ul>
-              <form id="form">
+            </div>
+            <div class="hero-art" aria-hidden="true">
+              <img src="/static/logo.png" alt="" width="260" height="260" />
+            </div>
+          </div>
+          <div class="thread" id="thread" aria-live="polite"></div>
+          <div class="ask-dock">
+            <button type="button" class="ghost" id="ask-new" hidden>+ שיחה חדשה</button>
+            <form class="ask-form" id="ask-form">
+              <label for="q" class="visually-hidden">שאלה</label>
+              <textarea
+                id="q"
+                rows="1"
+                placeholder="שאלו על הסכם, סעיף, צד או תנאי…"
+              ></textarea>
+              <button type="submit" class="send" id="ask-send" aria-label="שליחה" disabled>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+              </button>
+            </form>
+            <p class="ask-note">התשובות נשענות על ההסכמים במאגר ואינן ייעוץ משפטי.</p>
+          </div>
+        </div>
+
+        <div class="page" id="page-draft" hidden>
+          <div class="brief" id="brief-view">
+            <header class="page-h">
+              <h1 tabindex="-1">הסכם חדש</h1>
+              <p>
+                מלאו את מה שידוע לכם. מה שחסר יסומן בטיוטה להשלמה. הניסוח מתבסס
+                קודם כל על הסעיפים מההסכמים שכבר במאגר.
+              </p>
+            </header>
+            <form id="brief">
+              <fieldset>
+                <legend>על מה ההסכם</legend>
+                <div class="two">
+                  <label class="field">
+                    <span class="lbl">סוג החוזה</span>
+                    <input id="b-type" list="b-types" required placeholder="למשל: הסכם שירותים" />
+                    <datalist id="b-types">
+                      <option value="הסכם שירותים"></option>
+                      <option value="הסכם ייעוץ"></option>
+                      <option value="כתב התחייבות"></option>
+                      <option value="הסכם סודיות"></option>
+                      <option value="הסכם שכירות"></option>
+                      <option value="הסכם הרשאה לשימוש במקרקעין"></option>
+                      <option value="הסכם קבלנות"></option>
+                      <option value="הסכם שיתוף פעולה"></option>
+                      <option value="הסכם מסגרת"></option>
+                      <option value="הסכם מכר"></option>
+                    </datalist>
+                  </label>
+                  <label class="field">
+                    <span class="lbl">כותרת <small>לא חובה</small></span>
+                    <input id="b-title" placeholder="תיווצר אוטומטית" />
+                  </label>
+                </div>
+                <label class="field">
+                  <span class="lbl">מהות ההתקשרות</span>
+                  <textarea id="b-essence" rows="3" placeholder="מה בדיוק הצד השני מספק או מקבל, ולאיזו מטרה"></textarea>
+                </label>
+                <label class="field">
+                  <span class="lbl">חוזה בסיס <small>לא חובה, אפשר כמה</small></span>
+                  <select id="b-base">
+                    <option value="">בחירה אוטומטית של הסעיפים המתאימים מכל המאגר</option>
+                  </select>
+                </label>
                 <div class="focus" id="focus-bar" hidden>
                   <span>מבוסס על:</span>
                   <ul id="focus-list"></ul>
                 </div>
-                <label for="input" class="hint">ההודעה שלך</label>
+              </fieldset>
+
+              <fieldset>
+                <legend>הצדדים</legend>
+                <div id="parties"></div>
+                <button type="button" class="ghost" id="add-party">+ הוספת צד</button>
+              </fieldset>
+
+              <fieldset>
+                <legend>תנאים</legend>
+                <label class="field">
+                  <span class="lbl">תנאים מסחריים <small>תמורה, תקופה, תנאי תשלום</small></span>
+                  <textarea id="b-terms" rows="3" placeholder='למשל: 18,000 ש"ח לחודש בתוספת מע"מ, ל-12 חודשים, שוטף + 30'></textarea>
+                </label>
+                <label class="field">
+                  <span class="lbl">דרישות מיוחדות</span>
+                  <textarea id="b-special" rows="3" placeholder="למשל: סודיות ל-7 שנים, בלי בלעדיות, ביטוח אחריות מקצועית"></textarea>
+                </label>
+                <div class="field" role="radiogroup" aria-labelledby="bias-l">
+                  <span class="lbl" id="bias-l">נטיית הניסוח</span>
+                  <div class="seg">
+                    <label><input type="radio" name="bias" value="balanced" checked /><span>מאוזן</span></label>
+                    <label><input type="radio" name="bias" value="first" /><span>לטובת הצד הראשון</span></label>
+                    <label><input type="radio" name="bias" value="second" /><span>לטובת הצד השני</span></label>
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset class="opts">
+                <legend class="visually-hidden">אפשרויות</legend>
+                <label class="opt">
+                  <input type="checkbox" id="b-web" />
+                  <span><b>בדיקת דרישות חוק עדכניות באינטרנט</b><small>מוסיף כ-20 שניות. כדאי לחוזים מסוג שעדיין אין במאגר.</small></span>
+                </label>
+                <label class="opt">
+                  <input type="checkbox" id="b-review" />
+                  <span><b>בדיקה משפטית מעמיקה</b><small>מודל חזק יותר בודק ומתקן את הטיוטה. איטי ויקר יותר, מתאים לחוזים מורכבים.</small></span>
+                </label>
+              </fieldset>
+
+              <div class="row submit-row">
+                <button type="submit" class="primary big">הכנת טיוטה</button>
+                <span class="kbd">בדרך כלל כשתי דקות; עם בדיקה משפטית מעמיקה עד כחמש.</span>
+              </div>
+            </form>
+          </div>
+
+          <div id="result-view" hidden>
+          <header class="page-h result-h">
+            <div>
+              <h1 tabindex="-1">טיוטת הסכם</h1>
+              <span class="chip" role="note">
+                ⚠️ טיוטה שנוצרה בבינה מלאכותית. יש לבדוק כל הסכם לפני שימוש.
+              </span>
+            </div>
+            <button type="button" id="reset">+ הסכם חדש</button>
+          </header>
+          <div class="draft-grid">
+            <section id="chat-panel" aria-labelledby="chat-h">
+              <h2 id="chat-h">תיקונים</h2>
+              <p class="hint">
+                בקשו כאן שינויים בטיוטה, למשל "הוסף סעיף שיפוי" או "קצר את
+                תקופת ההודעה ל-30 יום". אפשר גם לערוך ישירות בחלונית ההסכם.
+              </p>
+              <div id="chat" aria-live="polite"></div>
+              <form id="form">
+                <label for="input" class="hint">הבקשה שלך</label>
                 <textarea
                   id="input"
-                  rows="4"
+                  rows="3"
                   required
-                  placeholder="לדוגמה: כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים…"
+                  placeholder="מה לשנות בטיוטה?"
                 ></textarea>
                 <div class="row">
                   <button class="primary" id="send">שליחה</button>
-                  <button type="button" id="reset">שיחה חדשה</button>
                   <span class="kbd">Ctrl+Enter לשליחה</span>
                 </div>
               </form>
@@ -1518,6 +2085,7 @@
               </div>
             </section>
           </div>
+          </div>
         </div>
 
         <div class="page" id="page-drafts" hidden>
@@ -1539,8 +2107,8 @@
           <header class="page-h">
             <h1 tabindex="-1">עלויות</h1>
             <p>
-              ההוצאות על OpenAI API בשבוע האחרון: ניסוח טיוטות באתר, וסנכרון
-              ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של כל קריאה לפי
+              ההוצאות על OpenAI API בשבוע האחרון: ניסוח טיוטות, שאלות על
+              המסמכים, וסנכרון ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של כל קריאה לפי
               המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI הוא הקובע.
             </p>
           </header>
@@ -1553,6 +2121,11 @@
               <span>ניסוח טיוטות</span>
               <b id="c-draft">—</b>
               <small id="c-draft-n"></small>
+            </div>
+            <div class="tile">
+              <span>שאלות על המסמכים</span>
+              <b id="c-ask">—</b>
+              <small id="c-ask-n"></small>
             </div>
             <div class="tile">
               <span>סנכרון ועיבוד מסמכים</span>
@@ -1662,6 +2235,9 @@
     </div>
 
     <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
+    <template id="icon-trash">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </template>
     <template id="icon-draft">
       <svg
         class="icon"
@@ -1682,7 +2258,6 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const EXPECTED_SECONDS = 120;
       let messages = [];
       let timer = null;
 
@@ -1695,7 +2270,8 @@
         return div;
       }
 
-      function busy(on) {
+      // expected: כמה שניות הניסוח לוקח בדרך כלל, לפס ההתקדמות
+      function busy(on, expected = 120) {
         for (const id of ["send", "reset", "input", "download", "copy"])
           $(id).disabled = on;
         $("body").contentEditable = !on;
@@ -1716,16 +2292,23 @@
           $("elapsed").textContent = txt;
           if ($("elapsed2")) $("elapsed2").textContent = txt;
           $("bar").style.width =
-            Math.min(95, (s / EXPECTED_SECONDS) * 95) + "%"; // לא מגיע ל-100 עד שהתשובה מגיעה
+            Math.min(95, (s / expected) * 95) + "%"; // לא מגיע ל-100 עד שהתשובה מגיעה
         };
         tick();
         timer = setInterval(tick, 1000);
       }
 
-      $("form").addEventListener("submit", async (e) => {
+      $("form").addEventListener("submit", (e) => {
         e.preventDefault();
         const text = $("input").value.trim();
         if (!text) return;
+        $("input").value = "";
+        growInput();
+        send(text);
+      });
+
+      // opts: web_check ו-deep_review מהטופס. תיקונים בצ'אט נשלחים בלעדיהם (בדיקה מעמיקה בכל תיקון יקרה)
+      async function send(text, opts = {}) {
         // אם העובד ערך את ההסכם ידנית, המודל יקבל את הגרסה הערוכה
         if (
           !$("doc").hidden &&
@@ -1737,9 +2320,7 @@
         }
         messages.push({ role: "user", content: text });
         add("user", text);
-        $("input").value = "";
-        growInput();
-        busy(true);
+        busy(true, opts.deep_review ? 300 : opts.web_check ? 150 : 120);
         try {
           const res = await fetch("/api/draft", {
             method: "POST",
@@ -1751,6 +2332,7 @@
               })),
               focus_file_ids: focus.map((x) => x.id),
               conversation,
+              ...opts,
             }),
           });
           if (res.status === 401) return toLogin();
@@ -1777,14 +2359,27 @@
             });
             add("assistant", DOC_MSG);
             showDoc(r);
+            if (r.review_notes?.length) {
+              const notes =
+                "הבדיקה המשפטית המעמיקה:\n" +
+                r.review_notes.map((x) => "• " + x).join("\n");
+              messages.push({ role: "assistant", content: notes });
+              add("assistant", notes);
+            }
             saveHistory();
           }
         } catch (err) {
           busy(false);
           messages.pop();
+          // הטופס עצמו נכשל: חוזרים אליו עם כל מה שמולא, כדי לנסות שוב בלחיצה
+          if (!messages.length) {
+            $("chat").replaceChildren();
+            showResult(false);
+            return toast("הניסוח נכשל: " + err.message + ". אפשר לנסות שוב.", 0);
+          }
           add("error", "הניסוח נכשל: " + err.message + ". נסה שוב.");
         }
-      });
+      }
 
       const DOC_MSG =
         "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.";
@@ -1896,7 +2491,10 @@
         $("doc").hidden = true;
         $("placeholder").hidden = false;
         setFocus([]);
-        $("input").focus();
+        $("brief").reset();
+        resetParties();
+        showResult(false);
+        $("b-type").focus();
       });
 
       // טבלת הסטטוס בפאנל הצדדי. אם המסד לא זמין, היא פשוט לא מוצגת.
@@ -2059,6 +2657,7 @@
         renderFiles();
       }
       function renderFiles() {
+        fillBase();
         const q = $("files-q").value.trim().toLowerCase();
         const shown = files.filter((f) => f.name.toLowerCase().includes(q));
         const failed = files.filter((f) => f.status === "failed").length;
@@ -2225,6 +2824,7 @@
       }
       function setFocus(list) {
         focus = list;
+        fillBase();
         $("focus-bar").hidden = !focus.length;
         $("nav-focus").hidden = !focus.length;
         $("nav-focus").textContent = focus.length;
@@ -2763,6 +3363,7 @@
         $("chat").replaceChildren();
         for (const m of messages) add(m.role, m.isDoc ? DOC_MSG : m.content);
         showDoc(h, h.html);
+        showResult(true);
         location.hash = "#draft";
       }
       async function deleteHistory(h) {
@@ -2793,6 +3394,8 @@
         $("c-total").textContent = usd(c.total);
         $("c-draft").textContent = usd(c.draft.cost);
         $("c-draft-n").textContent = c.draft.calls + " קריאות ל-API";
+        $("c-ask").textContent = usd(c.ask.cost);
+        $("c-ask-n").textContent = c.ask.calls + " קריאות ל-API";
         $("c-sync").textContent = usd(c.sync.cost);
         $("c-sync-n").textContent = c.sync.calls + " קריאות ל-API";
         $("c-since").textContent = c.since
@@ -2850,26 +3453,264 @@
         );
       }
 
-      // דוגמה מהרשימה ממלאת את תיבת הכתיבה, כדי שאפשר יהיה להשלים פרטים לפני השליחה
-      $("examples").addEventListener("click", (e) => {
-        const b = e.target.closest("button");
-        if (!b) return;
-        $("input").value = b.textContent;
-        growInput();
-        $("input").focus();
+      // ---- טופס "הסכם חדש" ----
+      // הטופס הופך להודעה אחת למודל: כל שדה בשורה משלו, ומה שלא מולא מסומן [___] בטיוטה
+      const showResult = (on) => {
+        $("brief-view").hidden = on;
+        $("result-view").hidden = !on;
+      };
+      const ROLES = ["המזמין", "הספק"];
+      function addParty() {
+        const row = el(
+          "div",
+          { className: "party" },
+          el("input", { className: "p-role" }),
+          el("input", { placeholder: "שם מלא או שם החברה" }),
+          el("input", { placeholder: "ח.פ. / ת.ז." }),
+          el("button", {
+            type: "button",
+            className: "p-x",
+            onclick: () => {
+              row.remove();
+              syncParties();
+            },
+          }),
+        );
+        row.lastChild.append(
+          $("icon-trash").content.firstElementChild.cloneNode(true),
+        );
+        $("parties").append(row);
+        syncParties();
+      }
+      // מספור, תוויות לקורא מסך וברירת המחדל לתפקיד, אחרי הוספה או הסרה. תמיד נשארים לפחות שני צדדים
+      function syncParties() {
+        const rows = [...$("parties").children];
+        rows.forEach((r, i) => {
+          const [role, name, id, x] = r.children;
+          role.placeholder = ROLES[i] || "צד " + (i + 1);
+          role.ariaLabel = "תפקיד צד " + (i + 1);
+          name.ariaLabel = "שם צד " + (i + 1);
+          id.ariaLabel = "מספר מזהה צד " + (i + 1);
+          x.ariaLabel = "הסרת צד " + (i + 1);
+          x.disabled = rows.length <= 2;
+        });
+      }
+      function resetParties() {
+        $("parties").replaceChildren();
+        addParty();
+        addParty();
+      }
+      $("add-party").onclick = addParty;
+      resetParties();
+
+      function briefText() {
+        const v = (id) => $(id).value.trim();
+        const parties = [...$("parties").children].map((r) => {
+          const [role, name, id] = [...r.querySelectorAll("input")];
+          return {
+            role: role.value.trim() || role.placeholder,
+            name: name.value.trim(),
+            id: id.value.trim(),
+          };
+        });
+        const bias = document.querySelector('input[name="bias"]:checked').value;
+        const favored =
+          bias === "first" ? parties[0]?.role : bias === "second" ? parties[1]?.role : null;
+        return [
+          "סוג החוזה: " + v("b-type"),
+          v("b-title") && "כותרת: " + v("b-title"),
+          v("b-essence") && "מהות ההתקשרות: " + v("b-essence"),
+          "הצדדים:\n" +
+            parties
+              .map(
+                (p) =>
+                  `- ${p.role}: ${p.name || "[___]"}` +
+                  (p.id ? `, ח.פ./ת.ז. ${p.id}` : ""),
+              )
+              .join("\n"),
+          v("b-terms") && "תנאים מסחריים: " + v("b-terms"),
+          v("b-special") && "דרישות מיוחדות: " + v("b-special"),
+          "נטיית הניסוח: " +
+            (favored
+              ? `לטובת ${favored}. בסעיפי האחריות, השיפוי, הביטול, התשלום והקניין הרוחני נסח כך שיגנו על ${favored}, בגבולות המקובל וההוגן.`
+              : "מאוזנת: חלוקת סיכונים הוגנת בין הצדדים."),
+          "נסח עכשיו טיוטה מלאה, בלי שאלות השלמה. כל פרט שלא נמסר סמן כ-[___].",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+      }
+      $("brief").addEventListener("submit", (e) => {
+        e.preventDefault();
+        showResult(true);
+        $("result-view").querySelector("h1").focus();
+        send(briefText(), {
+          web_check: $("b-web").checked,
+          deep_review: $("b-review").checked,
+        });
+      });
+      // חוזה בסיס: כל בחירה מוסיפה מסמך לרשימת "מבוסס על", והבחירה חוזרת להתחלה
+      function fillBase() {
+        $("b-base").replaceChildren(
+          el("option", {
+            value: "",
+            textContent: focus.length
+              ? "הוספת חוזה בסיס נוסף…"
+              : "בחירה אוטומטית של הסעיפים המתאימים מכל המאגר",
+          }),
+          ...files
+            .filter((f) => f.status === "indexed" && !isFocus(f))
+            .map((f) => el("option", { value: f.file_id, textContent: f.name })),
+        );
+      }
+      $("b-base").addEventListener("change", (e) => {
+        const f = files.find((x) => x.file_id === e.target.value);
+        if (f) toggleFocus(f);
       });
 
+      // ---- שאלו על המסמכים ----
+      // השיחה נשלחת כולה בכל שאלה, כדי ששאלת המשך ("ומה לגבי השני?") תובן
+      let askMessages = [],
+        askConversation = newConversation(),
+        answerSeq = 0;
+      const growQ = () => {
+        const q = $("q");
+        q.style.height = "auto";
+        q.style.height = Math.min(q.scrollHeight + 2, 180) + "px";
+        $("ask-send").disabled = !q.value.trim();
+      };
+      $("q").addEventListener("input", growQ);
+      $("q").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+          e.preventDefault();
+          $("ask-form").requestSubmit();
+        }
+      });
+      $("ask-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = $("q").value.trim();
+        if (!text || $("q").disabled) return;
+        $("q").value = "";
+        growQ();
+        askQuestion(text);
+      });
+      $("ask-examples").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (b) askQuestion(b.textContent);
+      });
+      $("ask-new").onclick = () => {
+        askMessages = [];
+        askConversation = newConversation();
+        $("thread").replaceChildren();
+        $("ask-hero").hidden = false;
+        $("ask-new").hidden = true;
+        $("q").focus();
+      };
+      async function askQuestion(text) {
+        $("ask-hero").hidden = true;
+        $("ask-new").hidden = false;
+        askMessages.push({ role: "user", content: text });
+        const pending = el(
+          "div",
+          { className: "a typing" },
+          el("span", { className: "dots" }, el("span"), el("span"), el("span")),
+          "מחפש במסמכים…",
+        );
+        $("thread").append(el("div", { className: "q-bubble", textContent: text }), pending);
+        pending.scrollIntoView({ behavior: "smooth", block: "end" });
+        $("q").disabled = true;
+        try {
+          const r = await api("/api/ask", {
+            method: "POST",
+            body: JSON.stringify({
+              messages: askMessages,
+              conversation: askConversation,
+            }),
+          });
+          askMessages.push({ role: "assistant", content: r.answer });
+          pending.replaceWith(answerNode(r));
+        } catch (e) {
+          askMessages.pop();
+          pending.replaceWith(
+            el("div", {
+              className: "msg error",
+              textContent: e.message + ". אפשר לנסות שוב.",
+            }),
+          );
+        }
+        $("q").disabled = false;
+        $("q").focus();
+      }
+      // [1] בתשובה הופך לכפתור שגולל להפניה. לא קישור עם #, כי ה-hash משמש לניווט בין העמודים
+      function answerNode(r) {
+        const id = "ans" + ++answerSeq;
+        const text = el("p", { className: "a-text" });
+        r.answer.split(/\[(\d+)\]/).forEach((part, i) =>
+          text.append(
+            i % 2
+              ? el("button", {
+                  type: "button",
+                  className: "ref",
+                  textContent: part,
+                  ariaLabel: "הפניה " + part,
+                  onclick: () =>
+                    $(`${id}-${part}`)?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "center",
+                    }),
+                })
+              : part,
+          ),
+        );
+        const cites = r.citations.map((c) =>
+          el(
+            "li",
+            { id: `${id}-${c.n}` },
+            el("span", { className: "cite-n", textContent: c.n }),
+            el(
+              "div",
+              {},
+              c.url
+                ? el("a", {
+                    href: c.url,
+                    target: "_blank",
+                    rel: "noopener",
+                    className: "cite-doc",
+                    textContent: c.name + " ↗",
+                  })
+                : el("b", { className: "cite-doc", textContent: c.name }),
+              el("span", {
+                className: "cite-loc",
+                textContent: [c.section, c.page && "עמוד " + c.page]
+                  .filter(Boolean)
+                  .join(" · "),
+              }),
+              c.quote && el("q", { textContent: c.quote }),
+            ),
+          ),
+        );
+        return el(
+          "div",
+          { className: "a" },
+          text,
+          cites.length > 0 && el("ol", { className: "cites" }, ...cites),
+        );
+      }
+
       // ניווט בין העמודים לפי ה-hash בכתובת (#draft, #files, #status), בלי טעינה מחדש
-      const PAGES = ["draft", "drafts", "agreements", "costs", "status"];
+      const PAGES = ["ask", "draft", "drafts", "agreements", "costs", "status"];
       function route(e) {
         const hash = location.hash.slice(1);
-        const page = PAGES.includes(hash) ? hash : "draft";
+        const page = PAGES.includes(hash) ? hash : "ask";
         for (const p of PAGES) $("page-" + p).hidden = p !== page;
         for (const a of document.querySelectorAll(".nav a"))
           a.ariaCurrent = a.hash === "#" + page ? "page" : null;
         if (page === "drafts") loadHistory();
         if (page === "costs") loadCosts();
-        if (e) $("page-" + page).querySelector("h1").focus(); // מעבר עמוד: קורא המסך מכריז על הכותרת
+        // מעבר עמוד: קורא המסך מכריז על הכותרת (הגלויה: בדף הניסוח יש כותרת לטופס ולטיוטה)
+        if (e)
+          [...$("page-" + page).querySelectorAll("h1")]
+            .find((h) => h.offsetParent)
+            ?.focus();
       }
       addEventListener("hashchange", route);
       route();

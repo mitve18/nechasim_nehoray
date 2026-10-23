@@ -74,7 +74,7 @@ alter table drafts add column if not exists conversation text;
 create table if not exists api_usage (
     id bigserial primary key,
     at timestamptz not null default now(),
-    kind text not null check (kind in ('draft', 'sync')),
+    kind text not null,
     model text not null,
     input_tokens int not null,
     cached_tokens int not null,
@@ -82,6 +82,9 @@ create table if not exists api_usage (
     cost_usd numeric(12, 6) not null,
     conversation text
 );
+-- 'ask': שאלות על המסמכים. ה-constraint מוגדר מחדש בכל הפעלה, כדי שמסד ישן יקבל את הסוגים החדשים
+alter table api_usage drop constraint if exists api_usage_kind_check;
+alter table api_usage add constraint api_usage_kind_check check (kind in ('draft', 'sync', 'ask'));
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
@@ -101,7 +104,8 @@ def _dicts(conn, sql, params=()):
 
 
 # דולר למיליון טוקנים: (קלט, קלט מהמטמון, פלט). מהמחירון של OpenAI, נבדק 10/2026. מחליפים מודל? מוסיפים אותו כאן
-PRICES = {"gpt-4o": (2.50, 1.25, 10.00), "text-embedding-3-small": (0.02, 0.02, 0.0)}
+PRICES = {"gpt-4o": (2.50, 1.25, 10.00), "gpt-5.5": (5.00, 0.50, 30.00), "text-embedding-3-small": (0.02, 0.02, 0.0),
+          "web_search": (25_000, 0, 0)}  # web_search: היחידה היא חיפוש ולא טוקן ($25 לאלף חיפושים)
 
 
 def cost(model, input_tokens, cached_tokens=0, output_tokens=0):
@@ -123,6 +127,15 @@ def log_usage(conn, kind, usage, conversation=None):
         with conn.cursor() as cur:
             cur.executemany("insert into api_usage (kind, model, input_tokens, cached_tokens, output_tokens, "
                             "cost_usd, conversation) values (%s, %s, %s, %s, %s, %s, %s)", rows)
+
+
+def record(kind, usage, conversation=None):
+    """log_usage בחיבור משלו, לאתר. מסד לא זמין לא מכשיל את הניסוח או התשובה; רק העלות הזו לא תירשם."""
+    try:
+        with connect() as conn:
+            log_usage(conn, kind, usage, conversation)
+    except Exception as e:
+        print(f"רישום העלות נכשל: {e!r}")
 
 
 def embed(text, usage=None):
@@ -232,10 +245,26 @@ def delete(conn, file_ids):
 
 def search(conn, query, k=3, usage=None):
     rows = conn.execute(
-        "select name, url, summary, text from agreements order by embedding <=> %s::vector limit %s",
+        "select file_id, name, url, summary, text from agreements order by embedding <=> %s::vector limit %s",
         (embed(query, usage), k),
     ).fetchall()
-    return [dict(zip(("name", "url", "summary", "text"), r)) for r in rows]
+    return [dict(zip(("file_id", "name", "url", "summary", "text"), r)) for r in rows]
+
+
+def catalog(conn):
+    """כל המסמכים בלי הטקסט, לשאלות על כל המאגר ("אילו הסכמים מסתיימים השנה")."""
+    return _dicts(conn, "select file_id, name, url, summary, metadata from agreements order by name")
+
+
+def missing_page_marks(conn):
+    """מסמכים מרובי עמודים שנשמרו לפני סימוני [עמוד N]. בלעדיהם התשובות לא יכולות לציין עמוד."""
+    return {r[0] for r in conn.execute(
+        "select file_id from agreements where coalesce(pages, 2) > 1 and position('[עמוד 1]' in text) = 0").fetchall()}
+
+
+def save_text(conn, file_id, text):
+    """הטקסט בלבד. התקציר וה-embedding לא משתנים, ולכן בלי קריאה למודל."""
+    conn.execute("update agreements set text = %s where file_id = %s", (text, file_id))
 
 
 def get_doc(conn, file_id):
@@ -431,5 +460,5 @@ def costs(conn):
                            (HISTORY_DAYS,)).fetchone()[0]
     since = conn.execute(f"select to_char(min(at) at time zone '{TZ}', 'DD/MM/YYYY') from api_usage").fetchone()[0]
     return {"days": HISTORY_DAYS, "total": sum(k["cost"] for k in kinds.values()),
-            "draft": kinds.get("draft", {"cost": 0, "calls": 0}), "sync": kinds.get("sync", {"cost": 0, "calls": 0}),
+            **{k: kinds.get(k, {"cost": 0, "calls": 0}) for k in ("draft", "ask", "sync")},
             "drafts": drafts, "unsaved": unsaved, "since": since}

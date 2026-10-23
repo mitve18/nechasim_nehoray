@@ -62,7 +62,7 @@ def extract(f, data):
             return text, "docx", None
         # מסמך Word שבתוכו עמודים סרוקים כתמונות, וכמעט בלי טקסט: הטקסט מזוהה מהתמונות
         ocr_text, quality = ocr(images)
-        return _checked(clean([text, *ocr_text]), len(images)), "ocr", quality
+        return _checked(clean([text, *ocr_text], mark_pages=False), len(images)), "ocr", quality  # תמונות, לא עמודים
     return clean([data.decode("utf-8-sig")]), "text", None  # GDOC, DOC (כבר הומר לטקסט) או text/*
 
 
@@ -140,12 +140,13 @@ def ocr(images):
     return pages, round(weighted / letters) if letters else 0
 
 
+PAGE_MARK = re.compile(r"\n*\[עמוד \d+\]\n*")  # תחילת עמוד בטקסט השמור: ממנו הציטוטים בתשובות לוקחים מספר עמוד
 PAGE_NUM = re.compile(r"^\s*[-–]?\s*(עמוד|page)?\s*\d+\s*((מתוך|of|/)\s*\d+)?\s*[-–]?\s*$", re.I)
 BLOCK_START = re.compile(r"^\s*(\d+(\.\d+)*[.)]|[א-ת][.)]|[-•●▪])\s")
 SENTENCE_END = (".", ":", ";", "!", "?", ")", '"')
 
 
-def clean(pages):
+def clean(pages, mark_pages=True):
     """מסיר כותרות עליונות/תחתונות חוזרות ומספרי עמודים, ומאחד שבירות שורה באמצע משפט."""
     pages = [[l.strip() for l in p.splitlines()] for p in pages]
     repeated = set()
@@ -153,7 +154,9 @@ def clean(pages):
         counts = Counter(l for p in pages for l in set(p) if l)
         repeated = {l for l, n in counts.items() if n >= len(pages) * 0.6}
     paras = []
-    for p in pages:
+    for n, p in enumerate(pages, 1):
+        if mark_pages and len(pages) > 1:  # Word וטקסט הם "עמוד" אחד, בלי עמודים קבועים. השורה הריקה מונעת מיזוג לתוך הסימון
+            paras += ["", f"[עמוד {n}]", ""]
         for line in p:
             if not line:
                 paras.append("")
@@ -164,6 +167,11 @@ def clean(pages):
             else:
                 paras.append(line)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(paras)).strip()
+
+
+def strip_pages(text):
+    """הטקסט בלי סימוני העמודים, לדוגמאות שהמודל מנסח מהן (שלא יעתיק [עמוד 3] לטיוטה)."""
+    return PAGE_MARK.sub("\n\n", text).strip()
 
 
 def _demo():

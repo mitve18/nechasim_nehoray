@@ -49,6 +49,7 @@ def _fake_backends(logged, downloads, summary_path):
                                 upsert=lambda conn, f, method, text, pages=None, quality=None: None,
                                 save_files=lambda conn, rows: None, prune_files=lambda conn, ids: None,
                                 pending_metadata=lambda conn: [], missing_pages=lambda conn: set(), missing_quality=lambda conn: set(),
+                                missing_page_marks=lambda conn: set(),
                                 log_run=lambda conn, stats: logged.append(stats)), \
             mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder-123", "GITHUB_STEP_SUMMARY": summary_path}), \
             mock.patch.object(sys, "argv", ["sync.py"]):
