@@ -526,7 +526,7 @@ def test_whole_site_requires_login():
             assert c.get(path).status_code == 401, path
         assert c.post("/api/draft", json={"messages": [{"role": "user", "content": "x"}]}).status_code == 401
         assert c.get("/healthz").status_code == 200  # בדיקת התקינות של Render
-        assert c.get("/static/logo.png").status_code == 200 and c.get("/static/favicon.png").status_code == 200
+        assert c.get("/static/logo.webp").status_code == 200 and c.get("/static/favicon.png").status_code == 200
         assert "סיסמה" in c.get("/login").text
 
         wrong = c.post("/login", data={"password": "nope", "next": "/admin/sync"})

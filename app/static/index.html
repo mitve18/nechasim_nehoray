@@ -4,31 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>מנסח ההסכמים</title>
-    <meta name="theme-color" content="#0e2f4c" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="icon" type="image/png" href="/static/favicon.png" />
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@700&family=Rubik:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <style>
       :root {
-        /* פלטה לפי הלוגו: הכחול והשחור שלו, ותכלת בהיר להדגשות */
-        /* רקע בגוון נייר חם, שמשלים את הכחול של המותג במקום להתחרות בו */
-        --bg: #f5f4f1;
+        /* פלטה מהלוגו: כחול מ-#48a6f4 (הדגשות) עד #002c73 (כותרות). הלוגו בלי מסגרת, ולכן הרקעים בהירים וקרירים:
+           על רקע כהה החלקים הכהים של הלוגו נבלעים, ועל רקע חם הכחול שלו נראה זר */
+        --bg: #f4f7fb;
         --card: #fff;
-        --line: #e0e2e3;
-        --text: #1f2933;
-        --muted: #5f6b7a;
-        --brand: #1c5d8e;
-        --brand-dark: #164a72;
-        --brand-deep: #0e2f4c;
-        --brand-soft: #edf4fa;
-        --brand-line: #cfe0ee;
-        --accent: #2f8fd0;
-        --ring: rgba(47, 143, 208, 0.25);
+        --line: #e1e7ef;
+        --text: #1b2433;
+        --muted: #5d6b7d;
+        --brand: #1a6dc8;
+        --brand-dark: #1459a8;
+        --brand-deep: #0b2a5c;
+        --brand-soft: #ebf4fe;
+        --brand-line: #cde3fa;
+        --accent: #48a6f4;
+        --ring: rgba(72, 166, 244, 0.25);
         --warn-bg: #fff6e6;
         --warn: #8a4b08;
         --err-bg: #fdecee;
@@ -36,16 +36,17 @@
         --radius: 14px;
         /* צל בשכבות: קרוב וחד + רחוק ורך, כמו אור אמיתי. נותן עומק בלי להכביד */
         --shadow:
-          0 1px 2px rgba(14, 47, 76, 0.05),
-          0 10px 28px -12px rgba(14, 47, 76, 0.1);
-        --lift: 0 3px 8px -3px rgba(14, 47, 76, 0.12);
+          0 1px 2px rgba(11, 42, 92, 0.05),
+          0 10px 28px -12px rgba(11, 42, 92, 0.1);
+        --lift: 0 3px 8px -3px rgba(11, 42, 92, 0.12);
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        font-family: "Rubik", system-ui, "Segoe UI", Arial, sans-serif;
+        /* כמו ChatGPT: Inter לאותיות לטיניות ולמספרים (הכי קרוב ל-Söhne), Noto Sans Hebrew לעברית */
+        font-family: "Inter", "Noto Sans Hebrew", system-ui, "Segoe UI", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
         line-height: 1.55;
@@ -64,9 +65,9 @@
         flex-direction: column;
         gap: 28px;
         padding: 22px 12px;
-        background: linear-gradient(170deg, var(--brand-deep), #123e63 70%, var(--brand-dark));
-        color: #fff;
-        box-shadow: 4px 0 18px -10px rgba(14, 47, 76, 0.4);
+        background: var(--card);
+        color: var(--text);
+        border-inline-end: 1px solid var(--line);
         z-index: 3;
       }
       .brand {
@@ -79,28 +80,27 @@
       }
       .brand b {
         display: block;
-        font-family: "Frank Ruhl Libre", serif;
-        font-size: 21px;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+        font-size: 20px;
         line-height: 1.15;
+        white-space: nowrap;
       }
       .brand small {
         display: block;
         margin-top: 4px;
         font-size: 12.5px;
-        color: #cfe0ee;
+        color: var(--muted);
       }
-      /* הלוגו שקוף ורחב: אריח לבן עם פינות מעוגלות מתאים לצורה שלו יותר מעיגול */
+      .brand b {
+        color: var(--brand-deep);
+      }
+      /* הלוגו כמו שהוא, בלי אריח או מסגרת. הצל עוקב אחרי הצורה שלו, לא מלבן */
       .logo {
         width: 54px;
-        height: 54px;
-        padding: 5px;
-        object-fit: contain;
-        background: #fff;
-        border-radius: 14px;
+        height: auto;
         flex: none;
-        box-shadow:
-          0 0 0 3px rgba(255, 255, 255, 0.16),
-          0 4px 12px rgba(0, 0, 0, 0.25);
+        filter: drop-shadow(0 3px 5px rgba(11, 42, 92, 0.18));
       }
       .nav {
         display: grid;
@@ -112,7 +112,7 @@
         gap: 10px;
         padding: 9px 12px;
         border-radius: 10px;
-        color: rgba(255, 255, 255, 0.82);
+        color: #3c4a5c;
         text-decoration: none;
         font-size: 15px;
         transition:
@@ -120,14 +120,14 @@
           color 0.15s;
       }
       .nav a:hover {
-        background: rgba(255, 255, 255, 0.09);
-        color: #fff;
+        background: var(--brand-soft);
+        color: var(--brand-deep);
       }
       .nav a[aria-current="page"] {
-        background: #fff;
-        color: var(--brand-deep);
+        background: var(--brand);
+        color: #fff;
         font-weight: 500;
-        box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 6px 16px -8px rgba(26, 109, 200, 0.6);
       }
       .nav .icon {
         width: 18px;
@@ -151,21 +151,21 @@
         align-items: center;
         gap: 8px;
         padding: 10px 12px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--line);
         border-radius: 10px;
-        background: rgba(255, 255, 255, 0.05);
-        color: rgba(255, 255, 255, 0.78);
+        background: var(--bg);
+        color: var(--muted);
         font-size: 13px;
         text-decoration: none;
       }
       .side-sync:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--brand-soft);
       }
       .dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #8fd1ad;
+        background: #2f9e5f;
         flex: none;
       }
       main {
@@ -181,7 +181,8 @@
       }
       .page-h h1 {
         margin: 0;
-        font-family: "Frank Ruhl Libre", serif;
+        letter-spacing: -0.02em;
+        font-weight: 600;
         font-size: clamp(30px, 3.4vw, 40px);
         line-height: 1.15;
         color: var(--brand-deep);
@@ -225,12 +226,11 @@
           height: auto;
           padding: 10px 12px;
           gap: 10px;
+          border-inline-end: 0;
+          border-bottom: 1px solid var(--line);
         }
         .logo {
-          width: 40px;
-          height: 40px;
-          padding: 4px;
-          border-radius: 11px;
+          width: 46px;
         }
         .brand b {
           font-size: 18px;
@@ -339,7 +339,7 @@
         border-bottom-right-radius: 4px;
       }
       .assistant {
-        background: #eef2f6;
+        background: #edf2f8;
         align-self: flex-end;
         border-bottom-left-radius: 4px;
       }
@@ -429,7 +429,7 @@
         border: 1px solid var(--line);
         border-bottom: 0;
         border-radius: 10px 10px 0 0;
-        background: #f7f9fb;
+        background: #f6f9fd;
       }
       .toolbar button {
         min-width: 34px;
@@ -445,7 +445,7 @@
         font-size: 14px;
       }
       .toolbar button:hover:not(:disabled) {
-        background: #e8eef4;
+        background: #e6eefa;
       }
       .toolbar button[aria-pressed="true"] {
         background: var(--brand-soft);
@@ -536,7 +536,8 @@
       }
       .ask-hero h1 {
         margin: 18px 0 0;
-        font-family: "Frank Ruhl Libre", serif;
+        letter-spacing: -0.02em;
+        font-weight: 600;
         font-size: clamp(36px, 5vw, 56px);
         line-height: 1.1;
         color: var(--brand-deep);
@@ -556,22 +557,10 @@
         place-items: center;
         position: relative;
       }
-      .hero-art::before {
-        content: "";
-        position: absolute;
-        inset: 10% -10%;
-        border-radius: 50%;
-        background: radial-gradient(closest-side, rgba(47, 143, 208, 0.22), transparent);
-        filter: blur(20px);
-      }
       .hero-art img {
-        position: relative;
-        width: 260px;
+        width: 280px;
         height: auto;
-        padding: 22px;
-        border-radius: 48px;
-        background: #fff;
-        box-shadow: 0 30px 50px -20px rgba(14, 47, 76, 0.35);
+        filter: drop-shadow(0 26px 28px rgba(11, 42, 92, 0.22));
       }
       @media (max-width: 1100px) {
         .ask-hero {
@@ -603,7 +592,7 @@
       }
       .a {
         padding: 18px 20px;
-        border: 1px solid rgba(14, 47, 76, 0.08);
+        border: 1px solid rgba(11, 42, 92, 0.08);
         border-radius: var(--radius);
         background: var(--card);
         box-shadow: var(--shadow);
@@ -774,7 +763,8 @@
       #brief legend {
         margin-bottom: 14px;
         padding: 0;
-        font-family: "Frank Ruhl Libre", serif;
+        letter-spacing: -0.02em;
+        font-weight: 600;
         font-size: 23px;
         font-weight: 700;
         color: var(--brand-deep);
@@ -822,6 +812,63 @@
       }
       #brief ::placeholder {
         color: #8a95a1;
+      }
+      /* תיבת בחירה עם חיפוש (combo) */
+      .combo {
+        position: relative;
+      }
+      #brief .combo input {
+        padding-inline-end: 38px;
+        cursor: pointer;
+      }
+      .combo-chev {
+        position: absolute;
+        inset-inline-end: 12px;
+        top: 50%;
+        translate: 0 -50%;
+        color: var(--muted);
+        pointer-events: none;
+        transition: rotate 0.15s;
+      }
+      .combo:has([aria-expanded="true"]) .combo-chev {
+        rotate: 180deg;
+      }
+      .combo-list {
+        position: absolute;
+        inset-inline: 0;
+        top: calc(100% + 6px);
+        z-index: 10;
+        max-height: 300px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        margin: 0;
+        padding: 6px;
+        list-style: none;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 16px 36px -14px rgba(11, 42, 92, 0.3);
+      }
+      .combo-list li {
+        display: grid;
+        gap: 1px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 15px;
+        overflow-wrap: anywhere;
+      }
+      .combo-list li small {
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .combo-list li[aria-selected="true"] {
+        background: var(--brand-soft);
+        color: var(--brand-deep);
+      }
+      .combo-list .combo-empty {
+        color: var(--muted);
+        cursor: default;
       }
       .party {
         display: grid;
@@ -962,7 +1009,7 @@
         gap: 2px;
         padding: 16px 18px;
         background: var(--card);
-        border: 1px solid rgba(14, 47, 76, 0.08);
+        border: 1px solid rgba(11, 42, 92, 0.08);
         border-radius: var(--radius);
         box-shadow: var(--shadow);
       }
@@ -1054,11 +1101,11 @@
         border: 1px solid var(--line);
         border-radius: 12px;
         background: #fff;
-        box-shadow: 0 1px 1px rgba(14, 47, 76, 0.03);
+        box-shadow: 0 1px 1px rgba(11, 42, 92, 0.03);
       }
       .h-item.current {
         border-color: var(--brand-line);
-        background: #fafcfe;
+        background: #f8fbff;
       }
       .h-title {
         margin: 0;
@@ -1113,7 +1160,7 @@
           transform 0.05s;
       }
       button:hover:not(:disabled) {
-        background: #f2f6fa;
+        background: #f0f5fc;
       }
       button:active:not(:disabled) {
         transform: translateY(1px);
@@ -1253,7 +1300,7 @@
       .spinner {
         width: 46px;
         height: 46px;
-        border: 4px solid #dbe7f1;
+        border: 4px solid #d6e6fa;
         border-top-color: var(--brand);
         border-radius: 50%;
         animation: spin 1s linear infinite;
@@ -1274,7 +1321,7 @@
       .bar {
         width: min(320px, 80%);
         height: 6px;
-        background: #e3edf5;
+        background: #e1edfb;
         border-radius: 99px;
         overflow: hidden;
       }
@@ -1347,7 +1394,7 @@
       .dropzone:hover,
       .dropzone.over {
         border-color: var(--accent);
-        background: #e2eef8;
+        background: #e0eefd;
       }
       .dropzone:focus-within {
         outline: 3px solid var(--ring);
@@ -1370,42 +1417,61 @@
         margin-bottom: 4px;
       }
       /* לרשימה יש עמוד שלם: רשת כרטיסים, בלי גלילה פנימית */
+      /* כרטיס גדול לכל חוזה, עם התקציר והנתונים העיקריים. עדיף לגלול מאשר לדחוס */
       #files {
         list-style: none;
         margin: 0;
         padding: 0;
         display: grid;
-        gap: 8px;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 14px;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
       }
       .file {
         display: flex;
-        align-items: stretch;
+        flex-direction: column;
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: var(--radius);
         background: #fff;
       }
       .file:hover {
         border-color: var(--brand-line);
-        background: #fafcfe;
       }
       .file-open {
         flex: 1;
         min-width: 0;
         border: 0;
+        border-radius: var(--radius) var(--radius) 0 0;
         background: none;
-        padding: 7px 10px;
+        padding: 18px 20px 16px;
         text-align: start;
         display: grid;
-        gap: 3px;
+        gap: 8px;
+        align-content: start;
+        font-weight: 400;
       }
       .file-open:hover:not(:disabled) {
-        background: none;
+        background: #f8fbff;
+      }
+      .file-kind {
+        font-size: 13px;
+        color: var(--brand-dark);
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+      .file-summary {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.65;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       .file-name {
-        font-weight: 500;
-        font-size: 13.5px;
+        font-weight: 600;
+        font-size: 16.5px;
         line-height: 1.4;
+        color: var(--brand-deep);
         overflow-wrap: anywhere;
         unicode-bidi: plaintext;
         /* עד שתי שורות; השם המלא מופיע במעבר עכבר */
@@ -1425,21 +1491,25 @@
       .file-meta > span {
         white-space: nowrap; /* "500 KB" לא נשבר לשתי שורות */
       }
+      /* "נסח על בסיס החוזה": שורה בתחתית הכרטיס. הטקסט מתחלף לפי aria-pressed, שמתעדכן בלי לבנות את הרשימה מחדש */
       .pin {
         border: 0;
-        border-inline-start: 1px solid var(--line);
-        /* פינות מעוגלות בצד החיצוני, כמו המסגרת של הקובץ, כדי שהרקע במעבר עכבר לא יבלוט מעליה */
-        border-radius: 0;
-        border-start-end-radius: 9px;
-        border-end-end-radius: 9px;
+        border-top: 1px solid var(--line);
+        border-radius: 0 0 var(--radius) var(--radius);
         background: none;
-        padding: 0 10px;
+        padding: 10px 20px;
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 8px;
         color: var(--brand);
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 500;
+      }
+      .pin::after {
+        content: "נסח הסכם על בסיס החוזה";
+      }
+      .pin[aria-pressed="true"]::after {
+        content: "נבחר כחוזה בסיס ✓ (לחיצה מסירה)";
       }
       .icon {
         width: 16px;
@@ -1524,7 +1594,7 @@
         white-space: nowrap;
       }
       .sc-table tbody tr + tr {
-        border-top: 1px solid #edf1f5;
+        border-top: 1px solid #ebf1f8;
       }
       .sc-table .tone-bad {
         color: var(--err);
@@ -1623,7 +1693,7 @@
       dialog {
         border: 0;
         border-radius: var(--radius);
-        box-shadow: 0 20px 50px rgba(14, 47, 76, 0.3);
+        box-shadow: 0 20px 50px rgba(11, 42, 92, 0.3);
         padding: 22px;
         width: min(560px, calc(100vw - 32px));
         max-height: calc(100vh - 48px);
@@ -1636,7 +1706,7 @@
         overflow: hidden;
       }
       dialog::backdrop {
-        background: rgba(14, 47, 76, 0.45);
+        background: rgba(11, 42, 92, 0.45);
       }
       dialog h3 {
         margin: 0 0 6px;
@@ -1761,27 +1831,27 @@
         background:
           radial-gradient(
             1100px 520px at 100% -10%,
-            rgba(47, 143, 208, 0.035),
+            rgba(72, 166, 244, 0.035),
             transparent 65%
           ),
           radial-gradient(
             900px 480px at 0% 110%,
-            rgba(200, 150, 90, 0.045),
+            rgba(72, 166, 244, 0.04),
             transparent 65%
           ),
           var(--bg);
         background-attachment: fixed;
       }
       section {
-        border-color: rgba(14, 47, 76, 0.08);
+        border-color: rgba(11, 42, 92, 0.08);
       }
       textarea:not(:focus),
       input[type="text"]:not(:focus),
       #files-q:not(:focus) {
-        box-shadow: inset 0 1px 2px rgba(14, 47, 76, 0.035);
+        box-shadow: inset 0 1px 2px rgba(11, 42, 92, 0.035);
       }
       .row button {
-        box-shadow: 0 1px 2px rgba(14, 47, 76, 0.06);
+        box-shadow: 0 1px 2px rgba(11, 42, 92, 0.06);
         transition:
           background 0.15s,
           transform 0.15s,
@@ -1794,19 +1864,19 @@
       .row button.primary {
         box-shadow:
           inset 0 1px 0 rgba(255, 255, 255, 0.12),
-          0 1px 3px rgba(28, 93, 142, 0.22);
+          0 1px 3px rgba(26, 109, 200, 0.22);
       }
       .row button.primary:hover:not(:disabled) {
         background: var(--brand-dark);
         box-shadow:
           inset 0 1px 0 rgba(255, 255, 255, 0.12),
-          0 4px 10px -3px rgba(28, 93, 142, 0.3);
+          0 4px 10px -3px rgba(26, 109, 200, 0.3);
       }
       .user {
-        box-shadow: 0 2px 6px -2px rgba(28, 93, 142, 0.25);
+        box-shadow: 0 2px 6px -2px rgba(26, 109, 200, 0.25);
       }
       .file {
-        box-shadow: 0 1px 1px rgba(14, 47, 76, 0.03);
+        box-shadow: 0 1px 1px rgba(11, 42, 92, 0.03);
         transition:
           box-shadow 0.15s,
           border-color 0.15s;
@@ -1815,7 +1885,7 @@
         box-shadow: var(--lift);
       }
       #sources li {
-        box-shadow: 0 1px 2px rgba(14, 47, 76, 0.04);
+        box-shadow: 0 1px 2px rgba(11, 42, 92, 0.04);
       }
       dialog::backdrop {
         backdrop-filter: blur(2px);
@@ -1826,7 +1896,7 @@
     <div class="shell">
       <aside class="side">
         <a class="brand" href="#ask">
-          <img class="logo" src="/static/logo.png" alt="" width="54" height="54" />
+          <img class="logo" src="/static/logo.webp" alt="" width="54" height="44" />
           <span>
             <b>מנסח ההסכמים</b>
             <small>על בסיס מאגר ההסכמים של המשרד</small>
@@ -1834,11 +1904,11 @@
         </a>
         <nav class="nav" aria-label="ניווט ראשי">
           <a href="#ask"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>שאלו על המסמכים</a>
-          <a href="#draft"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>ניסוח הסכם<span class="nav-n" id="nav-focus" title="מסמכי בסיס שנבחרו" hidden></span></a>
+          <a href="#draft"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>הסכם חדש<span class="nav-n" id="nav-focus" title="מסמכי בסיס שנבחרו" hidden></span></a>
           <a href="#drafts"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>טיוטות</a>
-          <a href="#agreements"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>הסכמים</a>
+          <a href="#agreements"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>חוזים</a>
+          <a href="#status"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M8 16H3v5"/></svg>סנכרון</a>
           <a href="#costs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>עלויות</a>
-          <a href="#status"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M8 16H3v5"/></svg>סטטוס וסנכרון</a>
         </nav>
         <a class="side-sync" href="#status" id="side-sync" hidden>
           <span class="dot" aria-hidden="true"></span>
@@ -1864,7 +1934,7 @@
               </ul>
             </div>
             <div class="hero-art" aria-hidden="true">
-              <img src="/static/logo.png" alt="" width="260" height="260" />
+              <img src="/static/logo.webp" alt="" width="280" height="229" />
             </div>
           </div>
           <div class="thread" id="thread" aria-live="polite"></div>
@@ -1900,19 +1970,7 @@
                 <div class="two">
                   <label class="field">
                     <span class="lbl">סוג החוזה</span>
-                    <input id="b-type" list="b-types" required placeholder="למשל: הסכם שירותים" />
-                    <datalist id="b-types">
-                      <option value="הסכם שירותים"></option>
-                      <option value="הסכם ייעוץ"></option>
-                      <option value="כתב התחייבות"></option>
-                      <option value="הסכם סודיות"></option>
-                      <option value="הסכם שכירות"></option>
-                      <option value="הסכם הרשאה לשימוש במקרקעין"></option>
-                      <option value="הסכם קבלנות"></option>
-                      <option value="הסכם שיתוף פעולה"></option>
-                      <option value="הסכם מסגרת"></option>
-                      <option value="הסכם מכר"></option>
-                    </datalist>
+                    <input id="b-type" required placeholder="בחרו מהרשימה או הקלידו, למשל: הסכם שירותים" />
                   </label>
                   <label class="field">
                     <span class="lbl">כותרת <small>לא חובה</small></span>
@@ -1925,9 +1983,7 @@
                 </label>
                 <label class="field">
                   <span class="lbl">חוזה בסיס <small>לא חובה, אפשר כמה</small></span>
-                  <select id="b-base">
-                    <option value="">בחירה אוטומטית של הסעיפים המתאימים מכל המאגר</option>
-                  </select>
+                  <input id="b-base" placeholder="בחירה אוטומטית מכל המאגר, או חפשו חוזה" />
                 </label>
                 <div class="focus" id="focus-bar" hidden>
                   <span>מבוסס על:</span>
@@ -2156,10 +2212,10 @@
 
         <div class="page" id="page-agreements" hidden>
           <header class="page-h">
-            <h1 tabindex="-1">הסכמים</h1>
+            <h1 tabindex="-1">חוזים</h1>
             <p>
-              כל המסמכים שהמערכת מכירה. לחיצה על מסמך מציגה את פרטיו; הסיכה
-              מוסיפה אותו כמסמך בסיס לניסוח.
+              כל החוזים שהמערכת מכירה. לחיצה על חוזה מציגה את כל פרטיו; הכפתור
+              בתחתית הכרטיס מוסיף אותו כחוזה בסיס להסכם חדש.
               <span class="count" id="files-count"></span>
             </p>
           </header>
@@ -2193,7 +2249,7 @@
 
         <div class="page" id="page-status" hidden>
           <header class="page-h">
-            <h1 tabindex="-1">סטטוס וסנכרון</h1>
+            <h1 tabindex="-1">סנכרון</h1>
             <p>
               מצב המאגר, ישירות ממסד הנתונים. הסנכרון מושך מסמכים חדשים מ-Drive
               ומעבד אותם; הוא רץ גם אוטומטית בכל לילה.
@@ -2235,6 +2291,9 @@
     </div>
 
     <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
+    <template id="icon-chevron">
+      <svg class="icon combo-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </template>
     <template id="icon-trash">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     </template>
@@ -2636,6 +2695,13 @@
         $("icon-draft").content.firstElementChild.cloneNode(true);
       $("fd-pin").prepend(draftIcon());
       $("focus-bar").prepend(draftIcon());
+      // סוג המסמך והצדדים, לשורה העליונה בכרטיס
+      const fileKind = (m) =>
+        m
+          ? [m.doc_type, m.parties?.slice(0, 3).join(" · ")]
+              .filter(Boolean)
+              .join(" · ")
+          : "";
       const fileMeta = (f) =>
         [
           newIds.has(f.file_id) &&
@@ -2643,6 +2709,8 @@
           tag(f.status),
           el("span", { textContent: fmtSize(f.size_bytes) }),
           el("span", { textContent: fmtDate(f.modified_time) }),
+          f.metadata?.end_date &&
+            el("span", { textContent: "בתוקף עד " + fmtDate(f.metadata.end_date) }),
         ].filter(Boolean); // בלי זה, קובץ שאינו חדש הציג "false" בחלון הפרטים
 
       // פאנל הקבצים. החיפוש מסנן בצד הלקוח, בלי קריאה לשרת
@@ -2676,7 +2744,11 @@
                   title: f.name,
                   onclick: () => openFile(f.file_id),
                 },
+                fileKind(f.metadata) &&
+                  el("span", { className: "file-kind", textContent: fileKind(f.metadata) }),
                 el("span", { className: "file-name", textContent: f.name }),
+                f.summary &&
+                  el("span", { className: "file-summary", textContent: f.summary }),
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
               f.status === "indexed" && pinButton(f),
@@ -3548,24 +3620,125 @@
           deep_review: $("b-review").checked,
         });
       });
-      // חוזה בסיס: כל בחירה מוסיפה מסמך לרשימת "מבוסס על", והבחירה חוזרת להתחלה
-      function fillBase() {
-        $("b-base").replaceChildren(
-          el("option", {
-            value: "",
-            textContent: focus.length
-              ? "הוספת חוזה בסיס נוסף…"
-              : "בחירה אוטומטית של הסעיפים המתאימים מכל המאגר",
-          }),
-          ...files
-            .filter((f) => f.status === "indexed" && !isFocus(f))
-            .map((f) => el("option", { value: f.file_id, textContent: f.name })),
-        );
+      // תיבת בחירה עם חיפוש, במקום datalist ו-select של הדפדפן: אותו עיצוב בכל דפדפן, וחיפוש בתוך הרשימה.
+      // options() נקרא בכל פתיחה, כך שהרשימה תמיד עדכנית. מקלדת: חצים, Enter ו-Esc
+      function combo(input, options, onPick) {
+        const list = el("ul", { className: "combo-list", id: input.id + "-list", hidden: true });
+        list.setAttribute("role", "listbox");
+        const wrap = el("div", { className: "combo" });
+        input.replaceWith(wrap);
+        wrap.append(input, $("icon-chevron").content.firstElementChild.cloneNode(true), list);
+        input.autocomplete = "off";
+        for (const [k, v] of Object.entries({
+          role: "combobox",
+          "aria-controls": list.id,
+          "aria-expanded": "false",
+          "aria-autocomplete": "list",
+        }))
+          input.setAttribute(k, v);
+        let items = [],
+          active = -1;
+        const setActive = (i) => {
+          active = i;
+          [...list.children].forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
+          if (i >= 0) {
+            input.setAttribute("aria-activedescendant", list.children[i].id);
+            list.children[i].scrollIntoView({ block: "nearest" });
+          } else input.removeAttribute("aria-activedescendant");
+        };
+        // filter: רק כשמקלידים. בפתיחה בלחיצה מוצגת הרשימה המלאה, גם כשכבר נבחר ערך
+        const open = (filter) => {
+          const q = filter ? input.value.trim().toLowerCase() : "";
+          items = options().filter(
+            (o) => !q || (o.label + " " + (o.hint || "")).toLowerCase().includes(q),
+          );
+          list.replaceChildren(
+            ...(items.length
+              ? items.map((o, i) => {
+                  const li = el(
+                    "li",
+                    {
+                      id: `${list.id}-${i}`,
+                      onmousedown: (e) => {
+                        e.preventDefault(); // הפוקוס נשאר בשדה
+                        pick(i);
+                      },
+                      onmousemove: () => active !== i && setActive(i),
+                    },
+                    el("span", { textContent: o.label }),
+                    o.hint && el("small", { textContent: o.hint }),
+                  );
+                  li.setAttribute("role", "option");
+                  return li;
+                })
+              : [el("li", { className: "combo-empty", textContent: "לא נמצאו תוצאות" })]),
+          );
+          list.hidden = false;
+          input.setAttribute("aria-expanded", "true");
+          setActive(-1);
+        };
+        const close = () => {
+          list.hidden = true;
+          input.setAttribute("aria-expanded", "false");
+          input.removeAttribute("aria-activedescendant");
+        };
+        const pick = (i) => {
+          close();
+          onPick(items[i]);
+        };
+        input.addEventListener("click", () => list.hidden && open(false));
+        input.addEventListener("focus", () => open(false));
+        input.addEventListener("input", () => open(true));
+        input.addEventListener("blur", close);
+        input.addEventListener("keydown", (e) => {
+          const n = items.length;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (list.hidden) return open(false);
+            if (n) setActive(e.key === "ArrowDown" ? (active + 1) % n : (active - 1 + n) % n);
+          } else if (e.key === "Enter" && !list.hidden && active >= 0) {
+            e.preventDefault();
+            pick(active);
+          } else if (e.key === "Escape" && !list.hidden) {
+            e.preventDefault();
+            close();
+          }
+        });
       }
-      $("b-base").addEventListener("change", (e) => {
-        const f = files.find((x) => x.file_id === e.target.value);
-        if (f) toggleFocus(f);
-      });
+      const TYPES = [
+        "הסכם שירותים",
+        "הסכם ייעוץ",
+        "כתב התחייבות",
+        "הסכם סודיות",
+        "הסכם שכירות",
+        "הסכם הרשאה לשימוש במקרקעין",
+        "הסכם קבלנות",
+        "הסכם שיתוף פעולה",
+        "הסכם מסגרת",
+        "הסכם מכר",
+      ];
+      combo(
+        $("b-type"),
+        () => TYPES.map((t) => ({ label: t })),
+        (o) => ($("b-type").value = o.label),
+      );
+      // חוזה בסיס: כל בחירה מוסיפה חוזה לרשימת "מבוסס על", והשדה מתרוקן לבחירה הבאה
+      combo(
+        $("b-base"),
+        () =>
+          files
+            .filter((f) => f.status === "indexed" && !isFocus(f))
+            .map((f) => ({ label: f.name, hint: fileKind(f.metadata), file: f })),
+        (o) => {
+          $("b-base").value = "";
+          toggleFocus(o.file);
+        },
+      );
+      function fillBase() {
+        $("b-base").placeholder = focus.length
+          ? "הוספת חוזה בסיס נוסף…"
+          : "בחירה אוטומטית מכל המאגר, או חפשו חוזה";
+      }
 
       // ---- שאלו על המסמכים ----
       // השיחה נשלחת כולה בכל שאלה, כדי ששאלת המשך ("ומה לגבי השני?") תובן
