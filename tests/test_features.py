@@ -62,7 +62,8 @@ def _sync_fakes(conn, listing, downloads):
 
     env = {k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"} | {"DRIVE_FOLDER_ID": "folder"}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(conn),
-                             analyze=lambda name, text: ("תקציר", dict(META)), embed=lambda text: VEC), \
+                             analyze=lambda name, text, usage=None: ("תקציר", dict(META)),
+                             embed=lambda text, usage=None: VEC), \
             mock.patch.multiple(sync.drive, service=lambda: None, list_files=lambda svc, folder: listing,
                                 download=lambda svc, f: downloads.append(f["id"]) or b"data"), \
             mock.patch.multiple(sync.extract, extract=fake_extract, page_count=lambda f, data: 3), \
@@ -121,7 +122,7 @@ def test_backfill_selects_only_missing_or_stale():
         _agreement(conn, "fail", "ייכשל.pdf")
         assert {d["file_id"] for d in store.pending_metadata(conn)} == {"none", "stale", "fail"}
 
-        def fake_analyze(name, text):
+        def fake_analyze(name, text, usage=None):
             assert text == f"טקסט של {name}"  # מהמסד, בלי Drive ובלי OCR
             if name == "ייכשל.pdf":
                 raise RuntimeError("timeout")
@@ -159,6 +160,80 @@ def test_files_panel_queries():
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
             files = TestClient(main.app).get("/api/files").json()
         assert [f["name"] for f in files] == ["broken.pdf", "doc.pdf", "הועלה.pdf"]
+
+
+def test_history_save_list_open_delete_and_week_retention():
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        msgs = [{"role": "user", "content": "הסכם שכירות"}, {"role": "assistant", "content": "ט\n\nגוף", "isDoc": True}]
+        body = {"title": "הסכם שכירות", "html": "<p><b>גוף</b></p>", "text": "גוף", "messages": msgs,
+                "sources": [{"name": "א.pdf", "base": True}]}
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+            c = TestClient(main.app)
+            first = c.post("/api/history", json=body).json()["id"]
+            assert c.post("/api/history", json=body | {"id": first, "text": "גוף ערוך"}).json()["id"] == first
+            second = c.post("/api/history", json=body | {"title": "שני"}).json()["id"]
+            listed = c.get("/api/history").json()
+            assert [h["id"] for h in listed] == [second, first]  # האחרון שעודכן ראשון
+            assert listed[1]["preview"] == "גוף ערוך" and "html" not in listed[1]
+
+            got = c.get(f"/api/history/{first}").json()
+            assert got["html"] == "<p><b>גוף</b></p>" and got["messages"] == msgs and got["sources"][0]["base"]
+
+            # שבוע בלי עדכון: לא מופיע, ונמחק בשמירה הבאה. שמירה עם המזהה שלו יוצרת אותו מחדש
+            conn.execute("update drafts set updated_at = now() - interval '8 days' where id = %s", (first,))
+            assert [h["id"] for h in c.get("/api/history").json()] == [second]
+            again = c.post("/api/history", json=body | {"id": first}).json()["id"]
+            assert again not in (first, second)
+            assert conn.execute("select count(*) from drafts where id = %s", (first,)).fetchone()[0] == 0
+
+            assert c.delete(f"/api/history/{second}").json() == {"ok": True}
+            assert c.delete(f"/api/history/{second}").status_code == 404
+            assert c.get(f"/api/history/{second}").status_code == 404
+            assert c.post("/api/history", json=body | {"html": "x" * 1_000_001}).status_code == 422
+
+
+def test_costs_per_draft_and_week_total():
+    assert store.cost("gpt-4o", 1_000_000, 400_000, 100_000) == 0.6 * 2.5 + 0.4 * 1.25 + 0.1 * 10
+    run = SimpleNamespace(metrics=SimpleNamespace(input_tokens=10_000, cache_read_tokens=0, output_tokens=2_000))
+    assert store.agent_usage(run, "gpt-4o") == ("gpt-4o", 10_000, 0, 2_000)
+    assert store.agent_usage(SimpleNamespace(), "gpt-4o") is None  # ריצה בלי metrics לא נרשמת
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        draft_run = store.agent_usage(run, "gpt-4o")  # 0.025 + 0.02 = $0.045
+        store.log_usage(conn, "draft", [("text-embedding-3-small", 50, 0, 0), draft_run, None], "conv-a")
+        store.log_usage(conn, "draft", [draft_run], "conv-a")  # תיקון באותה שיחה
+        store.log_usage(conn, "draft", [draft_run], "conv-questions-only")
+        store.log_usage(conn, "sync", [("gpt-4o", 100_000, 0, 1_000)])
+        store.log_usage(conn, "sync", [("gpt-4o", 1_000_000, 0, 0)])
+        conn.execute("update api_usage set at = now() - interval '8 days' where input_tokens = 1000000")  # מחוץ לשבוע
+        store.save_draft(conn, None, "טיוטה א", "<p>x</p>", "x", [], [], "conv-a")
+        store.save_draft(conn, None, "טיוטה ישנה", "<p>y</p>", "y", [], [])  # מלפני מדידת העלויות
+
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+            c = TestClient(main.app).get("/api/costs").json()
+        rows = {d["title"]: d for d in c["drafts"]}
+        assert round(rows["טיוטה א"]["cost"], 6) == round(2 * 0.045 + 50 * 0.02 / 1e6, 6)
+        assert rows["טיוטה א"]["runs"] == 2  # שני ניסוחים; ה-embedding של החיפוש לא נספר כבקשה
+        assert rows["טיוטה ישנה"]["cost"] is None
+        assert round(c["unsaved"], 6) == 0.045
+        assert round(c["draft"]["cost"], 6) == round(3 * 0.045 + 50 * 0.02 / 1e6, 6) and c["draft"]["calls"] == 4
+        assert round(c["sync"]["cost"], 6) == 0.26 and c["sync"]["calls"] == 1
+        assert round(c["total"], 6) == round(c["draft"]["cost"] + c["sync"]["cost"], 6)
+
+        # ניסוח באתר רושם את העלות עם מזהה השיחה, גם בלי מסמכי בסיס
+        def fake_run(self, messages):
+            return SimpleNamespace(status=RunStatus.completed, metrics=run.metrics,
+                                   content=draft.Draft(status="questions", questions=["מי הצדדים?"], title="", body=""))
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), \
+                mock.patch.object(Agent, "run", fake_run):
+            assert TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
+                                                                  "conversation": "conv-b"}).status_code == 200
+        assert conn.execute("select count(*) from api_usage where conversation = 'conv-b'").fetchone()[0] == 1
 
 
 def test_server_start_creates_tables_before_first_sync():
@@ -322,7 +397,7 @@ def test_draft_limits_and_errors():
     body = {"messages": [{"role": "user", "content": "נסח"}]}
     with mock.patch.multiple(main, PASSWORD="", TOKEN="t", DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
                              _drafts=main.defaultdict(main.deque)), \
-            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda m, f: ok):
+            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda m, f, c=None: ok):
         a, b = TestClient(main.app, cookies={"sid": "a"}), TestClient(main.app, cookies={"sid": "b"})
         assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
         r = a.post("/api/draft", json=body)
@@ -380,7 +455,7 @@ def test_focus_file_in_agent_context():
     assert "טקסט הבסיס" in agent.additional_context and "הדוגמאות העיקריות" in agent.additional_context
     assert sources == [{"name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "base": True}]
     found = [base, {"name": "אחר.pdf", "url": "u", "summary": "s", "text": "t"}]
-    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q: found):
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q, usage=None: found):
         agent.tools[0]("שאילתה")
     assert [s["name"] for s in sources] == ["בסיס.pdf", "אחר.pdf"]  # הבסיס לא נכפל, ונשאר ראשון
 

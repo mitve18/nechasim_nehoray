@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@700&family=Heebo:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -50,84 +50,206 @@
         color: var(--text);
         line-height: 1.55;
       }
-      header {
-        background: linear-gradient(135deg, var(--brand-deep), var(--brand));
-        border-bottom: 3px solid var(--accent);
-        color: #fff;
+      /* מעטפת: תפריט צד קבוע + אזור תוכן. כל חלק באתר הוא עמוד נפרד (#draft, #files, #status) */
+      .shell {
+        min-height: 100dvh;
+        display: grid;
+        grid-template-columns: 250px minmax(0, 1fr);
       }
-      .top {
-        max-width: 1560px;
-        margin: 0 auto;
-        padding: 18px 20px;
+      .side {
+        position: sticky;
+        top: 0;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        padding: 22px 12px;
+        background: linear-gradient(170deg, var(--brand-deep), #123e63 70%, var(--brand-dark));
+        color: #fff;
+        box-shadow: 4px 0 18px -10px rgba(14, 47, 76, 0.4);
+        z-index: 3;
+      }
+      .brand {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
+        padding: 0 8px;
+        color: inherit;
+        text-decoration: none;
+      }
+      .brand b {
+        display: block;
+        font-family: "Frank Ruhl Libre", serif;
+        font-size: 21px;
+        line-height: 1.15;
+      }
+      .brand small {
+        display: block;
+        margin-top: 4px;
+        font-size: 12.5px;
+        color: #cfe0ee;
       }
       /* הלוגו שקוף ורחב: אריח לבן עם פינות מעוגלות מתאים לצורה שלו יותר מעיגול */
       .logo {
-        width: 70px;
-        height: 70px;
-        padding: 7px;
+        width: 54px;
+        height: 54px;
+        padding: 5px;
         object-fit: contain;
         background: #fff;
-        border-radius: 18px;
+        border-radius: 14px;
         flex: none;
         box-shadow:
-          0 0 0 3px rgba(255, 255, 255, 0.18),
+          0 0 0 3px rgba(255, 255, 255, 0.16),
           0 4px 12px rgba(0, 0, 0, 0.25);
       }
-      .top h1 {
-        margin: 0;
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -0.2px;
+      .nav {
+        display: grid;
+        gap: 2px;
       }
-      .top p {
-        margin: 0;
-        font-size: 14px;
-        color: #cfe0ee;
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 10px;
+        color: rgba(255, 255, 255, 0.82);
+        text-decoration: none;
+        font-size: 15px;
+        transition:
+          background 0.15s,
+          color 0.15s;
       }
-      .banner {
-        background: var(--warn-bg);
-        color: var(--warn);
-        padding: 9px 16px;
-        text-align: center;
-        font-size: 14px;
+      .nav a:hover {
+        background: rgba(255, 255, 255, 0.09);
+        color: #fff;
+      }
+      .nav a[aria-current="page"] {
+        background: #fff;
+        color: var(--brand-deep);
         font-weight: 500;
-        border-bottom: 1px solid #f0d9a8;
+        box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
+      }
+      .nav .icon {
+        width: 18px;
+        height: 18px;
+      }
+      /* מספר מסמכי הבסיס שנבחרו, ליד "ניסוח הסכם" */
+      .nav-n {
+        margin-inline-start: auto;
+        min-width: 22px;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12px;
+        text-align: center;
+      }
+      /* כרטיס הסנכרון בתחתית התפריט: מוביל לעמוד הסטטוס */
+      .side-sync {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .side-sync:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #8fd1ad;
+        flex: none;
       }
       main {
-        max-width: 1560px;
+        min-width: 0;
+        padding: 30px clamp(16px, 3vw, 40px) 40px;
+      }
+      .page {
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 20px;
+      }
+      .page-h {
+        margin-bottom: 22px;
+      }
+      .page-h h1 {
+        margin: 0;
+        font-family: "Frank Ruhl Libre", serif;
+        font-size: clamp(30px, 3.4vw, 40px);
+        line-height: 1.15;
+        color: var(--brand-deep);
+      }
+      .page-h h1:focus {
+        outline: none;
+      }
+      .page-h p {
+        margin: 8px 0 0;
+        max-width: 640px;
+        color: var(--muted);
+      }
+      .chip {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 3px 12px;
+        border-radius: 999px;
+        background: var(--warn-bg);
+        color: var(--warn);
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .draft-grid {
         display: grid;
         gap: 20px;
-        grid-template-columns: 300px minmax(0, 2fr) minmax(0, 3fr);
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
         align-items: start;
       }
-      @media (max-width: 1200px) {
-        /* פאנל הקבצים עובר לשורה משלו מעל הצ'אט, ומתקפל */
-        main {
-          grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-        }
-        #files-panel {
-          grid-column: 1 / -1;
+      @media (max-width: 1150px) {
+        .draft-grid {
+          grid-template-columns: 1fr;
         }
       }
+      /* מסך צר: התפריט הופך לפס עליון, והקישורים בשורה אחת נגללת */
       @media (max-width: 900px) {
-        main {
-          grid-template-columns: 1fr;
-          padding: 12px;
-          gap: 12px;
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+          align-content: start;
         }
-        .top {
-          padding: 14px 16px;
+        .side {
+          height: auto;
+          padding: 10px 12px;
+          gap: 10px;
         }
         .logo {
-          width: 56px;
-          height: 56px;
-          padding: 5px;
-          border-radius: 15px;
+          width: 40px;
+          height: 40px;
+          padding: 4px;
+          border-radius: 11px;
+        }
+        .brand b {
+          font-size: 18px;
+        }
+        .brand small,
+        .side-sync {
+          display: none;
+        }
+        .nav {
+          display: flex;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .nav a {
+          white-space: nowrap;
+          padding: 7px 12px;
+        }
+        main {
+          padding: 18px 12px 28px;
         }
       }
       section {
@@ -156,6 +278,45 @@
         display: block;
         margin: 0 0 6px;
         font-weight: 500;
+      }
+      #chat:empty {
+        display: none;
+      }
+      #chat:not(:empty) ~ .examples {
+        display: none;
+      }
+      /* דוגמאות לפתיחת שיחה: מוצגות רק כשהשיחה ריקה */
+      .examples {
+        list-style: none;
+        margin: 0 0 16px;
+        padding: 0;
+        border-top: 1px solid var(--line);
+      }
+      .examples button {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 11px 4px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        background: none;
+        text-align: start;
+        font-weight: 400;
+      }
+      .examples button::after {
+        content: "←";
+        color: var(--brand);
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .examples button:hover:not(:disabled) {
+        background: none;
+        color: var(--brand-dark);
+      }
+      .examples button:hover::after {
+        opacity: 1;
       }
       #chat {
         overflow-y: auto;
@@ -258,10 +419,234 @@
         font-weight: 700;
         margin-bottom: 12px;
       }
-      #body {
+      /* עורך ההסכם: contenteditable עם סרגל עיצוב. ההדגשות, הגודל, היישור והכיוון עוברים גם ל-Word */
+      .toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        border-radius: 10px 10px 0 0;
+        background: #f7f9fb;
+      }
+      .toolbar button {
+        min-width: 34px;
+        height: 32px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 7px;
+        background: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 14px;
+      }
+      .toolbar button:hover:not(:disabled) {
+        background: #e8eef4;
+      }
+      .toolbar button[aria-pressed="true"] {
+        background: var(--brand-soft);
+        color: var(--brand-dark);
+        box-shadow: inset 0 0 0 1px var(--brand-line);
+      }
+      .toolbar select {
+        height: 32px;
+        font: inherit;
+        font-size: 14px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        padding: 0 6px;
+      }
+      .toolbar .sep {
+        width: 1px;
+        height: 20px;
+        margin: 0 4px;
+        background: var(--line);
+      }
+      .editor {
         min-height: 60vh;
+        padding: 14px 18px;
+        border: 1px solid var(--line);
+        border-radius: 0 0 10px 10px;
+        background: #fff;
         line-height: 1.8;
         font-size: 15px;
+        overflow-wrap: anywhere;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+      .editor:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      .editor p,
+      .editor div {
+        margin: 0 0 0.6em;
+      }
+      .editor ol,
+      .editor ul {
+        margin: 0 0 0.6em;
+        padding-inline-start: 1.6em;
+      }
+      .editor[contenteditable="false"] {
+        opacity: 0.6;
+      }
+      .saved {
+        color: var(--muted);
+        font-size: 13px;
+        margin-inline-start: auto;
+      }
+
+      /* עמוד העלויות */
+      .tiles {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        margin-bottom: 20px;
+      }
+      .tile {
+        display: grid;
+        gap: 2px;
+        padding: 16px 18px;
+        background: var(--card);
+        border: 1px solid rgba(14, 47, 76, 0.08);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+      .tile span,
+      .tile small {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .tile small {
+        font-size: 13px;
+      }
+      .tile b {
+        font-size: 30px;
+        line-height: 1.3;
+        color: var(--brand-deep);
+        font-variant-numeric: tabular-nums;
+      }
+      .c-wrap {
+        overflow-x: auto;
+      }
+      .c-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      .c-table th,
+      .c-table td {
+        padding: 9px 8px;
+        text-align: start;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .c-table thead th {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .c-table tbody th {
+        white-space: normal;
+        min-width: 180px;
+      }
+      .c-table td:last-child,
+      .c-table th:last-child {
+        text-align: end;
+      }
+      .c-table tbody td:last-child {
+        font-weight: 700;
+        color: var(--brand-deep);
+      }
+      .c-table tfoot th,
+      .c-table tfoot td {
+        color: var(--muted);
+        font-weight: 400;
+        white-space: normal;
+        border-bottom: 0;
+      }
+      .c-table .c-empty {
+        color: var(--muted);
+        text-align: center;
+      }
+      .linkish {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--brand-dark);
+        font-weight: 500;
+        text-align: start;
+      }
+      .linkish:hover:not(:disabled) {
+        background: none;
+        text-decoration: underline;
+      }
+
+      /* עמוד הטיוטות */
+      #history {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+      .h-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 16px;
+        align-items: center;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 1px 1px rgba(14, 47, 76, 0.03);
+      }
+      .h-item.current {
+        border-color: var(--brand-line);
+        background: #fafcfe;
+      }
+      .h-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--brand-deep);
+        overflow-wrap: anywhere;
+      }
+      .h-preview {
+        grid-column: 1;
+        margin: 0;
+        color: var(--muted);
+        font-size: 13.5px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .h-actions {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+        display: flex;
+        gap: 8px;
+      }
+      @media (max-width: 600px) {
+        .h-item {
+          grid-template-columns: 1fr;
+        }
+        .h-actions {
+          grid-column: 1;
+          grid-row: auto;
+        }
       }
       .row {
         display: flex;
@@ -467,56 +852,25 @@
         }
       }
 
-      /* כפתורים בכותרת העליונה */
-      .actions {
-        margin-inline-start: auto;
-        display: flex;
-        gap: 8px;
-      }
-      .actions button {
-        background: rgba(255, 255, 255, 0.12);
-        border-color: rgba(255, 255, 255, 0.35);
-        color: #fff;
-        white-space: nowrap;
-      }
-      .actions button:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.22);
-      }
-
       /* פאנל הקבצים */
       #files-panel {
         padding: 16px;
       }
-      /* חלק מתקפל עם חץ: "סטטוס מאגר ההסכמים" ו"קבצים במאגר" */
-      .fold > summary {
-        list-style: none;
-        cursor: pointer;
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .fold > summary::-webkit-details-marker {
-        display: none;
-      }
-      .fold > summary::before {
-        content: "▾";
-        color: var(--muted);
-        transition: transform 0.15s;
-      }
-      .fold:not([open]) > summary::before {
-        transform: rotate(90deg);
-      }
-      .fold > summary h2,
-      .fold > summary h3 {
-        margin: 0;
-      }
-      #status-box[open] > summary {
-        margin-bottom: 10px;
-      }
       .count {
         color: var(--muted);
         font-size: 13px;
+      }
+      .files-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+      @media (max-width: 600px) {
+        .files-tools {
+          grid-template-columns: 1fr;
+        }
       }
       #files-q {
         width: 100%;
@@ -525,7 +879,6 @@
         border: 1px solid var(--line);
         border-radius: 10px;
         padding: 8px 12px;
-        margin: 12px 0 10px;
       }
       #files-q:focus {
         outline: none;
@@ -538,12 +891,11 @@
         background: var(--brand-soft);
         color: var(--brand-dark);
         border-radius: 12px;
-        padding: 8px 10px;
+        padding: 8px 18px;
         text-align: center;
         font-size: 13px;
         line-height: 1.4;
         cursor: pointer;
-        margin-bottom: 10px;
         transition:
           background 0.15s,
           border-color 0.15s;
@@ -573,19 +925,14 @@
         width: 100%;
         margin-bottom: 4px;
       }
-      /* הרשימה נגללת בתוך עצמה, כך שהדף לא מתארך כשיש הרבה קבצים */
+      /* לרשימה יש עמוד שלם: רשת כרטיסים, בלי גלילה פנימית */
       #files {
         list-style: none;
         margin: 0;
-        padding: 0 0 0 4px;
-        max-height: min(340px, 45vh);
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: thin;
-        scrollbar-color: var(--brand-line) transparent;
+        padding: 0;
         display: grid;
-        gap: 6px;
-        align-content: start;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       }
       .file {
         display: flex;
@@ -698,19 +1045,10 @@
         margin: 8px 0 0;
       }
 
-      /* "סטטוס מאגר ההסכמים": טבלה קבועה בראש הפאנל הצדדי */
+      /* עמוד הסטטוס */
       .status-card {
-        background: var(--card);
-        border: 1px solid var(--line);
+        max-width: 620px;
         border-inline-start: 4px solid var(--brand);
-        border-radius: 12px;
-        padding: 12px 14px 10px;
-        margin-bottom: 16px;
-      }
-      .sc-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--brand-deep);
       }
       .sc-table {
         width: 100%;
@@ -990,11 +1328,6 @@
           var(--bg);
         background-attachment: fixed;
       }
-      header {
-        position: relative;
-        z-index: 1;
-        box-shadow: 0 4px 14px -6px rgba(14, 47, 76, 0.25);
-      }
       section {
         border-color: rgba(14, 47, 76, 0.08);
       }
@@ -1037,11 +1370,6 @@
       .file:hover {
         box-shadow: var(--lift);
       }
-      /* מקום לצל ולהרמה בתוך הרשימה הנגללת, בלי להזיז את היישור שלה */
-      #files {
-        padding: 3px 4px 10px 8px;
-        margin: -3px -4px -10px;
-      }
       #sources li {
         box-shadow: 0 1px 2px rgba(14, 47, 76, 0.04);
       }
@@ -1051,128 +1379,263 @@
     </style>
   </head>
   <body>
-    <header>
-      <div class="top">
-        <img
-          class="logo"
-          src="/static/logo.png"
-          alt=""
-          width="70"
-          height="70"
-        />
-        <div>
-          <h1>מנסח ההסכמים</h1>
-          <p>ניסוח טיוטות הסכמים על בסיס מאגר ההסכמים של המשרד</p>
-        </div>
-        <div class="actions">
-          <button type="button" id="sync-btn" hidden>⟳ סנכרון</button>
-        </div>
-      </div>
-    </header>
-    <div class="banner" role="note">
-      ⚠️ ההסכמים נוצרים על ידי בינה מלאכותית ומהווים טיוטה בלבד. יש לבדוק כל
-      הסכם לפני שימוש.
-    </div>
-    <main>
-      <section id="files-panel" aria-labelledby="files-h">
-        <details class="status-card fold" id="status-box" hidden>
-          <summary>
-            <h3 class="sc-title" id="sc-title">סטטוס מאגר ההסכמים</h3>
-          </summary>
-          <div id="status-body"></div>
-        </details>
-        <details class="fold" id="files-box" open>
-          <summary>
-            <h2 id="files-h">קבצים במאגר</h2>
-            <span class="count" id="files-count"></span>
-          </summary>
-          <input
-            type="search"
-            id="files-q"
-            placeholder="חיפוש לפי שם…"
-            aria-label="חיפוש קבצים לפי שם"
-          />
-          <label class="dropzone" id="dropzone" hidden>
-            <input
-              type="file"
-              id="file-input"
-              class="visually-hidden"
-              multiple
-              accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.heic,.heif,.docx,.doc"
-            />
-            ⬆ גרור קבצים או לחץ להעלאה
-          </label>
-          <div id="upload-progress" hidden role="status">
-            <div class="bar" aria-hidden="true"><i id="upload-bar"></i></div>
-            <span id="upload-text"></span>
-          </div>
-          <ul id="files"></ul>
-          <p class="files-note" id="files-note" hidden></p>
-        </details>
-      </section>
+    <div class="shell">
+      <aside class="side">
+        <a class="brand" href="#draft">
+          <img class="logo" src="/static/logo.png" alt="" width="54" height="54" />
+          <span>
+            <b>מנסח ההסכמים</b>
+            <small>על בסיס מאגר ההסכמים של המשרד</small>
+          </span>
+        </a>
+        <nav class="nav" aria-label="ניווט ראשי">
+          <a href="#draft"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>ניסוח הסכם<span class="nav-n" id="nav-focus" title="מסמכי בסיס שנבחרו" hidden></span></a>
+          <a href="#drafts"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>טיוטות</a>
+          <a href="#agreements"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>הסכמים</a>
+          <a href="#costs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>עלויות</a>
+          <a href="#status"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M8 16H3v5"/></svg>סטטוס וסנכרון</a>
+        </nav>
+        <a class="side-sync" href="#status" id="side-sync" hidden>
+          <span class="dot" aria-hidden="true"></span>
+          <span id="side-sync-text"></span>
+        </a>
+      </aside>
 
-      <section id="chat-panel" aria-labelledby="chat-h">
-        <h2 id="chat-h">שיחה</h2>
-        <p class="hint">
-          תאר את ההסכם שאתה צריך: סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם
-          יחסרו פרטים מהותיים, המערכת תשאל.
-        </p>
-        <div id="chat" aria-live="polite"></div>
-        <form id="form">
-          <div class="focus" id="focus-bar" hidden>
-            <span>מבוסס על:</span>
-            <ul id="focus-list"></ul>
-          </div>
-          <label for="input" class="hint">ההודעה שלך</label>
-          <textarea
-            id="input"
-            rows="4"
-            required
-            placeholder="לדוגמה: כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים…"
-          ></textarea>
-          <div class="row">
-            <button class="primary" id="send">שליחה</button>
-            <button type="button" id="reset">שיחה חדשה</button>
-            <span class="kbd">Ctrl+Enter לשליחה</span>
-          </div>
-        </form>
-      </section>
-
-      <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
-        <h2 id="doc-h" style="margin-bottom: 14px">ההסכם</h2>
-        <div id="doc" hidden>
-          <div class="sources" aria-labelledby="sources-h">
-            <p class="sources-h" id="sources-h">
-              📚 מקורות מהמאגר <span class="badge" id="sources-n">0</span>
+      <main>
+        <div class="page" id="page-draft">
+          <header class="page-h">
+            <h1 tabindex="-1">ניסוח הסכם</h1>
+            <p>
+              תאר את ההסכם שאתה צריך, והמערכת תנסח טיוטה על בסיס ההסכמים הדומים
+              במאגר.
             </p>
-            <ul id="sources"></ul>
-          </div>
-          <label for="title" class="hint">כותרת</label>
-          <input type="text" id="title" />
-          <label for="body" class="hint">נוסח (ניתן לערוך)</label>
-          <textarea id="body"></textarea>
-          <div class="row">
-            <button type="button" class="primary" id="download">
-              ⬇ הורדה כ-Word
-            </button>
-            <button type="button" id="copy">העתקה</button>
+            <span class="chip" role="note">
+              ⚠️ טיוטה שנוצרה בבינה מלאכותית. יש לבדוק כל הסכם לפני שימוש.
+            </span>
+          </header>
+          <div class="draft-grid">
+            <section id="chat-panel" aria-labelledby="chat-h">
+              <h2 id="chat-h">שיחה</h2>
+              <p class="hint">
+                ציין את סוג ההסכם, הצדדים, התחום, סכומים ומועדים. אם יחסרו פרטים
+                מהותיים, המערכת תשאל.
+              </p>
+              <div id="chat" aria-live="polite"></div>
+              <ul class="examples" id="examples" aria-label="דוגמאות">
+                <li><button type="button">כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים</button></li>
+                <li><button type="button">הסכם שירותי ייעוץ תכנוני עם אבני דרך ותנאי תשלום לפי שלבים</button></li>
+                <li><button type="button">הסכם הרשאה לשימוש זמני במקרקעין לתקופה של שנתיים</button></li>
+              </ul>
+              <form id="form">
+                <div class="focus" id="focus-bar" hidden>
+                  <span>מבוסס על:</span>
+                  <ul id="focus-list"></ul>
+                </div>
+                <label for="input" class="hint">ההודעה שלך</label>
+                <textarea
+                  id="input"
+                  rows="4"
+                  required
+                  placeholder="לדוגמה: כתב התחייבות של קבלן כלפי משרד הביטחון לביצוע קידוחים בשטח צבאי, לתקופה של 3 חודשים…"
+                ></textarea>
+                <div class="row">
+                  <button class="primary" id="send">שליחה</button>
+                  <button type="button" id="reset">שיחה חדשה</button>
+                  <span class="kbd">Ctrl+Enter לשליחה</span>
+                </div>
+              </form>
+            </section>
+
+            <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
+              <h2 id="doc-h" style="margin-bottom: 14px">ההסכם</h2>
+              <div id="doc" hidden>
+                <div class="sources" aria-labelledby="sources-h">
+                  <p class="sources-h" id="sources-h">
+                    📚 מקורות מהמאגר <span class="badge" id="sources-n">0</span>
+                  </p>
+                  <ul id="sources"></ul>
+                </div>
+                <label for="title" class="hint">כותרת</label>
+                <input type="text" id="title" />
+                <p class="hint" id="body-l">נוסח (ניתן לערוך ולעצב)</p>
+                <div class="toolbar" id="toolbar" role="toolbar" aria-label="עיצוב טקסט" aria-controls="body">
+                  <button type="button" data-cmd="bold" title="מודגש (Ctrl+B)" aria-label="מודגש"><b>B</b></button>
+                  <button type="button" data-cmd="italic" title="נטוי (Ctrl+I)" aria-label="נטוי"><i>I</i></button>
+                  <button type="button" data-cmd="underline" title="קו תחתון (Ctrl+U)" aria-label="קו תחתון"><u>U</u></button>
+                  <select id="font-size" aria-label="גודל גופן" title="גודל גופן">
+                    <option value="" selected disabled>גודל</option>
+                    <option value="2">קטן</option>
+                    <option value="3">רגיל</option>
+                    <option value="4">בינוני</option>
+                    <option value="5">גדול</option>
+                    <option value="6">גדול מאוד</option>
+                  </select>
+                  <span class="sep" aria-hidden="true"></span>
+                  <button type="button" data-cmd="justifyRight" title="יישור לימין" aria-label="יישור לימין"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/></svg></button>
+                  <button type="button" data-cmd="justifyCenter" title="מרכוז" aria-label="מרכוז"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M17 12H7"/><path d="M19 18H5"/></svg></button>
+                  <button type="button" data-cmd="justifyLeft" title="יישור לשמאל" aria-label="יישור לשמאל"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M15 12H3"/><path d="M17 18H3"/></svg></button>
+                  <button type="button" data-cmd="justifyFull" title="יישור לשני הצדדים" aria-label="יישור לשני הצדדים"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button>
+                  <span class="sep" aria-hidden="true"></span>
+                  <button type="button" data-dir="rtl" title="כתיבה מימין לשמאל" aria-label="כתיבה מימין לשמאל">¶←</button>
+                  <button type="button" data-dir="ltr" title="כתיבה משמאל לימין" aria-label="כתיבה משמאל לימין">→¶</button>
+                  <span class="sep" aria-hidden="true"></span>
+                  <button type="button" data-cmd="insertOrderedList" title="רשימה ממוספרת" aria-label="רשימה ממוספרת"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 6h11"/><path d="M10 12h11"/><path d="M10 18h11"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
+                  <button type="button" data-cmd="insertUnorderedList" title="רשימת תבליטים" aria-label="רשימת תבליטים"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h12"/><path d="M9 12h12"/><path d="M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></button>
+                  <span class="sep" aria-hidden="true"></span>
+                  <button type="button" data-cmd="undo" title="ביטול (Ctrl+Z)" aria-label="ביטול"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+                  <button type="button" data-cmd="redo" title="ביצוע מחדש (Ctrl+Y)" aria-label="ביצוע מחדש"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+                  <button type="button" data-cmd="removeFormat" title="ניקוי עיצוב" aria-label="ניקוי עיצוב"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M5 20h6"/><path d="M13 4 8 20"/><path d="m15 15 5 5"/><path d="m20 15-5 5"/></svg></button>
+                </div>
+                <div
+                  id="body"
+                  class="editor"
+                  contenteditable="true"
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-labelledby="body-l"
+                  dir="rtl"
+                ></div>
+                <div class="row">
+                  <button type="button" class="primary" id="download">
+                    ⬇ הורדה כ-Word
+                  </button>
+                  <button type="button" id="copy">העתקה</button>
+                  <span class="saved" id="saved" role="status"></span>
+                </div>
+              </div>
+              <p class="empty" id="placeholder">
+                <span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן
+                לאחר הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.
+              </p>
+              <div class="loading" id="loading" hidden role="status">
+                <div class="spinner" aria-hidden="true"></div>
+                <strong>מנסח את ההסכם…</strong>
+                <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+                <span class="sub"
+                  ><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות.
+                  אפשר להשאיר את החלון פתוח.</span
+                >
+              </div>
+            </section>
           </div>
         </div>
-        <p class="empty" id="placeholder">
-          <span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן לאחר
-          הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.
-        </p>
-        <div class="loading" id="loading" hidden role="status">
-          <div class="spinner" aria-hidden="true"></div>
-          <strong>מנסח את ההסכם…</strong>
-          <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-          <span class="sub"
-            ><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות. אפשר
-            להשאיר את החלון פתוח.</span
-          >
+
+        <div class="page" id="page-drafts" hidden>
+          <header class="page-h">
+            <h1 tabindex="-1">טיוטות</h1>
+            <p>
+              הטיוטות שנוסחו באתר בשבוע האחרון. פתיחה של טיוטה מחזירה אותה לעריכה,
+              יחד עם השיחה שבה נוצרה. השינויים נשמרים אוטומטית, וטיוטה שלא נגעו
+              בה שבוע נמחקת.
+            </p>
+          </header>
+          <section aria-label="טיוטות מהשבוע האחרון">
+            <ul id="history"></ul>
+            <p class="files-note" id="history-note" hidden></p>
+          </section>
         </div>
-      </section>
-    </main>
+
+        <div class="page" id="page-costs" hidden>
+          <header class="page-h">
+            <h1 tabindex="-1">עלויות</h1>
+            <p>
+              ההוצאות על OpenAI API בשבוע האחרון: ניסוח טיוטות באתר, וסנכרון
+              ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של כל קריאה לפי
+              המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI הוא הקובע.
+            </p>
+          </header>
+          <div class="tiles">
+            <div class="tile">
+              <span>סה"כ ב-7 הימים האחרונים</span>
+              <b id="c-total">—</b>
+            </div>
+            <div class="tile">
+              <span>ניסוח טיוטות</span>
+              <b id="c-draft">—</b>
+              <small id="c-draft-n"></small>
+            </div>
+            <div class="tile">
+              <span>סנכרון ועיבוד מסמכים</span>
+              <b id="c-sync">—</b>
+              <small id="c-sync-n"></small>
+            </div>
+          </div>
+          <section aria-labelledby="c-h">
+            <h2 id="c-h">עלות לכל טיוטה</h2>
+            <p class="hint" id="c-since"></p>
+            <div class="c-wrap">
+              <table class="c-table">
+                <thead>
+                  <tr>
+                    <th scope="col">טיוטה</th>
+                    <th scope="col">נוצרה</th>
+                    <th scope="col">בקשות למודל</th>
+                    <th scope="col">עלות</th>
+                  </tr>
+                </thead>
+                <tbody id="c-rows"></tbody>
+                <tfoot id="c-foot"></tfoot>
+              </table>
+            </div>
+            <p class="files-note" id="c-note" hidden></p>
+          </section>
+        </div>
+
+        <div class="page" id="page-agreements" hidden>
+          <header class="page-h">
+            <h1 tabindex="-1">הסכמים</h1>
+            <p>
+              כל המסמכים שהמערכת מכירה. לחיצה על מסמך מציגה את פרטיו; הסיכה
+              מוסיפה אותו כמסמך בסיס לניסוח.
+              <span class="count" id="files-count"></span>
+            </p>
+          </header>
+          <section id="files-panel" aria-label="קבצים במאגר">
+            <div class="files-tools">
+              <input
+                type="search"
+                id="files-q"
+                placeholder="חיפוש לפי שם…"
+                aria-label="חיפוש קבצים לפי שם"
+              />
+              <label class="dropzone" id="dropzone" hidden>
+                <input
+                  type="file"
+                  id="file-input"
+                  class="visually-hidden"
+                  multiple
+                  accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp,.heic,.heif,.docx,.doc"
+                />
+                ⬆ גרור קבצים או לחץ להעלאה
+              </label>
+            </div>
+            <div id="upload-progress" hidden role="status">
+              <div class="bar" aria-hidden="true"><i id="upload-bar"></i></div>
+              <span id="upload-text"></span>
+            </div>
+            <ul id="files"></ul>
+            <p class="files-note" id="files-note" hidden></p>
+          </section>
+        </div>
+
+        <div class="page" id="page-status" hidden>
+          <header class="page-h">
+            <h1 tabindex="-1">סטטוס וסנכרון</h1>
+            <p>
+              מצב המאגר, ישירות ממסד הנתונים. הסנכרון מושך מסמכים חדשים מ-Drive
+              ומעבד אותם; הוא רץ גם אוטומטית בכל לילה.
+            </p>
+          </header>
+          <section class="status-card" aria-labelledby="sc-title">
+            <h2 id="sc-title">סטטוס מאגר ההסכמים</h2>
+            <div id="status-body"><p class="hint">טוען…</p></div>
+            <div class="row" id="sync-row" hidden>
+              <button type="button" class="primary" id="sync-btn">⟳ סנכרון עכשיו</button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
 
     <dialog id="file-dialog" aria-labelledby="fd-name">
       <button type="button" class="dialog-x" id="fd-x" aria-label="סגירת החלון">
@@ -1235,6 +1698,7 @@
       function busy(on) {
         for (const id of ["send", "reset", "input", "download", "copy"])
           $(id).disabled = on;
+        $("body").contentEditable = !on;
         $("loading").hidden = !on;
         $("doc-panel").setAttribute("aria-busy", on);
         clearInterval(timer);
@@ -1269,7 +1733,7 @@
           messages.at(-1).role === "assistant" &&
           messages.at(-1).isDoc
         ) {
-          messages.at(-1).content = $("title").value + "\n\n" + $("body").value;
+          messages.at(-1).content = $("title").value + "\n\n" + bodyText();
         }
         messages.push({ role: "user", content: text });
         add("user", text);
@@ -1286,6 +1750,7 @@
                 content,
               })),
               focus_file_ids: focus.map((x) => x.id),
+              conversation,
             }),
           });
           if (res.status === 401) return toLogin();
@@ -1310,11 +1775,9 @@
               content: r.title + "\n\n" + r.body,
               isDoc: true,
             });
-            add(
-              "assistant",
-              "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.",
-            );
+            add("assistant", DOC_MSG);
             showDoc(r);
+            saveHistory();
           }
         } catch (err) {
           busy(false);
@@ -1323,11 +1786,25 @@
         }
       });
 
-      function showDoc(r) {
+      const DOC_MSG =
+        "ההסכם נוסח ומוצג בחלונית ״ההסכם״. אפשר לערוך אותו ישירות, או לבקש כאן תיקונים.";
+      let sources = [];
+
+      // html: טיוטה שנפתחה מעמוד הטיוטות, עם העיצוב שלו. בלי html, כל שורה בטקסט מהמודל היא פסקה
+      function showDoc(r, html) {
         $("doc").hidden = false;
         $("placeholder").hidden = true;
         $("title").value = r.title;
-        $("body").value = r.body;
+        $("body").replaceChildren(
+          ...(html != null
+            ? cleanHtml(html)
+            : r.body
+                .split("\n")
+                .filter((l) => l.trim())
+                .map((l) => el("p", { textContent: l }))),
+        );
+        $("saved").textContent = "";
+        sources = r.sources;
         $("sources-n").textContent = r.sources.length;
         $("sources").replaceChildren(
           ...(r.sources.length
@@ -1373,10 +1850,19 @@
           $("doc-panel").scrollIntoView({ behavior: "smooth" });
       }
 
+      // העתקה עם העיצוב (נדבק מעוצב ב-Word ובמייל), וגם כטקסט נקי לכל מקום אחר
       $("copy").addEventListener("click", async () => {
-        await navigator.clipboard.writeText(
-          $("title").value + "\n\n" + $("body").value,
-        );
+        const title = el("h1", { textContent: $("title").value }).outerHTML;
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([title + $("body").innerHTML], {
+              type: "text/html",
+            }),
+            "text/plain": new Blob([$("title").value + "\n\n" + bodyText()], {
+              type: "text/plain",
+            }),
+          }),
+        ]);
         $("copy").textContent = "הועתק ✓";
         setTimeout(() => ($("copy").textContent = "העתקה"), 1500);
       });
@@ -1387,7 +1873,8 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: $("title").value,
-            body: $("body").value,
+            body: bodyText(),
+            html: $("body").innerHTML,
           }),
         });
         if (!res.ok) {
@@ -1403,6 +1890,8 @@
 
       $("reset").addEventListener("click", () => {
         messages = [];
+        historyId = null;
+        conversation = newConversation();
         $("chat").replaceChildren();
         $("doc").hidden = true;
         $("placeholder").hidden = false;
@@ -1419,7 +1908,13 @@
           const res = await fetch("/api/status");
           s = res.ok ? await res.json() : null;
         } catch {}
-        if (!s) return null;
+        if (!s) {
+          if (lastSync === undefined)
+            $("status-body").replaceChildren(
+              el("p", { className: "hint", textContent: "הסטטוס לא זמין כרגע." }),
+            );
+          return null;
+        }
         renderStatus(s);
         if (lastSync !== undefined && s.updated_at && s.updated_at !== lastSync)
           await syncFinished(s);
@@ -1441,7 +1936,6 @@
         indexed.forEach((f) => newIds.add(f.file_id));
         renderFiles();
         toast(`✓ הסנכרון הושלם (${s.updated_at}).`, 0);
-        if (indexed.length) $("files-box").open = true;
         if (document.hidden) document.title = "✓ " + TITLE;
       }
       const TITLE = document.title;
@@ -1732,6 +2226,8 @@
       function setFocus(list) {
         focus = list;
         $("focus-bar").hidden = !focus.length;
+        $("nav-focus").hidden = !focus.length;
+        $("nav-focus").textContent = focus.length;
         $("focus-list").replaceChildren(
           ...focus.map((x) =>
             el(
@@ -1850,7 +2346,10 @@
             ),
           ),
         );
-        $("status-box").hidden = false;
+        $("side-sync-text").textContent = s.updated_at
+          ? "סנכרון אחרון: " + s.updated_at
+          : "עדיין לא היה סנכרון";
+        $("side-sync").hidden = false;
       }
 
       // העלאה וכפתור הסנכרון: למי שמחובר (הכניסה עצמה במסך /login, לפני האתר)
@@ -1860,7 +2359,7 @@
         } catch {
           return;
         }
-        $("sync-btn").hidden = !(me.writer && me.sync);
+        $("sync-row").hidden = !(me.writer && me.sync);
         $("dropzone").hidden = !me.writer;
       }
       // הכניסה פגה (אחרי 30 יום, או שהסיסמה הוחלפה) בזמן שהאתר פתוח: חוזרים למסך הכניסה
@@ -1871,7 +2370,8 @@
       // ההודעה "הסנכרון הושלם" מגיעה מ-loadStatus, כשזמן הסנכרון האחרון משתנה
       function setSyncRunning(on) {
         $("sync-btn").disabled = on;
-        $("sync-btn").textContent = on ? "⟳ מסנכרן…" : "⟳ סנכרון";
+        $("sync-btn").textContent = on ? "⟳ מסנכרן…" : "⟳ סנכרון עכשיו";
+        if (on) $("side-sync-text").textContent = "מסנכרן…";
       }
       function watchSync() {
         if (syncWatch) return;
@@ -2065,8 +2565,314 @@
       }
       $("input").addEventListener("input", growInput);
 
-      // "סטטוס מאגר ההסכמים" מתחיל מקופל תמיד. רשימת הקבצים פתוחה במסך רחב, ומקופלת במסך צר
-      $("files-box").open = matchMedia("(min-width: 1201px)").matches;
+      // ---- עורך ההסכם ----
+      const bodyText = () => $("body").innerText.replace(/\n{3,}/g, "\n\n").trim();
+      document.execCommand("styleWithCSS", false, false); // <b>, <font size> ו-align: מה שהייצוא ל-Word מכיר
+      document.execCommand("defaultParagraphSeparator", false, "p");
+      // הבחירה האחרונה בעורך, כדי שגודל הגופן והכיוון יחולו עליה גם אחרי לחיצה על הסרגל
+      let range = null;
+      document.addEventListener("selectionchange", () => {
+        const sel = getSelection();
+        if (!sel.rangeCount || !$("body").contains(sel.anchorNode)) return;
+        range = sel.getRangeAt(0);
+        for (const b of $("toolbar").querySelectorAll("[data-cmd]"))
+          if (!["undo", "redo", "removeFormat"].includes(b.dataset.cmd))
+            b.ariaPressed = String(document.queryCommandState(b.dataset.cmd));
+      });
+      function restore() {
+        $("body").focus();
+        if (!range) return;
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+      }
+      // mousedown בלי ברירת מחדל: הלחיצה על הסרגל לא מוציאה את הסמן מהעורך
+      $("toolbar").addEventListener("mousedown", (e) => {
+        if (e.target.closest("button")) e.preventDefault();
+      });
+      $("toolbar").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        restore();
+        if (b.dataset.cmd) document.execCommand(b.dataset.cmd);
+        else setDir(b.dataset.dir);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+      $("font-size").addEventListener("change", (e) => {
+        restore();
+        document.execCommand("fontSize", false, e.target.value);
+        e.target.value = "";
+      });
+      // כיוון הכתב חל על הפסקאות שבבחירה. היישור שלהן מתאפס, כך שהטקסט מתחיל מהצד החדש
+      function setDir(dir) {
+        const ed = $("body");
+        if (!range) return;
+        if ([...ed.childNodes].some((n) => n.nodeType === 3 && n.data.trim()))
+          document.execCommand("formatBlock", false, "p"); // טקסט שהוקלד בעורך ריק, עוד בלי פסקה
+        for (const b of ed.children)
+          if (range.intersectsNode(b)) {
+            b.dir = dir;
+            b.style.textAlign = "";
+            b.removeAttribute("align");
+          }
+        ed.dispatchEvent(new Event("input"));
+      }
+      // הדבקה כטקסט נקי: עיצוב מאתרים אחרים לא נכנס להסכם בלי שרואים אותו
+      $("body").addEventListener("paste", (e) => {
+        e.preventDefault();
+        document.execCommand(
+          "insertText",
+          false,
+          e.clipboardData.getData("text/plain"),
+        );
+      });
+      // HTML מהטיוטות עובר סינון: רק תגים ומאפייני עיצוב שהעורך עצמו יוצר
+      const ALLOWED = new Set(
+        "P DIV BR B STRONG I EM U FONT SPAN OL UL LI H1 H2 H3 BLOCKQUOTE".split(" "),
+      );
+      const STYLES = [
+        "text-align",
+        "font-size",
+        "font-weight",
+        "font-style",
+        "text-decoration-line",
+        "direction",
+      ];
+      function cleanHtml(html) {
+        const copy = (from, to) => {
+          for (const n of from.childNodes) {
+            if (n.nodeType === 3) to.append(n.data);
+            if (n.nodeType !== 1) continue;
+            if (!ALLOWED.has(n.tagName)) {
+              copy(n, to);
+              continue;
+            }
+            const e = document.createElement(n.tagName);
+            for (const a of ["dir", "align", "size"])
+              if (n.hasAttribute(a)) e.setAttribute(a, n.getAttribute(a));
+            for (const p of STYLES)
+              if (n.style.getPropertyValue(p))
+                e.style.setProperty(p, n.style.getPropertyValue(p));
+            copy(n, e);
+            to.append(e);
+          }
+          return to;
+        };
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        return [...copy(doc.body, document.createDocumentFragment()).childNodes];
+      }
+
+      // ---- טיוטות ----
+      // כל ניסוח נשמר מיד, וכל עריכה נשמרת שנייה וחצי אחרי ההקלדה האחרונה
+      let historyId = null;
+      // מזהה השיחה נשלח עם כל ניסוח ונשמר עם הטיוטה, כך שעמוד "עלויות" יודע כמה עלתה כל טיוטה
+      const newConversation = () =>
+        crypto.randomUUID?.() ?? Date.now() + "-" + Math.random().toString(36).slice(2);
+      let conversation = newConversation();
+      async function saveHistory() {
+        if ($("doc").hidden) return;
+        try {
+          const r = await api("/api/history", {
+            method: "POST",
+            body: JSON.stringify({
+              id: historyId,
+              title: $("title").value,
+              html: $("body").innerHTML,
+              text: bodyText(),
+              messages,
+              sources,
+              conversation,
+            }),
+          });
+          historyId = r.id;
+          $("saved").textContent = "נשמר בטיוטות ✓";
+        } catch {
+          $("saved").textContent = "השמירה בטיוטות נכשלה";
+        }
+      }
+      let saveTimer;
+      for (const id of ["title", "body"])
+        $(id).addEventListener("input", () => {
+          $("saved").textContent = "";
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(saveHistory, 1500);
+        });
+
+      async function loadHistory() {
+        let list;
+        try {
+          list = await api("/api/history");
+        } catch {
+          list = null;
+        }
+        $("history-note").hidden = !!list?.length;
+        $("history-note").textContent = list
+          ? "עדיין לא נוסחו טיוטות בשבוע האחרון."
+          : "הטיוטות לא זמינות כרגע.";
+        $("history").replaceChildren(
+          ...(list || []).map((h) =>
+            el(
+              "li",
+              { className: "h-item" + (h.id === historyId ? " current" : "") },
+              el("h2", { className: "h-title", textContent: h.title || "ללא כותרת" }),
+              el(
+                "div",
+                { className: "file-meta" },
+                h.id === historyId &&
+                  el("span", { className: "tag tag-new", textContent: "פתוח כעת" }),
+                el("span", { textContent: "נוצר " + h.created_at }),
+                h.updated_at !== h.created_at &&
+                  el("span", { textContent: "עודכן " + h.updated_at }),
+              ),
+              el("p", { className: "h-preview", textContent: h.preview }),
+              el(
+                "div",
+                { className: "h-actions" },
+                el("button", {
+                  type: "button",
+                  className: "primary",
+                  textContent: "פתיחה לעריכה",
+                  onclick: () => openHistory(h.id),
+                }),
+                el("button", {
+                  type: "button",
+                  textContent: "מחיקה",
+                  ariaLabel: "מחיקת " + h.title,
+                  onclick: () => deleteHistory(h),
+                }),
+              ),
+            ),
+          ),
+        );
+      }
+      async function openHistory(id) {
+        // שיחה שעוד לא הגיעה להסכם לא נשמרת בטיוטות, ולכן שואלים לפני שמחליפים אותה
+        if (messages.length && !historyId && !confirm("השיחה הנוכחית תיסגר. להמשיך?"))
+          return;
+        let h;
+        try {
+          h = await api("/api/history/" + id);
+        } catch (e) {
+          toast(e.message);
+          return loadHistory();
+        }
+        clearTimeout(saveTimer);
+        messages = h.messages;
+        historyId = h.id;
+        conversation = h.conversation || newConversation(); // טיוטה מלפני מדידת העלויות מקבלת מזהה מעכשיו
+        setFocus([]);
+        $("chat").replaceChildren();
+        for (const m of messages) add(m.role, m.isDoc ? DOC_MSG : m.content);
+        showDoc(h, h.html);
+        location.hash = "#draft";
+      }
+      async function deleteHistory(h) {
+        if (!confirm(`למחוק את הטיוטה "${h.title}"?`)) return;
+        try {
+          await api("/api/history/" + h.id, { method: "DELETE" });
+          if (h.id === historyId) historyId = null; // השמירה הבאה תיצור אותו מחדש
+        } catch (e) {
+          toast(e.message);
+        }
+        loadHistory();
+      }
+
+      // ---- עלויות ----
+      // סכומים קטנים מאגורה מוצגים עם 4 ספרות, כדי שניסוח של סנטים בודדים לא יופיע כ-$0.00
+      const usd = (v) =>
+        v == null ? "—" : "$" + v.toFixed(v > 0 && v < 0.01 ? 4 : 2);
+      async function loadCosts() {
+        let c;
+        try {
+          c = await api("/api/costs");
+        } catch {
+          $("c-note").textContent = "העלויות לא זמינות כרגע.";
+          $("c-note").hidden = false;
+          return;
+        }
+        $("c-note").hidden = true;
+        $("c-total").textContent = usd(c.total);
+        $("c-draft").textContent = usd(c.draft.cost);
+        $("c-draft-n").textContent = c.draft.calls + " קריאות ל-API";
+        $("c-sync").textContent = usd(c.sync.cost);
+        $("c-sync-n").textContent = c.sync.calls + " קריאות ל-API";
+        $("c-since").textContent = c.since
+          ? `העלויות נמדדות מ-${c.since}. לחיצה על טיוטה פותחת אותה לעריכה.`
+          : "עדיין לא נרשמו עלויות.";
+        $("c-rows").replaceChildren(
+          ...(c.drafts.length
+            ? c.drafts.map((d) =>
+                el(
+                  "tr",
+                  {},
+                  el(
+                    "th",
+                    { scope: "row" },
+                    el("button", {
+                      type: "button",
+                      className: "linkish",
+                      textContent: d.title || "ללא כותרת",
+                      onclick: () => openHistory(d.id),
+                    }),
+                  ),
+                  el("td", { textContent: d.created_at }),
+                  el("td", { textContent: d.runs || "—" }),
+                  el("td", { textContent: usd(d.cost) }),
+                ),
+              )
+            : [
+                el(
+                  "tr",
+                  {},
+                  el("td", {
+                    colSpan: 4,
+                    className: "c-empty",
+                    textContent: "אין טיוטות מהשבוע האחרון.",
+                  }),
+                ),
+              ]),
+        );
+        // ניסוחים שלא נשמרו כטיוטה: שיחה שנעצרה בשאלות, ניסוח שנכשל או טיוטה שנמחקה
+        $("c-foot").replaceChildren(
+          ...(c.unsaved > 0
+            ? [
+                el(
+                  "tr",
+                  {},
+                  el("th", {
+                    scope: "row",
+                    colSpan: 3,
+                    textContent: "שיחות שלא נשמרו כטיוטה (שאלות בלבד, ניסוח שנכשל או טיוטה שנמחקה)",
+                  }),
+                  el("td", { textContent: usd(c.unsaved) }),
+                ),
+              ]
+            : []),
+        );
+      }
+
+      // דוגמה מהרשימה ממלאת את תיבת הכתיבה, כדי שאפשר יהיה להשלים פרטים לפני השליחה
+      $("examples").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        $("input").value = b.textContent;
+        growInput();
+        $("input").focus();
+      });
+
+      // ניווט בין העמודים לפי ה-hash בכתובת (#draft, #files, #status), בלי טעינה מחדש
+      const PAGES = ["draft", "drafts", "agreements", "costs", "status"];
+      function route(e) {
+        const hash = location.hash.slice(1);
+        const page = PAGES.includes(hash) ? hash : "draft";
+        for (const p of PAGES) $("page-" + p).hidden = p !== page;
+        for (const a of document.querySelectorAll(".nav a"))
+          a.ariaCurrent = a.hash === "#" + page ? "page" : null;
+        if (page === "drafts") loadHistory();
+        if (page === "costs") loadCosts();
+        if (e) $("page-" + page).querySelector("h1").focus(); // מעבר עמוד: קורא המסך מכריז על הכותרת
+      }
+      addEventListener("hashchange", route);
+      route();
       loadStatus();
       loadMe();
       loadFiles();

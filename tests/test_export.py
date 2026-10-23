@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import docx  # noqa: E402
 from docx.oxml.ns import qn  # noqa: E402
 
-from app.docx_export import AI_NOTE, HEADER_NOTE, build  # noqa: E402
+from app.docx_export import AI_NOTE, HEADER_NOTE, build, build_html  # noqa: E402
 from app.draft import clean_output  # noqa: E402
 
 TITLE = "כתב התחייבות להקמת חניון לילה במערב ראשון לציון"
@@ -91,8 +91,32 @@ def test_build():
     assert heading.runs[0].bold
 
 
+def test_build_html_keeps_editor_formatting():
+    html = ('<p>1. ביצוע העבודות:</p><p>החברה מתחייבת לבצע.</p>'
+            '<p style="text-align: center;"><b>מודגש</b> ו<i>נטוי</i> ו<u>קו</u> <font size="5">גדול</font></p>'
+            '<p dir="ltr">Section <b>A</b></p><p align="left">לשמאל</p><p><br></p>'
+            '<ol><li>ראשון</li><li>שני</li></ol><p>שם: [___] תפקיד: [___] חתימה: [___]</p>'
+            '<script>alert(1)</script><p>&lt;b&gt;לא תג&lt;/b&gt;</p>')
+    doc = docx.Document(io.BytesIO(build_html("<b>הסכם</b>", html)))
+    paras = {p.text: p for p in doc.paragraphs}
+    assert doc.paragraphs[1].text == "<b>הסכם</b>"  # הכותרת היא טקסט, לא HTML
+    assert paras["1. ביצוע העבודות:"].runs[0].bold  # פסקה בלי עיצוב: זיהוי התבניות הרגיל
+    rich = paras["מודגש ונטוי וקו גדול"]
+    assert rich._p.pPr.jc.get(qn("w:val")) == "center"
+    runs = {r.text: r for r in rich.runs}
+    assert runs["מודגש"].bold and runs["מודגש"].font.cs_bold and runs["נטוי"].italic and runs["קו"].underline
+    assert runs["גדול"].font.size.pt == 18 and not runs[" ו"].bold
+    ltr = paras["Section A"]
+    assert ltr._p.pPr.find(qn("w:bidi")).get(qn("w:val")) == "0" and ltr.runs[0].font.rtl is False
+    assert paras["לשמאל"]._p.pPr.jc.get(qn("w:val")) == "right"  # בפסקה RTL ‏Word קורא right כסוף השורה
+    assert "1. ראשון" in paras and "2. שני" in paras
+    assert "<b>לא תג</b>" in paras and not any("alert" in p.text for p in doc.paragraphs)
+    assert len(doc.tables) == 1 and "חתימה: ____" in doc.tables[0].cell(0, 0).text  # שורת חתימות עדיין טבלה
+
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     test_clean_output()
     test_build()
+    test_build_html_keeps_editor_formatting()
     print("ok")

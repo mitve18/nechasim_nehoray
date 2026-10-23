@@ -62,7 +62,7 @@ class Draft(BaseModel):
     body: str
 
 
-def build_agent(sources, focus=()):
+def build_agent(sources, focus=(), usage=None):
     """Agent חדש לכל בקשה. ה-tool ממלא את sources במסמכים ששלף, כדי להחזיר אותם לממשק.
 
     focus: המסמכים שהעובד בחר ("נסח על בסיס המסמך הזה"), בלי הגבלה על הכמות. הם נכנסים להקשר כדוגמאות
@@ -84,7 +84,7 @@ def build_agent(sources, focus=()):
             query: תיאור המסמך המבוקש: סוג, צדדים, תחום ונושאים עיקריים.
         """
         with store.connect() as conn:
-            examples = store.search(conn, query)
+            examples = store.search(conn, query, usage=usage)
         known = {s["name"] for s in sources}
         sources.extend({"name": e["name"], "url": e["url"], "summary": e["summary"]}
                        for e in examples if e["name"] not in known)
@@ -106,9 +106,10 @@ def build_agent(sources, focus=()):
     )
 
 
-def draft(messages, focus_file_ids=()):
+def draft(messages, focus_file_ids=(), conversation=None):
     """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources.
-    focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError אם אחד מהם לא במאגר."""
+    focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError אם אחד מהם לא במאגר.
+    conversation: מזהה השיחה מהדפדפן. העלות נרשמת איתו, כדי שעמוד "עלויות" יחבר אותה לטיוטה."""
     focus = []
     if focus_file_ids:
         with store.connect() as conn:
@@ -117,8 +118,12 @@ def draft(messages, focus_file_ids=()):
                 if not doc:
                     raise LookupError("מסמך בסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
                 focus.append(doc)
-    sources = []
-    result = build_agent(sources, focus).run(messages)
+    sources, usage = [], []
+    try:
+        result = build_agent(sources, focus, usage).run(messages)
+        usage.append(store.agent_usage(result, MODEL))
+    finally:  # גם ניסוח שנכשל אחרי הקריאה למודל עלה כסף
+        _log_usage(usage, conversation)
     if result.status != RunStatus.completed:
         raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
     if not isinstance(result.content, Draft):  # סירוב או JSON לא תקין מגיעים כטקסט ולא כ-Draft
@@ -137,6 +142,15 @@ def _plain(line):
 
 def _norm(s):
     return " ".join(re.sub(r"[^\w\s]", " ", s).split())
+
+
+def _log_usage(usage, conversation):
+    """מסד לא זמין לא מכשיל את הניסוח עצמו; רק העלות הזו לא תופיע בעמוד "עלויות"."""
+    try:
+        with store.connect() as conn:
+            store.log_usage(conn, "draft", usage, conversation)
+    except Exception as e:
+        print(f"רישום העלות נכשל: {e!r}")
 
 
 def clean_output(title, body):

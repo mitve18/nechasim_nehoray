@@ -57,6 +57,31 @@ create table if not exists files (
     last_attempt_at timestamptz,
     retry_requested boolean not null default false
 );
+-- היסטוריית ההסכמים שנוסחו באתר: ה-HTML מהעורך (עם העיצוב), הטקסט הנקי לתצוגה מקדימה, והשיחה
+create table if not exists drafts (
+    id bigserial primary key,
+    title text not null,
+    html text not null,
+    text text not null,
+    messages jsonb not null,
+    sources jsonb not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+-- מזהה השיחה שבה הטיוטה נוצרה. דרכו מחברים לטיוטה את העלויות מ-api_usage, כולל סבבי שאלות ותיקונים
+alter table drafts add column if not exists conversation text;
+-- כל קריאה ל-OpenAI (ניסוח, חיפוש, סנכרון) עם הטוקנים והעלות בדולרים, לעמוד "עלויות"
+create table if not exists api_usage (
+    id bigserial primary key,
+    at timestamptz not null default now(),
+    kind text not null check (kind in ('draft', 'sync')),
+    model text not null,
+    input_tokens int not null,
+    cached_tokens int not null,
+    output_tokens int not null,
+    cost_usd numeric(12, 6) not null,
+    conversation text
+);
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
@@ -75,8 +100,36 @@ def _dicts(conn, sql, params=()):
         return cur.execute(sql, params).fetchall()
 
 
-def embed(text):
-    v = OpenAI().embeddings.create(model=EMBED_MODEL, input=text[:20000]).data[0].embedding
+# דולר למיליון טוקנים: (קלט, קלט מהמטמון, פלט). מהמחירון של OpenAI, נבדק 10/2026. מחליפים מודל? מוסיפים אותו כאן
+PRICES = {"gpt-4o": (2.50, 1.25, 10.00), "text-embedding-3-small": (0.02, 0.02, 0.0)}
+
+
+def cost(model, input_tokens, cached_tokens=0, output_tokens=0):
+    """input_tokens כולל את הטוקנים מהמטמון (כמו ב-OpenAI), והם מחויבים במחיר המוזל."""
+    p_in, p_cached, p_out = PRICES[model]
+    return ((input_tokens - cached_tokens) * p_in + cached_tokens * p_cached + output_tokens * p_out) / 1e6
+
+
+def agent_usage(result, model):
+    """השימוש של ריצת Agent (כל הקריאות למודל בה, גם אחרי tool) כשורה ל-log_usage, או None."""
+    m = getattr(result, "metrics", None)
+    return (model, m.input_tokens or 0, m.cache_read_tokens or 0, m.output_tokens or 0) if m else None
+
+
+def log_usage(conn, kind, usage, conversation=None):
+    """usage: [(model, input_tokens, cached_tokens, output_tokens)]. kind: 'draft' (באתר) או 'sync'."""
+    rows = [(kind, *u, cost(*u), conversation) for u in usage if u]
+    if rows:
+        with conn.cursor() as cur:
+            cur.executemany("insert into api_usage (kind, model, input_tokens, cached_tokens, output_tokens, "
+                            "cost_usd, conversation) values (%s, %s, %s, %s, %s, %s, %s)", rows)
+
+
+def embed(text, usage=None):
+    r = OpenAI().embeddings.create(model=EMBED_MODEL, input=text[:20000])
+    if usage is not None:
+        usage.append((EMBED_MODEL, r.usage.prompt_tokens, 0, 0))
+    v = r.data[0].embedding
     return "[" + ",".join(map(str, v)) + "]"
 
 
@@ -108,11 +161,13 @@ ANALYZE_INSTRUCTIONS = [
 ]
 
 
-def analyze(name, text):
+def analyze(name, text, usage=None):
     """קריאה אחת למודל: התקציר (לחיפוש ולמקורות) והנתונים המובנים. מחזיר (summary, metadata)."""
     agent = Agent(model=OpenAIResponses(id=SUMMARY_MODEL), instructions=ANALYZE_INSTRUCTIONS,
                   output_schema=DocInfo)
     result = agent.run(f"שם הקובץ: {name}\n\n{text[:30000]}")
+    if usage is not None:  # נרשם גם כשהתשובה לא תקינה: הקריאה כבר חויבה
+        usage.append(agent_usage(result, SUMMARY_MODEL))
     if result.status != RunStatus.completed or not isinstance(result.content, DocInfo):
         raise RuntimeError(f"התקציר נכשל: status={result.status}")  # הקובץ לא נשמר, ולכן ינוסה שוב בריצה הבאה
     meta = result.content.model_dump()
@@ -132,7 +187,15 @@ def indexed(conn):
 
 
 def upsert(conn, f, method, text, pages=None, ocr_quality=None):
-    summary, meta = analyze(f["name"], text)
+    usage = []
+    try:
+        _upsert(conn, f, method, text, pages, ocr_quality, usage)
+    finally:
+        log_usage(conn, "sync", usage)
+
+
+def _upsert(conn, f, method, text, pages, ocr_quality, usage):
+    summary, meta = analyze(f["name"], text, usage)
     if pages:  # מספר העמודים האמיתי מהקובץ עדיף על מה שכתוב בטקסט
         meta["pages"] = pages
     conn.execute(
@@ -146,7 +209,7 @@ def upsert(conn, f, method, text, pages=None, ocr_quality=None):
              ocr_quality=excluded.ocr_quality,
              indexed_at=now()""",
         (f["id"], f["name"], f.get("webViewLink"), f["modifiedTime"], method, summary, text,
-         embed(f"{f['name']}\n{summary}"), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages,
+         embed(f"{f['name']}\n{summary}", usage), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages,
          ocr_quality),
     )
 
@@ -167,10 +230,10 @@ def delete(conn, file_ids):
     conn.execute("delete from agreements where file_id = any(%s)", (list(file_ids),))
 
 
-def search(conn, query, k=3):
+def search(conn, query, k=3, usage=None):
     rows = conn.execute(
         "select name, url, summary, text from agreements order by embedding <=> %s::vector limit %s",
-        (embed(query), k),
+        (embed(query, usage), k),
     ).fetchall()
     return [dict(zip(("name", "url", "summary", "text"), r)) for r in rows]
 
@@ -311,3 +374,62 @@ def status(conn):
     documents = conn.execute("select count(*) from agreements").fetchone()[0]
     return {"updated_at": f"{run[0]:%d/%m/%Y %H:%M}" if run else None, "documents": documents,
             "failed": bool(run and run[1])}
+
+
+HISTORY_DAYS = 7
+HISTORY_FIELDS = (f"id, title, left(text, 300) as preview, "
+                  f"to_char(created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at, "
+                  f"to_char(updated_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as updated_at")
+
+
+def save_draft(conn, draft_id, title, html, text, messages, sources, conversation=None):
+    """שומר הסכם בהיסטוריה: עדכון של הקיים, או חדש (גם כשהקיים כבר נמחק). מוחק הסכמים שלא נגעו בהם שבוע."""
+    conn.execute("delete from drafts where updated_at < now() - make_interval(days => %s)", (HISTORY_DAYS,))
+    values = (title, html, text, Jsonb(messages), Jsonb(sources), conversation)
+    if draft_id:
+        row = conn.execute("update drafts set title = %s, html = %s, text = %s, messages = %s, sources = %s, conversation = %s, "
+                           "updated_at = now() where id = %s returning id", (*values, draft_id)).fetchone()
+        if row:
+            return row[0]
+    return conn.execute("insert into drafts (title, html, text, messages, sources, conversation) "
+                        "values (%s, %s, %s, %s, %s, %s) "
+                        "returning id", values).fetchone()[0]
+
+
+def drafts_list(conn):
+    """עמוד ההיסטוריה: מהחדש לישן, בלי ה-HTML והשיחה (נטענים רק כשפותחים הסכם)."""
+    return _dicts(conn, f"select {HISTORY_FIELDS} from drafts "
+                        "where updated_at >= now() - make_interval(days => %s) order by drafts.updated_at desc",
+                  (HISTORY_DAYS,))
+
+
+def get_draft(conn, draft_id):
+    rows = _dicts(conn, f"select {HISTORY_FIELDS}, html, messages, sources, conversation from drafts where id = %s", (draft_id,))
+    return rows[0] if rows else None
+
+
+def delete_draft(conn, draft_id):
+    return conn.execute("delete from drafts where id = %s returning id", (draft_id,)).fetchone() is not None
+
+
+def costs(conn):
+    """עמוד "עלויות": סה"כ בשבוע האחרון לפי סוג, העלות של כל טיוטה מהשבוע, ושיחות שלא נשמרו כטיוטה."""
+    week = "now() - make_interval(days => %s)"
+    kinds = {r["kind"]: r for r in _dicts(
+        conn, f"select kind, sum(cost_usd)::float as cost, count(*) as calls from api_usage where at >= {week} "
+              "group by kind", (HISTORY_DAYS,))}
+    drafts = _dicts(conn, f"""
+        select d.id, d.title, to_char(d.created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at,
+               sum(u.cost_usd)::float as cost, count(u.id) filter (where u.model <> %s) as runs
+        from drafts d left join api_usage u on u.conversation = d.conversation
+        where d.updated_at >= {week}
+        group by d.id order by d.created_at desc""", (EMBED_MODEL, HISTORY_DAYS))
+    unsaved = conn.execute(f"""
+        select coalesce(sum(cost_usd), 0)::float from api_usage u
+        where kind = 'draft' and at >= {week}
+          and not exists (select 1 from drafts d where d.conversation = u.conversation)""",
+                           (HISTORY_DAYS,)).fetchone()[0]
+    since = conn.execute(f"select to_char(min(at) at time zone '{TZ}', 'DD/MM/YYYY') from api_usage").fetchone()[0]
+    return {"days": HISTORY_DAYS, "total": sum(k["cost"] for k in kinds.values()),
+            "draft": kinds.get("draft", {"cost": 0, "calls": 0}), "sync": kinds.get("sync", {"cost": 0, "calls": 0}),
+            "drafts": drafts, "unsaved": unsaved, "since": since}

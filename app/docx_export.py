@@ -4,6 +4,7 @@
 """
 import io
 import re
+from html.parser import HTMLParser
 
 import docx
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -202,15 +203,31 @@ def _line(d, line):
         _para(d, line)
 
 
-def build(title, body):
-    title, body = clean_output(title, body)  # גם טקסט שהעובד ערך ידנית בממשק
+def _start(title):
     d = docx.Document()
     _setup(d)
     _note_box(d)
     t = _para(d, title, bold=True, size=16, align=WD_ALIGN_PARAGRAPH.CENTER, after=18)
     _border(t, "bottom", space="6")
+    return d
 
-    lines = [l.strip() for l in body.splitlines()]
+
+def _save(d):
+    buf = io.BytesIO()
+    d.save(buf)
+    return buf.getvalue()
+
+
+def build(title, body):
+    title, body = clean_output(title, body)  # גם טקסט שהעובד ערך ידנית בממשק
+    d = _start(title)
+    _body(d, body.splitlines())
+    return _save(d)
+
+
+def _body(d, lines):
+    """שורות טקסט נקי, כל אחת לפי התבנית שלה (סעיף, הואיל, חתימות...)."""
+    lines = [l.strip() for l in lines]
     i = 0
     while i < len(lines):
         if not lines[i]:
@@ -228,9 +245,146 @@ def build(title, body):
             _line(d, lines[i])
             i += 1
 
-    buf = io.BytesIO()
-    d.save(buf)
-    return buf.getvalue()
+
+BLOCK_TAGS = {"p", "div", "li", "h1", "h2", "h3", "h4", "blockquote", "ol", "ul"}
+HEADING_SIZE = {"h1": 16, "h2": 14, "h3": 13, "h4": 12}
+FONT_SIZE = {"1": 8, "2": 10, "3": 12, "4": 14, "5": 18, "6": 24, "7": 36}  # <font size> של execCommand
+CSS_SIZE = {"x-small": 8, "small": 10, "medium": 12, "large": 14, "x-large": 18, "xx-large": 24, "xxx-large": 36}
+
+
+def _css_size(v):
+    if v in CSS_SIZE:
+        return CSS_SIZE[v]
+    if m := re.fullmatch(r"([\d.]+)(px|pt)", v):
+        return round(float(m[1]) * (0.75 if m[2] == "px" else 1))
+
+
+class _Html(HTMLParser):
+    """ה-HTML מהעורך באתר ← פסקאות: {align, dir, runs: [(טקסט, עיצוב)]}.
+    כל תג נשמר במחסנית עם העיצוב והכיוון שהוא מוריש לתוכן שלו."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = [("", {}, {"align": None, "dir": None}, None)]  # (תג, עיצוב, פסקה, מונה רשימה)
+        self.blocks, self.runs, self.props = [], [], None
+
+    def flush(self):
+        if "".join(t for t, _ in self.runs).strip():
+            self.blocks.append({**self.props, "runs": self.runs})
+        self.runs, self.props = [], None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "br":
+            return self.flush()
+        a = dict(attrs)
+        style = dict(
+            (k.strip().lower(), v.strip().lower())
+            for k, _, v in (s.partition(":") for s in (a.get("style") or "").split(";")) if v
+        )
+        _, fmt, block, _ = self.stack[-1]
+        fmt, block = dict(fmt), dict(block)
+        if tag in ("b", "strong") or tag in HEADING_SIZE:
+            fmt["bold"] = True
+        if tag in ("i", "em"):
+            fmt["italic"] = True
+        if tag == "u":
+            fmt["underline"] = True
+        if tag in HEADING_SIZE:
+            fmt["size"] = HEADING_SIZE[tag]
+        if tag == "font" and a.get("size") in FONT_SIZE:
+            fmt["size"] = FONT_SIZE[a["size"]]
+        if w := style.get("font-weight"):
+            fmt["bold"] = w == "bold" or w.isdigit() and int(w) >= 600
+        if style.get("font-style") == "italic":
+            fmt["italic"] = True
+        if "underline" in style.get("text-decoration", "") + style.get("text-decoration-line", ""):
+            fmt["underline"] = True
+        if "font-size" in style and (size := _css_size(style["font-size"])):
+            fmt["size"] = size
+        if align := style.get("text-align") or a.get("align"):
+            block["align"] = align
+        if d := style.get("direction") or a.get("dir"):
+            block["dir"] = d if d in ("rtl", "ltr") else block["dir"]
+        if tag in BLOCK_TAGS:
+            self.flush()
+        self.stack.append((tag, fmt, block, 0 if tag in ("ol", "ul") else None))
+        if tag == "li":  # מספור או תבליט לפי הרשימה שמעליו
+            parent = next((i for i in range(len(self.stack) - 2, 0, -1) if self.stack[i][3] is not None), None)
+            prefix = "• "
+            if parent is not None:
+                t, f, b, n = self.stack[parent]
+                self.stack[parent] = (t, f, b, n + 1)
+                prefix = f"{n + 1}. " if t == "ol" else "• "
+            self.handle_data(prefix)
+
+    def handle_endtag(self, tag):
+        if not any(t == tag for t, *_ in self.stack[1:]):
+            return  # תג סוגר בלי פותח
+        while self.stack[-1][0] != tag:
+            self.stack.pop()
+        self.stack.pop()
+        if tag in BLOCK_TAGS:
+            self.flush()
+
+    def handle_data(self, data):
+        text = re.sub(r"\s+", " ", data)  # כמו בדפדפן: רווחים ושורות חדשות ב-HTML הם רווח אחד
+        if not text or self.stack[-1][0] in ("script", "style") or not self.runs and not text.strip():
+            return
+        _, fmt, block, _ = self.stack[-1]
+        if self.props is None:
+            self.props = block
+        self.runs.append((text, fmt))
+
+
+def parse_html(html):
+    p = _Html()
+    p.feed(html)
+    p.close()
+    p.flush()
+    return p.blocks
+
+
+def _jc(align, ltr):
+    """Word קורא את w:jc="left" בפסקה RTL כתחילת השורה (ימין), כמו ב-ind. לכן ממפים לפי תחילה/סוף, לא לפי צד."""
+    if align in ("center", "justify"):
+        return WD_ALIGN_PARAGRAPH.CENTER if align == "center" else WD_ALIGN_PARAGRAPH.JUSTIFY
+    if align in ("left", "right", "start", "end"):
+        start = align == "start" or align == ("left" if ltr else "right")
+        return WD_ALIGN_PARAGRAPH.LEFT if start else WD_ALIGN_PARAGRAPH.RIGHT
+
+
+def _rich(d, block):
+    """פסקה שהעובד עיצב בעורך: העיצוב שלו קובע, בלי זיהוי תבניות."""
+    ltr = block["dir"] == "ltr"
+    p = _para(d, align=_jc(block["align"], ltr))
+    if ltr:
+        _ppr_add(p._p.get_or_add_pPr(), _el("w:bidi", val="0"))
+    runs = block["runs"]
+    runs[0] = (runs[0][0].lstrip(), runs[0][1])
+    runs[-1] = (runs[-1][0].rstrip(), runs[-1][1])
+    for text, f in runs:
+        r = _run(p, text, f.get("bold"), f.get("size"))
+        if f.get("italic"):
+            r.font.italic = r.font.cs_italic = True
+        if f.get("underline"):
+            r.font.underline = True
+        if ltr:
+            r.font.rtl = False
+
+
+def build_html(title, html):
+    """ייצוא מהעורך באתר. פסקה בלי עיצוב עוברת את זיהוי התבניות הרגיל (סעיפים, חתימות...), ופסקה מעוצבת נשמרת כמו שהיא."""
+    d = _start(clean_output(title, "")[0])
+    plain = []
+    for block in parse_html(html):
+        if block["align"] or block["dir"] or any(f for _, f in block["runs"]):
+            _body(d, plain)
+            plain = []
+            _rich(d, block)
+        else:
+            plain.append("".join(t for t, _ in block["runs"]))
+    _body(d, plain)
+    return _save(d)
 
 
 def build_table(title, header, rows):

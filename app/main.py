@@ -23,7 +23,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -129,6 +129,7 @@ class Message(BaseModel):
 class DraftRequest(BaseModel):
     messages: list[Message]
     focus_file_ids: list[str] = []  # "נסח על בסיס המסמך הזה", אפשר כמה מסמכים
+    conversation: str | None = Field(None, max_length=64)  # מזהה השיחה, לחיבור העלות לטיוטה
 
 
 DRAFTS_PER_HOUR = 30
@@ -163,7 +164,7 @@ async def api_draft(req: DraftRequest, request: Request):
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
     _draft_quota(request)
     try:
-        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids)
+        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids, req.conversation)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק
@@ -174,16 +175,66 @@ async def api_draft(req: DraftRequest, request: Request):
 class DocxRequest(BaseModel):
     title: str
     body: str
+    html: str | None = None  # מהעורך באתר: עם הדגשות, גודל, יישור וכיוון כתב
 
 
 @app.post("/api/docx")
 def api_docx(req: DocxRequest):
     name = quote((req.title.strip() or "הסכם")[:80] + ".docx")
     return Response(
-        docx_export.build(req.title, req.body),
+        docx_export.build_html(req.title, req.html) if req.html else docx_export.build(req.title, req.body),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}"},
     )
+
+
+class HistoryRequest(BaseModel):
+    id: int | None = None  # None: הסכם חדש
+    title: str = Field(max_length=500)
+    html: str = Field(max_length=1_000_000)
+    text: str = Field(max_length=500_000)
+    messages: list[dict] = Field(max_length=200)
+    sources: list[dict] = Field(max_length=50)
+    conversation: str | None = Field(None, max_length=64)
+
+
+@app.get("/api/costs")
+def api_costs():
+    """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל."""
+    with store.connect() as conn:
+        return store.costs(conn)
+
+
+@app.get("/api/history")
+def api_history():
+    """עמוד "טיוטות": הטיוטות מהשבוע האחרון."""
+    with store.connect() as conn:
+        return store.drafts_list(conn)
+
+
+@app.post("/api/history")
+def api_history_save(req: HistoryRequest):
+    """נקרא אחרי כל ניסוח ובזמן עריכה (בהשהיה), כך שההסכם בהיסטוריה תמיד בגרסה האחרונה שלו."""
+    with store.connect() as conn:
+        return {"id": store.save_draft(conn, req.id, req.title, req.html, req.text, req.messages, req.sources,
+                                       req.conversation)}
+
+
+@app.get("/api/history/{draft_id}")
+def api_history_get(draft_id: int):
+    with store.connect() as conn:
+        d = store.get_draft(conn, draft_id)
+    if not d:
+        raise HTTPException(404, "ההסכם לא נמצא. ייתכן שעבר שבוע והוא נמחק")
+    return d
+
+
+@app.delete("/api/history/{draft_id}")
+def api_history_delete(draft_id: int):
+    with store.connect() as conn:
+        if not store.delete_draft(conn, draft_id):
+            raise HTTPException(404, "ההסכם לא נמצא")
+    return {"ok": True}
 
 
 STATUS_TITLE = "סטטוס מאגר ההסכמים"

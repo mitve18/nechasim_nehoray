@@ -124,13 +124,16 @@ def backfill(conn, stats):
     """משלים נתונים מובנים למסמכים שאין להם (או שהגרסה שלהם ישנה), מהטקסט ששמור במסד:
     בלי הורדה מ-Drive ובלי OCR. מסמך שנכשל לא עוצר את הסנכרון, ונבחר שוב בריצה הבאה."""
     for doc in store.pending_metadata(conn):
+        usage = []
         try:
-            _, meta = store.analyze(doc["name"], doc["text"])
+            _, meta = store.analyze(doc["name"], doc["text"], usage)
             store.save_metadata(conn, doc["file_id"], meta)
         except Exception as e:
             stats["errors"].append({"file": doc["name"], "error": f"השלמת נתונים מובנים: {str(e)[:250]}"})
             print(f"נכשל     השלמת נתונים מובנים  {doc['name']}  ({e})")
             continue
+        finally:
+            store.log_usage(conn, "sync", usage)
         stats["files"]["backfilled"].append(doc["name"])
         print(f"הושלם    נתונים מובנים  {doc['name']}")
 
