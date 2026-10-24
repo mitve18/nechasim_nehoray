@@ -61,39 +61,32 @@ def service():
 
 
 def list_files(svc, folder_id=None):
-    """כל הקבצים בתיקייה, כולל תתי-תיקיות. מחזיר dicts עם id, name, mimeType, modifiedTime, webViewLink.
+    """הקבצים שישירות בתיקייה, בלי תתי-תיקיות (שם נשמרים תוצרים של האתר, שאסור לאנדקס). מחזיר dicts עם id, name,
+    mimeType, modifiedTime, webViewLink.
 
-    קיצור דרך מוחלף ביעד שלו: לקובץ הוא מאונדקס כקובץ, ולתיקייה היא נסרקת. כל קובץ ותיקייה מופיעים פעם אחת,
-    גם כשיש אליהם קיצור דרך, וקיצור דרך לתיקיית אב לא יוצר לולאה.
+    קיצור דרך לקובץ מוחלף בקובץ עצמו; קיצור דרך לתיקייה מדולג, כמו תיקייה. כל קובץ מופיע פעם אחת,
+    גם כשיש אליו קיצור דרך.
     """
     folder_id = folder_id or os.environ["DRIVE_FOLDER_ID"]
-    files, pending, seen = [], [folder_id], set()
-    while pending:
-        parent = pending.pop()
-        if parent in seen:
-            continue
-        seen.add(parent)
-        token = None
-        while True:
-            resp = svc.files().list(
-                q=f"'{parent}' in parents and trashed=false",
-                fields=f"nextPageToken, files({FILE_FIELDS}, shortcutDetails(targetId))",
-                pageSize=1000,
-                pageToken=token,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            ).execute()
-            for f in resp["files"]:
-                if f["mimeType"] == SHORTCUT_MIME:
-                    f = _shortcut_target(svc, f)
-                if f["mimeType"] == FOLDER_MIME:
-                    pending.append(f["id"])
-                elif f["id"] not in seen:
-                    seen.add(f["id"])
-                    files.append(f)
-            token = resp.get("nextPageToken")
-            if not token:
-                break
+    files, seen, token = [], set(), None
+    while True:
+        resp = svc.files().list(
+            q=f"'{folder_id}' in parents and trashed=false and mimeType != '{FOLDER_MIME}'",
+            fields=f"nextPageToken, files({FILE_FIELDS}, shortcutDetails(targetId))",
+            pageSize=1000,
+            pageToken=token,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        for f in resp["files"]:
+            if f["mimeType"] == SHORTCUT_MIME:
+                f = _shortcut_target(svc, f)
+            if f["mimeType"] != FOLDER_MIME and f["id"] not in seen:
+                seen.add(f["id"])
+                files.append(f)
+        token = resp.get("nextPageToken")
+        if not token:
+            break
     return files
 
 

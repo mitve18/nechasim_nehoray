@@ -161,8 +161,8 @@ class FakeDrive:
 def test_list_files_shortcuts():
     files = drive.list_files(FakeDrive(), "root")
     names = sorted(f["name"] for f in files)
-    # א.pdf פעם אחת למרות הקיצור אליו, קיצור לתיקייה נסרק, קיצור לשורש לא יוצר לולאה, עמוד שני נקרא
-    assert names == sorted(["א.pdf", "ב.png", "ג.pdf", "חיצוני.pdf", "אין גישה"]), names
+    # רק התיקייה עצמה: תת-תיקייה וקיצורי דרך לתיקיות לא נסרקים. א.pdf פעם אחת למרות הקיצור אליו, עמוד שני נקרא
+    assert names == sorted(["א.pdf", "חיצוני.pdf", "אין גישה"]), names
     assert next(f for f in files if f["name"] == "אין גישה")["error"] == "קיצור דרך לקובץ שאין אליו גישה (404)"
 
 
