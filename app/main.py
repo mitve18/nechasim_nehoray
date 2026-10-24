@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from app import ask, docx_export, draft, drive, github, store  # noqa: E402
+from app import ask, docx_export, draft, drive, github, store, xlsx_export  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
 PASSWORD = os.environ.get("APP_PASSWORD", "")
@@ -232,6 +232,18 @@ def api_costs():
     """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל."""
     with store.connect() as conn:
         return store.costs(conn)
+
+
+@app.get("/api/costs/xlsx")
+def api_costs_xlsx():
+    with store.connect() as conn:
+        c = store.costs(conn)
+    name = quote(f"עלויות {date.today():%d-%m-%Y}.xlsx")
+    return Response(
+        xlsx_export.build_costs(c),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}"},
+    )
 
 
 @app.get("/api/history")

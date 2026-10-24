@@ -1107,6 +1107,13 @@
         color: var(--brand-deep);
         font-variant-numeric: tabular-nums;
       }
+      .c-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
       .c-wrap {
         overflow-x: auto;
       }
@@ -1646,20 +1653,19 @@
 
       /* עמוד הסטטוס */
       .status-card {
-        max-width: 620px;
         border-inline-start: 4px solid var(--brand);
       }
       .sc-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 15px;
       }
       .sc-table thead th {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         color: var(--muted);
         text-align: start;
-        padding: 0 0 6px;
+        padding: 0 0 8px;
         border-bottom: 1px solid var(--line);
       }
       .sc-table thead th + th,
@@ -1669,10 +1675,10 @@
       .sc-table tbody th {
         text-align: start;
         font-weight: 400;
-        padding: 5px 0;
+        padding: 10px 0;
       }
       .sc-table td {
-        padding: 5px 0 5px 2px;
+        padding: 10px 0 10px 2px;
         font-weight: 700;
         color: var(--brand-deep);
         font-variant-numeric: tabular-nums;
@@ -2741,7 +2747,16 @@
             </div>
           </div>
           <section aria-labelledby="c-h">
-            <h2 id="c-h">עלות לכל טיוטה</h2>
+            <div class="c-head">
+              <h2 id="c-h">עלות לכל טיוטה</h2>
+              <button
+                type="button"
+                id="c-xlsx"
+                onclick="location.href = '/api/costs/xlsx'"
+              >
+                ⬇ ייצוא לאקסל
+              </button>
+            </div>
             <p class="hint" id="c-since"></p>
             <div class="c-wrap">
               <table class="c-table">
