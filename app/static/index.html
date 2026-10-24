@@ -146,13 +146,6 @@
       .brand b {
         color: var(--brand-deep);
       }
-      /* הלוגו כמו שהוא, בלי אריח או מסגרת. הצל עוקב אחרי הצורה שלו, לא מלבן */
-      .logo {
-        width: 72px;
-        height: auto;
-        flex: none;
-        filter: drop-shadow(0 3px 5px rgba(11, 42, 92, 0.18));
-      }
       .nav {
         display: grid;
         gap: 2px;
@@ -307,9 +300,6 @@
           gap: 10px;
           border-inline-end: 0;
           border-bottom: 1px solid var(--line);
-        }
-        .logo {
-          width: 54px;
         }
         .brand b {
           font-size: 18px;
@@ -1985,7 +1975,6 @@
       dialog::backdrop {
         backdrop-filter: blur(2px);
       }
-          [data-theme="dark"] .logo,
       [data-theme="dark"] .hero-art img {
         filter: brightness(1.08) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
       }
@@ -1998,7 +1987,6 @@
     <div class="shell">
       <aside class="side">
         <a class="brand" href="#ask">
-          <img class="logo" src="/static/logo.webp" alt="" width="72" height="59" />
           <span>
             <b>מנסח ההסכמים</b>
             <small>על בסיס מאגר ההסכמים של המשרד</small>
