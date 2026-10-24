@@ -1653,7 +1653,13 @@
 
       /* עמוד הסטטוס */
       .status-card {
+        position: relative;
+        min-height: 260px;
         border-inline-start: 4px solid var(--brand);
+      }
+      .status-card .loading {
+        justify-content: center;
+        padding-top: 0;
       }
       .sc-table {
         width: 100%;
@@ -2824,6 +2830,15 @@
           <section class="status-card" aria-labelledby="sc-title">
             <h2 id="sc-title">סטטוס מאגר ההסכמים</h2>
             <div id="status-body"><p class="hint">טוען…</p></div>
+            <div class="loading" id="sync-loading" hidden role="status">
+              <div class="spinner" aria-hidden="true"></div>
+              <strong>מסנכרן את המאגר…</strong>
+              <span class="sub"
+                ><span id="sync-elapsed">0:00</span> · הסנכרון מושך מסמכים חדשים
+                מ-Drive ומעבד אותם, וזה יכול לקחת כמה דקות. אפשר לעבור לעמודים
+                אחרים בינתיים.</span
+              >
+            </div>
             <div class="row" id="sync-row" hidden>
               <button type="button" class="primary" id="sync-btn">
                 ⟳ סנכרון עכשיו
@@ -3191,7 +3206,7 @@
         );
         indexed.forEach((f) => newIds.add(f.file_id));
         renderFiles();
-        toast(`✓ הסנכרון הושלם (${s.updated_at}).`, 0);
+        toast(`✓ הסנכרון הושלם (${s.updated_at})`, 0);
         if (document.hidden) document.title = "✓ " + TITLE;
       }
       const TITLE = document.title;
@@ -3647,10 +3662,22 @@
 
       // סנכרון: אחרי הפעלה, הפאנל מתרענן כל 30 שניות עד שהריצה ב-GitHub מסתיימת.
       // ההודעה "הסנכרון הושלם" מגיעה מ-loadStatus, כשזמן הסנכרון האחרון משתנה
+      let syncClock = null;
       function setSyncRunning(on) {
         $("sync-btn").disabled = on;
         $("sync-btn").textContent = on ? "⟳ מסנכרן…" : "⟳ סנכרון עכשיו";
         if (on) $("side-sync-text").textContent = "מסנכרן…";
+        $("sync-loading").hidden = !on;
+        clearInterval(syncClock);
+        if (!on) return;
+        const start = Date.now();
+        const tick = () => {
+          const sec = Math.floor((Date.now() - start) / 1000);
+          $("sync-elapsed").textContent =
+            Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+        };
+        tick();
+        syncClock = setInterval(tick, 1000);
       }
       function watchSync() {
         if (syncWatch) return;
