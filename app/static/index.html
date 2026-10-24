@@ -8,7 +8,8 @@
     <script>
       // מצב בהיר/כהה נקבע לפני שהדף מצויר, כדי שבמצב כהה לא יהבהב לבן. ברירת המחדל בהיר; הכפתור שומר את הבחירה
       try {
-        document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+        document.documentElement.dataset.theme =
+          localStorage.getItem("theme") || "light";
       } catch {
         document.documentElement.dataset.theme = "light";
       }
@@ -87,8 +88,7 @@
         --overlay: rgba(23, 25, 30, 0.86);
         --toast: #343b47;
         --shadow:
-          0 1px 2px rgba(0, 0, 0, 0.3),
-          0 10px 28px -12px rgba(0, 0, 0, 0.55);
+          0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -12px rgba(0, 0, 0, 0.55);
         --lift: 0 3px 8px -3px rgba(0, 0, 0, 0.45);
       }
       * {
@@ -97,7 +97,8 @@
       body {
         margin: 0;
         /* כמו ChatGPT: Inter לאותיות לטיניות ולמספרים (הכי קרוב ל-Söhne), Noto Sans Hebrew לעברית */
-        font-family: "Inter", "Noto Sans Hebrew", system-ui, "Segoe UI", Arial, sans-serif;
+        font-family:
+          "Inter", "Noto Sans Hebrew", system-ui, "Segoe UI", Arial, sans-serif;
         background: var(--bg);
         color: var(--text);
         line-height: 1.55;
@@ -1989,16 +1990,113 @@
         <a class="brand" href="#ask">
           <span>
             <b>מנסח ההסכמים</b>
-            <small>על בסיס מאגר ההסכמים של המשרד</small>
+            <small>על בסיס מאגר ההסכמים של יחידת מתוו״ה</small>
           </span>
         </a>
         <nav class="nav" aria-label="ניווט ראשי">
-          <a href="#ask"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>שאלו על המסמכים</a>
-          <a href="#draft"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>הסכם חדש<span class="nav-n" id="nav-focus" title="מסמכי בסיס שנבחרו" hidden></span></a>
-          <a href="#drafts"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>טיוטות</a>
-          <a href="#agreements"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>חוזים</a>
-          <a href="#status"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M8 16H3v5"/></svg>סנכרון</a>
-          <a href="#costs"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>עלויות</a>
+          <a href="#ask"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+              />
+              <path d="M8 9h8" />
+              <path d="M8 13h5" /></svg
+            >שאלו על המסמכים</a
+          >
+          <a href="#draft"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg
+            >הסכם חדש<span
+              class="nav-n"
+              id="nav-focus"
+              title="מסמכי בסיס שנבחרו"
+              hidden
+            ></span
+          ></a>
+          <a href="#drafts"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M12 7v5l3 2" /></svg
+            >טיוטות</a
+          >
+          <a href="#agreements"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m16 6 4 14" />
+              <path d="M12 6v14" />
+              <path d="M8 8v12" />
+              <path d="M4 4v16" /></svg
+            >חוזים</a
+          >
+          <a href="#status"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 12a9 9 0 0 1 15.7-6L21 8" />
+              <path d="M21 3v5h-5" />
+              <path d="M21 12a9 9 0 0 1-15.7 6L3 16" />
+              <path d="M8 16H3v5" /></svg
+            >סנכרון</a
+          >
+          <a href="#costs"
+            ><svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m12 14 4-4" />
+              <path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg
+            >עלויות</a
+          >
         </nav>
         <div class="side-foot">
           <a class="side-sync" href="#status" id="side-sync" hidden>
@@ -2006,7 +2104,37 @@
             <span id="side-sync-text"></span>
           </a>
           <button type="button" class="theme-btn" id="theme-btn">
-            <svg class="icon moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="icon sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/><path d="m19.1 4.9-1.4 1.4"/></svg><span id="theme-label">מצב כהה</span>
+            <svg
+              class="icon moon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg
+            ><svg
+              class="icon sun"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.9 4.9 1.4 1.4" />
+              <path d="m17.7 17.7 1.4 1.4" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m6.3 17.7-1.4 1.4" />
+              <path d="m19.1 4.9-1.4 1.4" /></svg
+            ><span id="theme-label">מצב כהה</span>
           </button>
         </div>
       </aside>
@@ -2015,17 +2143,36 @@
         <div class="page ask" id="page-ask" hidden>
           <div class="ask-hero" id="ask-hero">
             <div>
-              <span class="pill"><span class="dot" aria-hidden="true"></span>יחידת מתוו״ה, מערכת חוזים והתחייבויות</span>
+              <span class="pill"
+                ><span class="dot" aria-hidden="true"></span>יחידת מתוו״ה, מערכת
+                חוזים והתחייבויות</span
+              >
               <h1 tabindex="-1">מה תרצו לדעת על ההסכמים?</h1>
               <p class="hero-p">
                 שאלו בשפה חופשית. כל תשובה נשענת על המסמכים במאגר, ולכל טענה יש
                 הפניה למסמך, לסעיף ולעמוד שממנו היא נלקחה.
               </p>
               <ul class="examples" id="ask-examples" aria-label="שאלות לדוגמה">
-                <li><button type="button">מה תקופת הסודיות המקובלת בהסכמים שלנו?</button></li>
-                <li><button type="button">אילו הסכמים כוללים פיצוי מוסכם, ובאיזה סכום?</button></li>
-                <li><button type="button">אילו התחייבויות מסתיימות השנה, ומי הצדדים בהן?</button></li>
-                <li><button type="button">מה נדרש בדרך כלל מקבלן לגבי ביטוח ואחריות?</button></li>
+                <li>
+                  <button type="button">
+                    מה תקופת הסודיות המקובלת בהסכמים שלנו?
+                  </button>
+                </li>
+                <li>
+                  <button type="button">
+                    אילו הסכמים כוללים פיצוי מוסכם, ובאיזה סכום?
+                  </button>
+                </li>
+                <li>
+                  <button type="button">
+                    אילו התחייבויות מסתיימות השנה, ומי הצדדים בהן?
+                  </button>
+                </li>
+                <li>
+                  <button type="button">
+                    מה נדרש בדרך כלל מקבלן לגבי ביטוח ואחריות?
+                  </button>
+                </li>
               </ul>
             </div>
             <div class="hero-art" aria-hidden="true">
@@ -2034,7 +2181,9 @@
           </div>
           <div class="thread" id="thread" aria-live="polite"></div>
           <div class="ask-dock">
-            <button type="button" class="ghost" id="ask-new" hidden>+ שיחה חדשה</button>
+            <button type="button" class="ghost" id="ask-new" hidden>
+              + שיחה חדשה
+            </button>
             <form class="ask-form" id="ask-form">
               <label for="q" class="visually-hidden">שאלה</label>
               <textarea
@@ -2042,11 +2191,31 @@
                 rows="1"
                 placeholder="שאלו על הסכם, סעיף, צד או תנאי…"
               ></textarea>
-              <button type="submit" class="send" id="ask-send" aria-label="שליחה" disabled>
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+              <button
+                type="submit"
+                class="send"
+                id="ask-send"
+                aria-label="שליחה"
+                disabled
+              >
+                <svg
+                  class="icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 7-7 7 7" />
+                  <path d="M12 19V5" />
+                </svg>
               </button>
             </form>
-            <p class="ask-note">התשובות נשענות על ההסכמים במאגר ואינן ייעוץ משפטי.</p>
+            <p class="ask-note">
+              התשובות נשענות על ההסכמים במאגר ואינן ייעוץ משפטי.
+            </p>
           </div>
         </div>
 
@@ -2065,7 +2234,11 @@
                 <div class="two">
                   <label class="field">
                     <span class="lbl">סוג החוזה</span>
-                    <input id="b-type" required placeholder="בחרו מהרשימה או הקלידו, למשל: הסכם שירותים" />
+                    <input
+                      id="b-type"
+                      required
+                      placeholder="בחרו מהרשימה או הקלידו, למשל: הסכם שירותים"
+                    />
                   </label>
                   <label class="field">
                     <span class="lbl">כותרת <small>לא חובה</small></span>
@@ -2074,11 +2247,20 @@
                 </div>
                 <label class="field">
                   <span class="lbl">מהות ההתקשרות</span>
-                  <textarea id="b-essence" rows="3" placeholder="מה בדיוק הצד השני מספק או מקבל, ולאיזו מטרה"></textarea>
+                  <textarea
+                    id="b-essence"
+                    rows="3"
+                    placeholder="מה בדיוק הצד השני מספק או מקבל, ולאיזו מטרה"
+                  ></textarea>
                 </label>
                 <label class="field">
-                  <span class="lbl">חוזה בסיס <small>לא חובה, אפשר כמה</small></span>
-                  <input id="b-base" placeholder="בחירה אוטומטית מכל המאגר, או חפשו חוזה" />
+                  <span class="lbl"
+                    >חוזה בסיס <small>לא חובה, אפשר כמה</small></span
+                  >
+                  <input
+                    id="b-base"
+                    placeholder="בחירה אוטומטית מכל המאגר, או חפשו חוזה"
+                  />
                 </label>
                 <div class="focus" id="focus-bar" hidden>
                   <span>מבוסס על:</span>
@@ -2089,25 +2271,52 @@
               <fieldset>
                 <legend>הצדדים</legend>
                 <div id="parties"></div>
-                <button type="button" class="ghost" id="add-party">+ הוספת צד</button>
+                <button type="button" class="ghost" id="add-party">
+                  + הוספת צד
+                </button>
               </fieldset>
 
               <fieldset>
                 <legend>תנאים</legend>
                 <label class="field">
-                  <span class="lbl">תנאים מסחריים <small>תמורה, תקופה, תנאי תשלום</small></span>
-                  <textarea id="b-terms" rows="3" placeholder='למשל: 18,000 ש"ח לחודש בתוספת מע"מ, ל-12 חודשים, שוטף + 30'></textarea>
+                  <span class="lbl"
+                    >תנאים מסחריים <small>תמורה, תקופה, תנאי תשלום</small></span
+                  >
+                  <textarea
+                    id="b-terms"
+                    rows="3"
+                    placeholder='למשל: 18,000 ש"ח לחודש בתוספת מע"מ, ל-12 חודשים, שוטף + 30'
+                  ></textarea>
                 </label>
                 <label class="field">
                   <span class="lbl">דרישות מיוחדות</span>
-                  <textarea id="b-special" rows="3" placeholder="למשל: סודיות ל-7 שנים, בלי בלעדיות, ביטוח אחריות מקצועית"></textarea>
+                  <textarea
+                    id="b-special"
+                    rows="3"
+                    placeholder="למשל: סודיות ל-7 שנים, בלי בלעדיות, ביטוח אחריות מקצועית"
+                  ></textarea>
                 </label>
                 <div class="field" role="radiogroup" aria-labelledby="bias-l">
                   <span class="lbl" id="bias-l">נטיית הניסוח</span>
                   <div class="seg">
-                    <label><input type="radio" name="bias" value="balanced" checked /><span>מאוזן</span></label>
-                    <label><input type="radio" name="bias" value="first" /><span>לטובת הצד הראשון</span></label>
-                    <label><input type="radio" name="bias" value="second" /><span>לטובת הצד השני</span></label>
+                    <label
+                      ><input
+                        type="radio"
+                        name="bias"
+                        value="balanced"
+                        checked
+                      /><span>מאוזן</span></label
+                    >
+                    <label
+                      ><input type="radio" name="bias" value="first" /><span
+                        >לטובת הצד הראשון</span
+                      ></label
+                    >
+                    <label
+                      ><input type="radio" name="bias" value="second" /><span
+                        >לטובת הצד השני</span
+                      ></label
+                    >
                   </div>
                 </div>
               </fieldset>
@@ -2116,126 +2325,372 @@
                 <legend class="visually-hidden">אפשרויות</legend>
                 <label class="opt">
                   <input type="checkbox" id="b-web" />
-                  <span><b>בדיקת דרישות חוק עדכניות באינטרנט</b><small>מוסיף כ-20 שניות. כדאי לחוזים מסוג שעדיין אין במאגר.</small></span>
+                  <span
+                    ><b>בדיקת דרישות חוק עדכניות באינטרנט</b
+                    ><small
+                      >מוסיף כ-20 שניות. כדאי לחוזים מסוג שעדיין אין
+                      במאגר.</small
+                    ></span
+                  >
                 </label>
                 <label class="opt">
                   <input type="checkbox" id="b-review" />
-                  <span><b>בדיקה משפטית מעמיקה</b><small>מודל חזק יותר בודק ומתקן את הטיוטה. איטי ויקר יותר, מתאים לחוזים מורכבים.</small></span>
+                  <span
+                    ><b>בדיקה משפטית מעמיקה</b
+                    ><small
+                      >מודל חזק יותר בודק ומתקן את הטיוטה. איטי ויקר יותר, מתאים
+                      לחוזים מורכבים.</small
+                    ></span
+                  >
                 </label>
               </fieldset>
 
               <div class="row submit-row">
                 <button type="submit" class="primary big">הכנת טיוטה</button>
-                <span class="kbd">בדרך כלל כשתי דקות; עם בדיקה משפטית מעמיקה עד כחמש.</span>
+                <span class="kbd"
+                  >בדרך כלל כשתי דקות; עם בדיקה משפטית מעמיקה עד כחמש.</span
+                >
               </div>
             </form>
           </div>
 
           <div id="result-view" hidden>
-          <header class="page-h result-h">
-            <div>
-              <h1 tabindex="-1">טיוטת הסכם</h1>
-              <span class="chip" role="note">
-                ⚠️ טיוטה שנוצרה בבינה מלאכותית. יש לבדוק כל הסכם לפני שימוש.
-              </span>
-            </div>
-            <button type="button" id="reset">+ הסכם חדש</button>
-          </header>
-          <div class="draft-grid">
-            <section id="chat-panel" aria-labelledby="chat-h">
-              <h2 id="chat-h">תיקונים</h2>
-              <p class="hint">
-                בקשו כאן שינויים בטיוטה, למשל "הוסף סעיף שיפוי" או "קצר את
-                תקופת ההודעה ל-30 יום". אפשר גם לערוך ישירות בחלונית ההסכם.
-              </p>
-              <div id="chat" aria-live="polite"></div>
-              <form id="form">
-                <label for="input" class="hint">הבקשה שלך</label>
-                <textarea
-                  id="input"
-                  rows="3"
-                  required
-                  placeholder="מה לשנות בטיוטה?"
-                ></textarea>
-                <div class="row">
-                  <button class="primary" id="send">שליחה</button>
-                  <span class="kbd">Ctrl+Enter לשליחה</span>
-                </div>
-              </form>
-            </section>
+            <header class="page-h result-h">
+              <div>
+                <h1 tabindex="-1">טיוטת הסכם</h1>
+                <span class="chip" role="note">
+                  ⚠️ טיוטה שנוצרה בבינה מלאכותית. יש לבדוק כל הסכם לפני שימוש.
+                </span>
+              </div>
+              <button type="button" id="reset">+ הסכם חדש</button>
+            </header>
+            <div class="draft-grid">
+              <section id="chat-panel" aria-labelledby="chat-h">
+                <h2 id="chat-h">תיקונים</h2>
+                <p class="hint">
+                  בקשו כאן שינויים בטיוטה, למשל "הוסף סעיף שיפוי" או "קצר את
+                  תקופת ההודעה ל-30 יום". אפשר גם לערוך ישירות בחלונית ההסכם.
+                </p>
+                <div id="chat" aria-live="polite"></div>
+                <form id="form">
+                  <label for="input" class="hint">הבקשה שלך</label>
+                  <textarea
+                    id="input"
+                    rows="3"
+                    required
+                    placeholder="מה לשנות בטיוטה?"
+                  ></textarea>
+                  <div class="row">
+                    <button class="primary" id="send">שליחה</button>
+                    <span class="kbd">Ctrl+Enter לשליחה</span>
+                  </div>
+                </form>
+              </section>
 
-            <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
-              <h2 id="doc-h" style="margin-bottom: 14px">ההסכם</h2>
-              <div id="doc" hidden>
-                <div class="sources" aria-labelledby="sources-h">
-                  <p class="sources-h" id="sources-h">
-                    📚 מקורות מהמאגר <span class="badge" id="sources-n">0</span>
-                  </p>
-                  <ul id="sources"></ul>
+              <section id="doc-panel" aria-labelledby="doc-h" aria-busy="false">
+                <h2 id="doc-h" style="margin-bottom: 14px">ההסכם</h2>
+                <div id="doc" hidden>
+                  <div class="sources" aria-labelledby="sources-h">
+                    <p class="sources-h" id="sources-h">
+                      📚 מקורות מהמאגר
+                      <span class="badge" id="sources-n">0</span>
+                    </p>
+                    <ul id="sources"></ul>
+                  </div>
+                  <label for="title" class="hint">כותרת</label>
+                  <input type="text" id="title" />
+                  <p class="hint" id="body-l">נוסח (ניתן לערוך ולעצב)</p>
+                  <div
+                    class="toolbar"
+                    id="toolbar"
+                    role="toolbar"
+                    aria-label="עיצוב טקסט"
+                    aria-controls="body"
+                  >
+                    <button
+                      type="button"
+                      data-cmd="bold"
+                      title="מודגש (Ctrl+B)"
+                      aria-label="מודגש"
+                    >
+                      <b>B</b>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="italic"
+                      title="נטוי (Ctrl+I)"
+                      aria-label="נטוי"
+                    >
+                      <i>I</i>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="underline"
+                      title="קו תחתון (Ctrl+U)"
+                      aria-label="קו תחתון"
+                    >
+                      <u>U</u>
+                    </button>
+                    <select
+                      id="font-size"
+                      aria-label="גודל גופן"
+                      title="גודל גופן"
+                    >
+                      <option value="" selected disabled>גודל</option>
+                      <option value="2">קטן</option>
+                      <option value="3">רגיל</option>
+                      <option value="4">בינוני</option>
+                      <option value="5">גדול</option>
+                      <option value="6">גדול מאוד</option>
+                    </select>
+                    <span class="sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      data-cmd="justifyRight"
+                      title="יישור לימין"
+                      aria-label="יישור לימין"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 6H3" />
+                        <path d="M21 12H9" />
+                        <path d="M21 18H7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="justifyCenter"
+                      title="מרכוז"
+                      aria-label="מרכוז"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 6H3" />
+                        <path d="M17 12H7" />
+                        <path d="M19 18H5" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="justifyLeft"
+                      title="יישור לשמאל"
+                      aria-label="יישור לשמאל"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 6H3" />
+                        <path d="M15 12H3" />
+                        <path d="M17 18H3" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="justifyFull"
+                      title="יישור לשני הצדדים"
+                      aria-label="יישור לשני הצדדים"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M3 12h18" />
+                        <path d="M3 18h18" />
+                      </svg>
+                    </button>
+                    <span class="sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      data-dir="rtl"
+                      title="כתיבה מימין לשמאל"
+                      aria-label="כתיבה מימין לשמאל"
+                    >
+                      ¶←
+                    </button>
+                    <button
+                      type="button"
+                      data-dir="ltr"
+                      title="כתיבה משמאל לימין"
+                      aria-label="כתיבה משמאל לימין"
+                    >
+                      →¶
+                    </button>
+                    <span class="sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      data-cmd="insertOrderedList"
+                      title="רשימה ממוספרת"
+                      aria-label="רשימה ממוספרת"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M10 6h11" />
+                        <path d="M10 12h11" />
+                        <path d="M10 18h11" />
+                        <path d="M4 6h1v4" />
+                        <path d="M4 10h2" />
+                        <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="insertUnorderedList"
+                      title="רשימת תבליטים"
+                      aria-label="רשימת תבליטים"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 6h12" />
+                        <path d="M9 12h12" />
+                        <path d="M9 18h12" />
+                        <circle cx="4" cy="6" r="1" />
+                        <circle cx="4" cy="12" r="1" />
+                        <circle cx="4" cy="18" r="1" />
+                      </svg>
+                    </button>
+                    <span class="sep" aria-hidden="true"></span>
+                    <button
+                      type="button"
+                      data-cmd="undo"
+                      title="ביטול (Ctrl+Z)"
+                      aria-label="ביטול"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 14 4 9l5-5" />
+                        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="redo"
+                      title="ביצוע מחדש (Ctrl+Y)"
+                      aria-label="ביצוע מחדש"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m15 14 5-5-5-5" />
+                        <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-cmd="removeFormat"
+                      title="ניקוי עיצוב"
+                      aria-label="ניקוי עיצוב"
+                    >
+                      <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M4 7V4h16v3" />
+                        <path d="M5 20h6" />
+                        <path d="M13 4 8 20" />
+                        <path d="m15 15 5 5" />
+                        <path d="m20 15-5 5" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    id="body"
+                    class="editor"
+                    contenteditable="true"
+                    role="textbox"
+                    aria-multiline="true"
+                    aria-labelledby="body-l"
+                    dir="rtl"
+                  ></div>
+                  <div class="row">
+                    <button type="button" class="primary" id="download">
+                      ⬇ הורדה כ-Word
+                    </button>
+                    <button type="button" id="copy">העתקה</button>
+                    <span class="saved" id="saved" role="status"></span>
+                  </div>
                 </div>
-                <label for="title" class="hint">כותרת</label>
-                <input type="text" id="title" />
-                <p class="hint" id="body-l">נוסח (ניתן לערוך ולעצב)</p>
-                <div class="toolbar" id="toolbar" role="toolbar" aria-label="עיצוב טקסט" aria-controls="body">
-                  <button type="button" data-cmd="bold" title="מודגש (Ctrl+B)" aria-label="מודגש"><b>B</b></button>
-                  <button type="button" data-cmd="italic" title="נטוי (Ctrl+I)" aria-label="נטוי"><i>I</i></button>
-                  <button type="button" data-cmd="underline" title="קו תחתון (Ctrl+U)" aria-label="קו תחתון"><u>U</u></button>
-                  <select id="font-size" aria-label="גודל גופן" title="גודל גופן">
-                    <option value="" selected disabled>גודל</option>
-                    <option value="2">קטן</option>
-                    <option value="3">רגיל</option>
-                    <option value="4">בינוני</option>
-                    <option value="5">גדול</option>
-                    <option value="6">גדול מאוד</option>
-                  </select>
-                  <span class="sep" aria-hidden="true"></span>
-                  <button type="button" data-cmd="justifyRight" title="יישור לימין" aria-label="יישור לימין"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M21 12H9"/><path d="M21 18H7"/></svg></button>
-                  <button type="button" data-cmd="justifyCenter" title="מרכוז" aria-label="מרכוז"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M17 12H7"/><path d="M19 18H5"/></svg></button>
-                  <button type="button" data-cmd="justifyLeft" title="יישור לשמאל" aria-label="יישור לשמאל"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 6H3"/><path d="M15 12H3"/><path d="M17 18H3"/></svg></button>
-                  <button type="button" data-cmd="justifyFull" title="יישור לשני הצדדים" aria-label="יישור לשני הצדדים"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg></button>
-                  <span class="sep" aria-hidden="true"></span>
-                  <button type="button" data-dir="rtl" title="כתיבה מימין לשמאל" aria-label="כתיבה מימין לשמאל">¶←</button>
-                  <button type="button" data-dir="ltr" title="כתיבה משמאל לימין" aria-label="כתיבה משמאל לימין">→¶</button>
-                  <span class="sep" aria-hidden="true"></span>
-                  <button type="button" data-cmd="insertOrderedList" title="רשימה ממוספרת" aria-label="רשימה ממוספרת"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 6h11"/><path d="M10 12h11"/><path d="M10 18h11"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg></button>
-                  <button type="button" data-cmd="insertUnorderedList" title="רשימת תבליטים" aria-label="רשימת תבליטים"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h12"/><path d="M9 12h12"/><path d="M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg></button>
-                  <span class="sep" aria-hidden="true"></span>
-                  <button type="button" data-cmd="undo" title="ביטול (Ctrl+Z)" aria-label="ביטול"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-                  <button type="button" data-cmd="redo" title="ביצוע מחדש (Ctrl+Y)" aria-label="ביצוע מחדש"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
-                  <button type="button" data-cmd="removeFormat" title="ניקוי עיצוב" aria-label="ניקוי עיצוב"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V4h16v3"/><path d="M5 20h6"/><path d="M13 4 8 20"/><path d="m15 15 5 5"/><path d="m20 15-5 5"/></svg></button>
+                <p class="empty" id="placeholder">
+                  <span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן
+                  לאחר הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.
+                </p>
+                <div class="loading" id="loading" hidden role="status">
+                  <div class="spinner" aria-hidden="true"></div>
+                  <strong>מנסח את ההסכם…</strong>
+                  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+                  <span class="sub"
+                    ><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות.
+                    אפשר להשאיר את החלון פתוח.</span
+                  >
                 </div>
-                <div
-                  id="body"
-                  class="editor"
-                  contenteditable="true"
-                  role="textbox"
-                  aria-multiline="true"
-                  aria-labelledby="body-l"
-                  dir="rtl"
-                ></div>
-                <div class="row">
-                  <button type="button" class="primary" id="download">
-                    ⬇ הורדה כ-Word
-                  </button>
-                  <button type="button" id="copy">העתקה</button>
-                  <span class="saved" id="saved" role="status"></span>
-                </div>
-              </div>
-              <p class="empty" id="placeholder">
-                <span class="ico" aria-hidden="true">📝</span>ההסכם יופיע כאן
-                לאחר הניסוח, יחד עם ההסכמים מהמאגר שעליהם הוא מבוסס.
-              </p>
-              <div class="loading" id="loading" hidden role="status">
-                <div class="spinner" aria-hidden="true"></div>
-                <strong>מנסח את ההסכם…</strong>
-                <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-                <span class="sub"
-                  ><span id="elapsed">0:00</span> · זה יכול לקחת עד כ-2 דקות.
-                  אפשר להשאיר את החלון פתוח.</span
-                >
-              </div>
-            </section>
-          </div>
+              </section>
+            </div>
           </div>
         </div>
 
@@ -2243,9 +2698,9 @@
           <header class="page-h">
             <h1 tabindex="-1">טיוטות</h1>
             <p>
-              הטיוטות שנוסחו באתר בשבוע האחרון. פתיחה של טיוטה מחזירה אותה לעריכה,
-              יחד עם השיחה שבה נוצרה. השינויים נשמרים אוטומטית, וטיוטה שלא נגעו
-              בה שבוע נמחקת.
+              הטיוטות שנוסחו באתר בשבוע האחרון. פתיחה של טיוטה מחזירה אותה
+              לעריכה, יחד עם השיחה שבה נוצרה. השינויים נשמרים אוטומטית, וטיוטה
+              שלא נגעו בה שבוע נמחקת.
             </p>
           </header>
           <section aria-label="טיוטות מהשבוע האחרון">
@@ -2259,8 +2714,9 @@
             <h1 tabindex="-1">עלויות</h1>
             <p>
               ההוצאות על OpenAI API בשבוע האחרון: ניסוח טיוטות, שאלות על
-              המסמכים, וסנכרון ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של כל קריאה לפי
-              המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI הוא הקובע.
+              המסמכים, וסנכרון ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של
+              כל קריאה לפי המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI
+              הוא הקובע.
             </p>
           </header>
           <div class="tiles">
@@ -2354,7 +2810,9 @@
             <h2 id="sc-title">סטטוס מאגר ההסכמים</h2>
             <div id="status-body"><p class="hint">טוען…</p></div>
             <div class="row" id="sync-row" hidden>
-              <button type="button" class="primary" id="sync-btn">⟳ סנכרון עכשיו</button>
+              <button type="button" class="primary" id="sync-btn">
+                ⟳ סנכרון עכשיו
+              </button>
             </div>
           </section>
         </div>
@@ -2387,10 +2845,36 @@
 
     <!-- אייקון "נסח על בסיס המסמך הזה": סיכת משרד. משוכפל לכפתורים ולפס "מבוסס על" -->
     <template id="icon-chevron">
-      <svg class="icon combo-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <svg
+        class="icon combo-chev"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
     </template>
     <template id="icon-trash">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      <svg
+        class="icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 6h18" />
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </svg>
     </template>
     <template id="icon-draft">
       <svg
@@ -2445,8 +2929,7 @@
             Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
           $("elapsed").textContent = txt;
           if ($("elapsed2")) $("elapsed2").textContent = txt;
-          $("bar").style.width =
-            Math.min(95, (s / expected) * 95) + "%"; // לא מגיע ל-100 עד שהתשובה מגיעה
+          $("bar").style.width = Math.min(95, (s / expected) * 95) + "%"; // לא מגיע ל-100 עד שהתשובה מגיעה
         };
         tick();
         timer = setInterval(tick, 1000);
@@ -2529,7 +3012,10 @@
           if (!messages.length) {
             $("chat").replaceChildren();
             showResult(false);
-            return toast("הניסוח נכשל: " + err.message + ". אפשר לנסות שוב.", 0);
+            return toast(
+              "הניסוח נכשל: " + err.message + ". אפשר לנסות שוב.",
+              0,
+            );
           }
           add("error", "הניסוח נכשל: " + err.message + ". נסה שוב.");
         }
@@ -2663,7 +3149,10 @@
         if (!s) {
           if (lastSync === undefined)
             $("status-body").replaceChildren(
-              el("p", { className: "hint", textContent: "הסטטוס לא זמין כרגע." }),
+              el("p", {
+                className: "hint",
+                textContent: "הסטטוס לא זמין כרגע.",
+              }),
             );
           return null;
         }
@@ -2805,7 +3294,9 @@
           el("span", { textContent: fmtSize(f.size_bytes) }),
           el("span", { textContent: fmtDate(f.modified_time) }),
           f.metadata?.end_date &&
-            el("span", { textContent: "בתוקף עד " + fmtDate(f.metadata.end_date) }),
+            el("span", {
+              textContent: "בתוקף עד " + fmtDate(f.metadata.end_date),
+            }),
         ].filter(Boolean); // בלי זה, קובץ שאינו חדש הציג "false" בחלון הפרטים
 
       // פאנל הקבצים. החיפוש מסנן בצד הלקוח, בלי קריאה לשרת
@@ -2840,10 +3331,16 @@
                   onclick: () => openFile(f.file_id),
                 },
                 fileKind(f.metadata) &&
-                  el("span", { className: "file-kind", textContent: fileKind(f.metadata) }),
+                  el("span", {
+                    className: "file-kind",
+                    textContent: fileKind(f.metadata),
+                  }),
                 el("span", { className: "file-name", textContent: f.name }),
                 f.summary &&
-                  el("span", { className: "file-summary", textContent: f.summary }),
+                  el("span", {
+                    className: "file-summary",
+                    textContent: f.summary,
+                  }),
                 el("span", { className: "file-meta" }, ...fileMeta(f)),
               ),
               f.status === "indexed" && pinButton(f),
@@ -3333,7 +3830,10 @@
       $("input").addEventListener("input", growInput);
 
       // ---- עורך ההסכם ----
-      const bodyText = () => $("body").innerText.replace(/\n{3,}/g, "\n\n").trim();
+      const bodyText = () =>
+        $("body")
+          .innerText.replace(/\n{3,}/g, "\n\n")
+          .trim();
       document.execCommand("styleWithCSS", false, false); // <b>, <font size> ו-align: מה שהייצוא ל-Word מכיר
       document.execCommand("defaultParagraphSeparator", false, "p");
       // הבחירה האחרונה בעורך, כדי שגודל הגופן והכיוון יחולו עליה גם אחרי לחיצה על הסרגל
@@ -3394,7 +3894,9 @@
       });
       // HTML מהטיוטות עובר סינון: רק תגים ומאפייני עיצוב שהעורך עצמו יוצר
       const ALLOWED = new Set(
-        "P DIV BR B STRONG I EM U FONT SPAN OL UL LI H1 H2 H3 BLOCKQUOTE".split(" "),
+        "P DIV BR B STRONG I EM U FONT SPAN OL UL LI H1 H2 H3 BLOCKQUOTE".split(
+          " ",
+        ),
       );
       const STYLES = [
         "text-align",
@@ -3425,7 +3927,9 @@
           return to;
         };
         const doc = new DOMParser().parseFromString(html, "text/html");
-        return [...copy(doc.body, document.createDocumentFragment()).childNodes];
+        return [
+          ...copy(doc.body, document.createDocumentFragment()).childNodes,
+        ];
       }
 
       // ---- טיוטות ----
@@ -3433,7 +3937,8 @@
       let historyId = null;
       // מזהה השיחה נשלח עם כל ניסוח ונשמר עם הטיוטה, כך שעמוד "עלויות" יודע כמה עלתה כל טיוטה
       const newConversation = () =>
-        crypto.randomUUID?.() ?? Date.now() + "-" + Math.random().toString(36).slice(2);
+        crypto.randomUUID?.() ??
+        Date.now() + "-" + Math.random().toString(36).slice(2);
       let conversation = newConversation();
       async function saveHistory() {
         if ($("doc").hidden) return;
@@ -3480,12 +3985,18 @@
             el(
               "li",
               { className: "h-item" + (h.id === historyId ? " current" : "") },
-              el("h2", { className: "h-title", textContent: h.title || "ללא כותרת" }),
+              el("h2", {
+                className: "h-title",
+                textContent: h.title || "ללא כותרת",
+              }),
               el(
                 "div",
                 { className: "file-meta" },
                 h.id === historyId &&
-                  el("span", { className: "tag tag-new", textContent: "פתוח כעת" }),
+                  el("span", {
+                    className: "tag tag-new",
+                    textContent: "פתוח כעת",
+                  }),
                 el("span", { textContent: "נוצר " + h.created_at }),
                 h.updated_at !== h.created_at &&
                   el("span", { textContent: "עודכן " + h.updated_at }),
@@ -3513,7 +4024,11 @@
       }
       async function openHistory(id) {
         // שיחה שעוד לא הגיעה להסכם לא נשמרת בטיוטות, ולכן שואלים לפני שמחליפים אותה
-        if (messages.length && !historyId && !confirm("השיחה הנוכחית תיסגר. להמשיך?"))
+        if (
+          messages.length &&
+          !historyId &&
+          !confirm("השיחה הנוכחית תיסגר. להמשיך?")
+        )
           return;
         let h;
         try {
@@ -3611,7 +4126,8 @@
                   el("th", {
                     scope: "row",
                     colSpan: 3,
-                    textContent: "שיחות שלא נשמרו כטיוטה (שאלות בלבד, ניסוח שנכשל או טיוטה שנמחקה)",
+                    textContent:
+                      "שיחות שלא נשמרו כטיוטה (שאלות בלבד, ניסוח שנכשל או טיוטה שנמחקה)",
                   }),
                   el("td", { textContent: usd(c.unsaved) }),
                 ),
@@ -3682,7 +4198,11 @@
         });
         const bias = document.querySelector('input[name="bias"]:checked').value;
         const favored =
-          bias === "first" ? parties[0]?.role : bias === "second" ? parties[1]?.role : null;
+          bias === "first"
+            ? parties[0]?.role
+            : bias === "second"
+              ? parties[1]?.role
+              : null;
         return [
           "סוג החוזה: " + v("b-type"),
           v("b-title") && "כותרת: " + v("b-title"),
@@ -3718,11 +4238,19 @@
       // תיבת בחירה עם חיפוש, במקום datalist ו-select של הדפדפן: אותו עיצוב בכל דפדפן, וחיפוש בתוך הרשימה.
       // options() נקרא בכל פתיחה, כך שהרשימה תמיד עדכנית. מקלדת: חצים, Enter ו-Esc
       function combo(input, options, onPick) {
-        const list = el("ul", { className: "combo-list", id: input.id + "-list", hidden: true });
+        const list = el("ul", {
+          className: "combo-list",
+          id: input.id + "-list",
+          hidden: true,
+        });
         list.setAttribute("role", "listbox");
         const wrap = el("div", { className: "combo" });
         input.replaceWith(wrap);
-        wrap.append(input, $("icon-chevron").content.firstElementChild.cloneNode(true), list);
+        wrap.append(
+          input,
+          $("icon-chevron").content.firstElementChild.cloneNode(true),
+          list,
+        );
         input.autocomplete = "off";
         for (const [k, v] of Object.entries({
           role: "combobox",
@@ -3735,7 +4263,9 @@
           active = -1;
         const setActive = (i) => {
           active = i;
-          [...list.children].forEach((li, j) => li.setAttribute("aria-selected", String(j === i)));
+          [...list.children].forEach((li, j) =>
+            li.setAttribute("aria-selected", String(j === i)),
+          );
           if (i >= 0) {
             input.setAttribute("aria-activedescendant", list.children[i].id);
             list.children[i].scrollIntoView({ block: "nearest" });
@@ -3745,7 +4275,8 @@
         const open = (filter) => {
           const q = filter ? input.value.trim().toLowerCase() : "";
           items = options().filter(
-            (o) => !q || (o.label + " " + (o.hint || "")).toLowerCase().includes(q),
+            (o) =>
+              !q || (o.label + " " + (o.hint || "")).toLowerCase().includes(q),
           );
           list.replaceChildren(
             ...(items.length
@@ -3766,7 +4297,12 @@
                   li.setAttribute("role", "option");
                   return li;
                 })
-              : [el("li", { className: "combo-empty", textContent: "לא נמצאו תוצאות" })]),
+              : [
+                  el("li", {
+                    className: "combo-empty",
+                    textContent: "לא נמצאו תוצאות",
+                  }),
+                ]),
           );
           list.hidden = false;
           input.setAttribute("aria-expanded", "true");
@@ -3790,7 +4326,10 @@
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
             if (list.hidden) return open(false);
-            if (n) setActive(e.key === "ArrowDown" ? (active + 1) % n : (active - 1 + n) % n);
+            if (n)
+              setActive(
+                e.key === "ArrowDown" ? (active + 1) % n : (active - 1 + n) % n,
+              );
           } else if (e.key === "Enter" && !list.hidden && active >= 0) {
             e.preventDefault();
             pick(active);
@@ -3823,7 +4362,11 @@
         () =>
           files
             .filter((f) => f.status === "indexed" && !isFocus(f))
-            .map((f) => ({ label: f.name, hint: fileKind(f.metadata), file: f })),
+            .map((f) => ({
+              label: f.name,
+              hint: fileKind(f.metadata),
+              file: f,
+            })),
         (o) => {
           $("b-base").value = "";
           toggleFocus(o.file);
@@ -3883,7 +4426,10 @@
           el("span", { className: "dots" }, el("span"), el("span"), el("span")),
           "מחפש במסמכים…",
         );
-        $("thread").append(el("div", { className: "q-bubble", textContent: text }), pending);
+        $("thread").append(
+          el("div", { className: "q-bubble", textContent: text }),
+          pending,
+        );
         pending.scrollIntoView({ behavior: "smooth", block: "end" });
         $("q").disabled = true;
         try {
@@ -3985,10 +4531,13 @@
         const dark = document.documentElement.dataset.theme === "dark";
         $("theme-label").textContent = dark ? "מצב בהיר" : "מצב כהה";
         $("theme-btn").ariaLabel = dark ? "מעבר למצב בהיר" : "מעבר למצב כהה";
-        document.querySelector('meta[name="theme-color"]').content = dark ? "#21252d" : "#ffffff";
+        document.querySelector('meta[name="theme-color"]').content = dark
+          ? "#21252d"
+          : "#ffffff";
       }
       $("theme-btn").onclick = () => {
-        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        const next =
+          document.documentElement.dataset.theme === "dark" ? "light" : "dark";
         document.documentElement.dataset.theme = next;
         try {
           localStorage.setItem("theme", next);
