@@ -2,7 +2,10 @@
 <html lang="he" dir="rtl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>מנסח ההסכמים</title>
     <meta name="theme-color" content="#ffffff" />
     <script>
@@ -343,18 +346,33 @@
           grid-template-columns: 1fr;
         }
       }
-      /* מסך צר: התפריט הופך לפס עליון, והקישורים בשורה אחת נגללת */
+      .nav-short {
+        display: none;
+      }
+      /* טלפון וטאבלט: כותרת דקה למעלה (שם האתר ומצב בהיר/כהה), והעמודים בסרגל לשוניות קבוע בתחתית,
+         כמו באפליקציה: כל העמודים במרחק הקשה אחת, בהישג האגודל */
       @media (max-width: 900px) {
+        :root {
+          --tabbar: calc(62px + env(safe-area-inset-bottom));
+        }
         .shell {
           grid-template-columns: minmax(0, 1fr);
           align-content: start;
         }
         .side {
           height: auto;
-          padding: 10px 12px;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          padding-top: max(10px, env(safe-area-inset-top));
           gap: 10px;
           border-inline-end: 0;
           border-bottom: 1px solid var(--line);
+          overflow: visible;
+        }
+        .brand {
+          padding: 0;
         }
         .brand b {
           font-size: 18px;
@@ -364,24 +382,104 @@
         .side::before {
           display: none;
         }
-        /* בפס העליון: רק האייקון, בפינה מול הלוגו */
+        .side-foot {
+          margin-top: 0;
+        }
         .theme-btn {
-          position: absolute;
-          top: 12px;
-          inset-inline-end: 12px;
-          padding: 8px;
+          width: 40px;
+          height: 40px;
         }
         .nav {
-          display: flex;
-          overflow-x: auto;
-          scrollbar-width: none;
+          position: fixed;
+          bottom: 0;
+          inset-inline: 0;
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 0;
+          padding: 6px 4px env(safe-area-inset-bottom);
+          background: var(--card);
+          border-top: 1px solid var(--line);
+          box-shadow: 0 -6px 18px -12px rgba(11, 42, 92, 0.25);
         }
-        .nav a {
+        .nav a,
+        .nav a:hover {
+          position: relative;
+          flex-direction: column;
+          gap: 3px;
+          padding: 6px 2px;
+          font-size: 11px;
+          line-height: 1.2;
+          text-align: center;
           white-space: nowrap;
-          padding: 7px 12px;
+          color: var(--muted);
+          background: none;
+          box-shadow: none;
+        }
+        .nav .icon {
+          width: 34px;
+          height: 26px;
+          padding: 3px 8px;
+          border-radius: 99px;
+          box-sizing: border-box;
+          transition: background 0.15s;
+        }
+        .nav a[aria-current="page"] {
+          color: var(--brand-deep);
+          font-weight: 600;
+          background: none;
+          box-shadow: none;
+        }
+        .nav a[aria-current="page"] .icon {
+          background: var(--brand-soft);
+          color: var(--brand);
+        }
+        .nav-long {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip-path: inset(50%);
+        }
+        .nav-short {
+          display: inline;
+        }
+        .nav-n {
+          position: absolute;
+          top: 2px;
+          inset-inline-start: calc(50% + 8px);
+          min-width: 18px;
+          padding: 0 5px;
+          font-size: 10.5px;
         }
         main {
-          padding: 18px 12px 28px;
+          padding: 18px 14px calc(var(--tabbar) + 24px);
+        }
+        /* "main" ו-"body": הכללים הבסיסיים של שני אלה מופיעים בהמשך הקובץ */
+        main .ask-dock {
+          bottom: var(--tabbar);
+        }
+        body #toast {
+          bottom: calc(var(--tabbar) + 12px);
+        }
+        /* בטלפון אין מקלדת עם Ctrl */
+        .row .kbd {
+          display: none;
+        }
+        #reset {
+          white-space: nowrap;
+        }
+      }
+      /* בטלפון: כרטיסי הסיכום בעמוד העלויות שניים בשורה (".page": הכללים הבסיסיים מופיעים בהמשך הקובץ) */
+      @media (max-width: 600px) {
+        .page .tiles {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .page .tile {
+          padding: 12px 14px;
+        }
+        .page .tile b {
+          font-size: 22px;
         }
       }
       section {
@@ -2131,7 +2229,8 @@
               />
               <path d="M8 9h8" />
               <path d="M8 13h5" /></svg
-            >שאלו על המסמכים</a
+            ><span class="nav-long">שאלו על המסמכים</span
+            ><span class="nav-short" aria-hidden="true">שאלות</span></a
           >
           <a href="#draft"
             ><svg
