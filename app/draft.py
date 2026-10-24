@@ -1,4 +1,10 @@
-"""מנוע הניסוח: Agent של Agno שמחפש הסכמים דומים במאגר (tool), ומנסח הסכם או שואל שאלות השלמה.
+"""מנוע הניסוח: שלושה Agents של Agno, כל אחד במודל שמתאים לתפקיד שלו.
+
+Intake (INTAKE_MODEL, זול): מחפש במאגר ורואה רק תקצירים. מחליט אם לשאול שאלות השלמה, ובוחר מסמכים לדוגמה.
+  רוב סבבי השאלות נעצרים כאן, בלי לשלם על הטקסט המלא של הדוגמאות.
+Writer (MODEL): מנסח, עם הטקסט המלא רק של מסמכי הבסיס והדוגמאות שנבחרו. תיקון בצ'אט מגיע ישר אליו, בלי חיפוש.
+Reviewer (REVIEW_MODEL, רק ב"בדיקה משפטית מעמיקה"): מחזיר תיקונים נקודתיים והערות, לא את כל ההסכם מחדש.
+החיבור ביניהם בקוד רגיל ולא ב-Team של Agno: הסדר קבוע, ומודל "מנהל" היה מוסיף קריאה ועלות בכל סבב.
 
 python -m app.draft "תיאור ההסכם"   בדיקה מהטרמינל
 """
@@ -10,16 +16,18 @@ from typing import Literal
 from agno.agent import Agent
 from agno.models.openai import OpenAIResponses
 from agno.run.base import RunStatus
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import store
 from app.extract import strip_pages
 
 MODEL = "gpt-4o"
-REVIEW_MODEL = "gpt-5.5"  # "בדיקה משפטית מעמיקה": מודל חזק יותר שעובר על הטיוטה. המחיר ב-store.PRICES
+INTAKE_MODEL = "gpt-4.1-mini"  # שאלות השלמה ובחירת דוגמאות. המחירים של כל המודלים ב-store.PRICES
+REVIEW_MODEL = "gpt-5.5"  # "בדיקה משפטית מעמיקה": מודל חזק יותר שעובר על הטיוטה
 MAX_OUTPUT_TOKENS = 16384  # התקרה של gpt-4o; הסכם עברי ארוך במיוחד ייחתך ויחזיר שגיאה ברורה
-EXAMPLE_CHARS = 40000  # לכל מסמך מהמאגר, כדי ששלוש דוגמאות + השיחה ייכנסו בחלון של 128K טוקנים
+EXAMPLE_CHARS = 40000  # לכל מסמך מהמאגר, כדי שהדוגמאות + השיחה ייכנסו בחלון של 128K טוקנים
 BASE_CHARS = 3 * EXAMPLE_CHARS  # לכל מסמכי הבסיס יחד, כמה שלא יהיו
+MAX_EXAMPLES = 2  # דוגמאות מהחיפוש שה-Writer מקבל במלואן, מעבר למסמכי הבסיס
 
 # השדות של Agno Agent. name לא נכנס לפרומפט (add_name_to_context כבוי); description פותח את הודעת המערכת
 NAME = "מנסח ההסכמים"
@@ -28,89 +36,106 @@ DESCRIPTION = """אתה עוזר משפטי שמנסח הסכמים, כתבי ה
 אתה עובד על בסיס מאגר המסמכים של החברה: אתה מאמץ את הנוסח, המבנה והמינוח שלהם,
 ומתאים אותם לבקשה של העובד. התוצר שלך הוא טיוטה לבדיקה, לא ייעוץ משפטי."""
 
-INSTRUCTIONS = [  # סדר הרשימה הוא סדר ההוראות. Agno מוסיף תבליט רק לפריט בשורה אחת, ולכן פריט רב-שורות פותח ב-"- "
-    "לפני כל ניסוח, חפש במאגר מסמכים דומים בעזרת כלי החיפוש (search_agreements). "
-    "חפש לפי סוג המסמך, הצדדים והתחום.",
+# סדר הרשימה הוא סדר ההוראות. Agno מוסיף תבליט רק לפריט בשורה אחת, ולכן פריט רב-שורות פותח ב-"- "
+INTAKE_INSTRUCTIONS = [
+    "אתה השלב הראשון: אתה לא מנסח. אתה מחליט אם אפשר לנסח, ובוחר מסמכים לדוגמה.",
+    "קודם חפש במאגר מסמכים דומים בעזרת כלי החיפוש (search_agreements). חפש לפי סוג המסמך, הצדדים והתחום.",
     """- בדוק אם יש מספיק פרטים מהותיים: זהות הצדדים, נושא ההתקשרות או העבודה, מיקום, תקופה ומועדים,
    סכומים, ביטוח ואחריות (כשרלוונטי).
    - אם חסרים פרטים מהותיים, החזר status="questions" עם עד 6 שאלות קצרות וממוקדות, לפי סדר חשיבות.
-   - אל תשאל על פרטים שוליים, ואל תשאל שוב על משהו שהעובד כבר ענה עליו.""",
-    """- כשיש מספיק פרטים, החזר status="agreement" עם מסמך מלא:
+   - אל תשאל על פרטים שוליים, ואל תשאל שוב על משהו שהעובד כבר ענה עליו.
+   - אם העובד ביקש לנסח בלי שאלות השלמה, החזר status="ready".""",
+    f'כשיש מספיק פרטים, החזר status="ready", וב-examples עד {MAX_EXAMPLES} file_id מתוצאות החיפוש, '
+    "של המסמכים שהנוסח והמבנה שלהם הכי מתאימים לבקשה. אם אף מסמך לא מתאים, רשימה ריקה.",
+    'אם הבקשה לא קשורה לניסוח מסמך משפטי, החזר status="questions" עם שאלה אחת שמבהירה איזה מסמך העובד צריך.',
+]
+
+WRITER_INSTRUCTIONS = [
+    """- נסח מסמך מלא, מוכן לבדיקה ולחתימה:
    - מבנה ה-body: פרטי הצדדים, מבוא (הואיל), סעיפים ממוספרים (1., 1.1, 1.2), ובלוק חתימות לכל הצדדים.
    - אל תחזור על הכותרת בתוך ה-body.
    - פסקאות המבוא כתובות בלי מספור, ומתחילות ב'הואיל ו...' ו'והואיל ו...'.
    - הסעיפים הממוספרים מתחילים מ-1. אחרי 'לפיכך'.
    - כל סעיף מתחיל בכותרת בשורה נפרדת.
    - עברית משפטית תקנית ועקבית. כל מונח מוגדר מוגדר פעם אחת, ואחר כך משתמשים בו בדיוק באותה צורה.
-   - אמץ את הנוסח, סדר הסעיפים והמינוח של המסמכים הדומים מהמאגר, כשהם מתאימים לבקשה.""",
+   - אמץ את הנוסח, סדר הסעיפים והמינוח של המסמכים מהמאגר שבהקשר, כשהם מתאימים לבקשה.""",
     "אל תמציא עובדות. פרט שלא נמסר מסמנים כ-[___] למילוי: שמות, מספרי ח.פ., סכומים, תאריכים, כתובות.",
     "אל תעתיק פרטים מזהים מהמסמכים במאגר, כמו שמות צדדים, מספרים ותאריכים, אלא אם העובד ביקש אותם במפורש. "
     "מהמאגר לוקחים נוסח ומבנה, לא נתונים.",
-    "אם המאגר לא מכיל מסמך דומה, נסח לפי מבנה מקובל של מסמכים מאותו סוג בישראל.",
+    "אם אין בהקשר מסמכים מהמאגר, נסח לפי מבנה מקובל של מסמכים מאותו סוג בישראל.",
     "כשהעובד מבקש תיקון למסמך שכבר נוסח, החזר את המסמך המלא והמעודכן, ושנה רק את מה שהתבקש.",
-    'אם הבקשה לא קשורה לניסוח מסמך משפטי, החזר status="questions" עם שאלה אחת שמבהירה איזה מסמך העובד צריך.',
     "ה-body הוא טקסט רגיל בלי Markdown (בלי #, ** או רשימות עם תבליטים).",
-    "שדות שלא בשימוש: מחרוזת ריקה או רשימה ריקה.",
 ]
 
-EXPECTED_OUTPUT = """אובייקט JSON לפי הסכימה:
-status הוא 'questions' (עם רשימת שאלות) או 'agreement' (עם title ו-body של מסמך מלא, מוכן לבדיקה ולחתימה)."""
 
-
-class Draft(BaseModel):
-    status: Literal["questions", "agreement"]
+class Intake(BaseModel):
+    status: Literal["questions", "ready"]
     questions: list[str]
+    examples: list[str] = Field(description="file_id של המסמכים לדוגמה, מתוצאות החיפוש")
+
+
+class Agreement(BaseModel):
     title: str
     body: str
 
 
-def build_agent(sources, focus=(), usage=None, web=False):
-    """Agent חדש לכל בקשה. ה-tool ממלא את sources במסמכים ששלף, כדי להחזיר אותם לממשק.
-
-    focus: המסמכים שהעובד בחר ("נסח על בסיס המסמך הזה"), בלי הגבלה על הכמות. הם נכנסים להקשר כדוגמאות
-    העיקריות ומופיעים ראשונים במקורות, ותוצאות החיפוש משמשות רק כדוגמאות משניות.
-    """
+def build_intake(focus, found, usage=None):
+    """Intake חדש לכל בקשה. ה-tool ממלא את found ({file_id: מסמך}) במסמכים ששלף, כדי שהבחירה תהיה רק מהם."""
     context = None
-    if focus:
-        # תקציב תווים משותף: עד 3 מסמכי בסיס כל אחד באורך מלא, ומעבר לזה כל מסמך מקוצר כדי להישאר בחלון ההקשר
-        chars = min(EXAMPLE_CHARS, BASE_CHARS // len(focus))
-        sources.extend({"name": f["name"], "url": f["url"], "summary": f["summary"], "base": True} for f in focus)
-        context = ("העובד בחר מסמכי בסיס. הם הדוגמאות העיקריות: אמץ את המבנה, סדר הסעיפים והנוסח שלהם, "
-                   "שלב ביניהם לפי הצורך, והתאם לבקשה. מסמכים שתמצא בחיפוש הם דוגמאות משניות בלבד.\n"
-                   + "\n".join(f"<מסמך בסיס name=\"{f['name']}\">\n{strip_pages(f['text'])[:chars]}\n</מסמך בסיס>"
-                               for f in focus))
-    if web:
-        context = (context + "\n\n" if context else "") + (
-            "לפני הניסוח, חפש באינטרנט (web_search) דרישות חוק, תקנות ופסיקה עדכניות בישראל לסוג ההסכם הזה, "
-            "ושלב בטיוטה את מה שנדרש. העדף מקורות רשמיים (nevo, gov.il, knesset).")
+    if focus:  # ה-Intake רק צריך לדעת שיש בסיס; הטקסט המלא נשלח ל-Writer בלבד
+        context = "העובד בחר מסמכי בסיס, והם ישמשו כדוגמאות העיקריות. בחר דוגמאות נוספות רק אם הן מוסיפות:\n" + \
+                  "\n".join(f"- {f['name']}: {f['summary']}" for f in focus)
 
     def search_agreements(query: str) -> str:
-        """חיפוש סמנטי במאגר ההסכמים של החברה. מחזיר עד 3 מסמכים דומים, לשימוש כדוגמאות לנוסח.
+        """חיפוש סמנטי במאגר ההסכמים של החברה. מחזיר עד 3 מסמכים דומים: file_id, שם ותקציר.
 
         Args:
             query: תיאור המסמך המבוקש: סוג, צדדים, תחום ונושאים עיקריים.
         """
         with store.connect() as conn:
-            examples = store.search(conn, query, usage=usage, learn=True)
-        known = {s["name"] for s in sources}
-        sources.extend({"name": e["name"], "url": e["url"], "summary": e["summary"]}
-                       for e in examples if e["name"] not in known)
-        return "\n\n".join(
-            f"<מסמך מהמאגר name=\"{e['name']}\">\n{strip_pages(e['text'])[:EXAMPLE_CHARS]}\n</מסמך מהמאגר>"
-            for e in examples
-        ) or "לא נמצאו מסמכים דומים במאגר."
+            docs = store.search(conn, query, usage=usage, learn=True)
+        found.update((d["file_id"], d) for d in docs)
+        return "\n".join(f'<מסמך file_id="{d["file_id"]}" name="{d["name"]}">{d["summary"]}</מסמך>'
+                         for d in docs) or "לא נמצאו מסמכים דומים במאגר."
 
+    return Agent(
+        model=OpenAIResponses(id=INTAKE_MODEL, timeout=60, max_retries=1),
+        description=DESCRIPTION,
+        instructions=INTAKE_INSTRUCTIONS,
+        additional_context=context,
+        tools=[search_agreements],
+        tool_call_limit=3,  # חיפוש אחד מספיק; התקרה מונעת לולאת חיפושים
+        output_schema=Intake,
+    )
+
+
+def build_writer(focus=(), examples=(), web=False):
+    """Writer חדש לכל בקשה. focus: מסמכי הבסיס שהעובד בחר ("נסח על בסיס המסמך הזה"), בלי הגבלה על הכמות.
+    הם הדוגמאות העיקריות. examples: הדוגמאות שה-Intake בחר מהחיפוש, משניות בלבד."""
+    parts = []
+    if focus:
+        # תקציב תווים משותף: עד 3 מסמכי בסיס כל אחד באורך מלא, ומעבר לזה כל מסמך מקוצר כדי להישאר בחלון ההקשר
+        chars = min(EXAMPLE_CHARS, BASE_CHARS // len(focus))
+        parts.append("העובד בחר מסמכי בסיס. הם הדוגמאות העיקריות: אמץ את המבנה, סדר הסעיפים והנוסח שלהם, "
+                     "שלב ביניהם לפי הצורך, והתאם לבקשה. מסמכים מהמאגר שאינם בסיס הם דוגמאות משניות בלבד.\n"
+                     + "\n".join(f"<מסמך בסיס name=\"{f['name']}\">\n{strip_pages(f['text'])[:chars]}\n</מסמך בסיס>"
+                                 for f in focus))
+    if examples:
+        parts.append("\n\n".join(f"<מסמך מהמאגר name=\"{e['name']}\">\n{strip_pages(e['text'])[:EXAMPLE_CHARS]}\n"
+                                 "</מסמך מהמאגר>" for e in examples))
+    if web:
+        parts.append("לפני הניסוח, חפש באינטרנט (web_search) דרישות חוק, תקנות ופסיקה עדכניות בישראל לסוג ההסכם הזה, "
+                     "ושלב בטיוטה את מה שנדרש. העדף מקורות רשמיים (nevo, gov.il, knesset).")
     return Agent(
         # ה-SDK של OpenAI מנסה שוב פעם אחת, עם backoff, על 429, 5xx וניתוק
         model=OpenAIResponses(id=MODEL, max_output_tokens=MAX_OUTPUT_TOKENS, timeout=120, max_retries=1),
         name=NAME,
         description=DESCRIPTION,
-        instructions=INSTRUCTIONS,
-        expected_output=EXPECTED_OUTPUT,
-        additional_context=context,
-        tools=[search_agreements] + ([{"type": "web_search"}] if web else []),  # web_search רץ אצל OpenAI
-        tool_call_limit=4 if web else 3,  # חיפוש אחד מספיק; התקרה מונעת לולאת חיפושים יקרה
-        output_schema=Draft,
+        instructions=WRITER_INSTRUCTIONS,
+        additional_context="\n\n".join(parts) or None,
+        tools=[{"type": "web_search"}] if web else None,  # web_search רץ אצל OpenAI
+        tool_call_limit=3 if web else None,
+        output_schema=Agreement,
     )
 
 
@@ -119,17 +144,35 @@ REVIEW_INSTRUCTIONS = [
     "בדוק: סתירות בין סעיפים, מונחים שמוגדרים ולא בשימוש או בשימוש בלי הגדרה, הפניות שגויות למספרי סעיפים, "
     "סעיפים מקובלים שחסרים לסוג ההסכם (סיום, הפרה, שיפוי, סודיות, סמכות שיפוט, הודעות), ניסוח עמום שקשה לאכוף, "
     "והתאמה לדין הישראלי, לבקשה ולנטיית הניסוח שהעובד ביקש.",
-    "תקן את הטיוטה עצמה והחזר את המסמך המלא והמתוקן. שמור על המבנה, המספור והסגנון; שנה רק מה שצריך.",
+    "תקן באמצעות edits בלבד, ואל תחזיר את המסמך המלא. find הוא קטע שמועתק מהטיוטה תו בתו, ארוך מספיק כדי להופיע "
+    "בה פעם אחת בלבד. replace הוא הנוסח שבא במקומו. להוספת סעיף: find הוא סוף הסעיף שלפניו, ו-replace הוא אותו "
+    "קטע ואחריו הסעיף החדש. שמור על המבנה, המספור והסגנון; שנה רק מה שצריך.",
     "אל תמציא עובדות. פרט חסר נשאר [___].",
     "notes: עד 6 הערות קצרות בעברית על מה שתיקנת או על מה שהעובד צריך לבדוק בעצמו. בלי הערות כלליות.",
-    "ה-body הוא טקסט רגיל בלי Markdown.",
+    "replace הוא טקסט רגיל בלי Markdown.",
 ]
 
 
+class Edit(BaseModel):
+    find: str = Field(description="קטע מהטיוטה, מועתק תו בתו, שמופיע בה פעם אחת בלבד")
+    replace: str = Field(description="הנוסח המתוקן שבא במקום הקטע")
+
+
 class Review(BaseModel):
-    title: str
-    body: str
+    edits: list[Edit]
     notes: list[str]
+
+
+def apply_edits(body, edits):
+    """מחיל את התיקונים של הבודק לפי הסדר. תיקון שהקטע שלו לא מופיע בדיוק פעם אחת מדולג, כדי לא לשנות מקום
+    אחר בטעות. מחזיר (body, מספר התיקונים שדולגו)."""
+    skipped = 0
+    for e in edits:
+        if e.find and body.count(e.find) == 1:
+            body = body.replace(e.find, e.replace)
+        else:
+            skipped += 1
+    return body, skipped
 
 
 def _review(messages, out, usage):
@@ -145,36 +188,59 @@ def _review(messages, out, usage):
     except Exception as e:
         print(f"הבדיקה המשפטית נכשלה: {e!r}")
         return {"review_notes": ["הבדיקה המשפטית המעמיקה נכשלה, וזו הטיוטה בלעדיה. אפשר לנסות שוב בהסכם חדש."]}
-    title, body = clean_output(result.content.title, result.content.body)
-    return {"title": title, "body": body, "review_notes": result.content.notes}
+    body, skipped = apply_edits(out["body"], result.content.edits)
+    notes = list(result.content.notes)
+    if skipped:
+        notes.append(f"{skipped} מהתיקונים של הבדיקה לא הוחלו, כי הקטע שלהם לא נמצא בטיוטה. כדאי לעבור על ההערות.")
+    title, body = clean_output(out["title"], body)
+    return {"title": title, "body": body, "review_notes": notes}
 
 
-def draft(messages, focus_file_ids=(), conversation=None, web=False, review=False):
+def _run(agent, model, messages, usage, schema):
+    """ריצה של Agent אחד: העלות נרשמת גם כשהתשובה לא תקינה (הקריאה כבר חויבה)."""
+    result = agent.run(messages)
+    usage.append(store.agent_usage(result, model))
+    if result.status != RunStatus.completed:
+        raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
+    if not isinstance(result.content, schema):  # סירוב או JSON לא תקין מגיעים כטקסט ולא כסכימה
+        raise RuntimeError(f"המודל לא החזיר תשובה תקינה: {str(result.content)[:300]}")
+    return result.content
+
+
+def draft(messages, focus_file_ids=(), conversation=None, web=False, review=False, revise=False):
     """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources.
     focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError אם אחד מהם לא במאגר.
     conversation: מזהה השיחה מהדפדפן. העלות נרשמת איתו, כדי שעמוד "עלויות" יחבר אותה לטיוטה.
-    web: חיפוש דרישות חוק עדכניות באינטרנט. review: בדיקה משפטית מעמיקה של הטיוטה ב-REVIEW_MODEL."""
+    web: חיפוש דרישות חוק עדכניות באינטרנט. review: בדיקה משפטית מעמיקה של הטיוטה ב-REVIEW_MODEL.
+    revise: תיקון בצ'אט להסכם שכבר נוסח. ישר ל-Writer, בלי Intake, חיפוש ודוגמאות: ההסכם עצמו בשיחה.
+    המקורות חוזרים ריקים, והממשק משאיר את המקורות של הניסוח."""
     focus = []
-    if focus_file_ids:
+    if focus_file_ids and not revise:
         with store.connect() as conn:
             for fid in dict.fromkeys(focus_file_ids):  # בלי כפילויות, בסדר שבו נבחרו
                 doc = store.get_doc(conn, fid)
                 if not doc:
                     raise LookupError("מסמך בסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
                 focus.append(doc)
-    sources, usage = [], []
+    sources = [{"name": f["name"], "url": f["url"], "summary": f["summary"], "base": True} for f in focus]
+    usage, examples = [], []
     try:
-        result = build_agent(sources, focus, usage, web).run(messages)
-        usage.append(store.agent_usage(result, MODEL))
+        if not revise:
+            found = {}
+            intake = _run(build_intake(focus, found, usage), INTAKE_MODEL, messages, usage, Intake)
+            if intake.status == "questions":
+                return {"status": "questions", "questions": intake.questions, "title": "", "body": "",
+                        "sources": sources}
+            base = {f["file_id"] for f in focus}
+            # רק מסמכים שהחיפוש באמת החזיר: file_id מומצא או מסמך בסיס כפול לא נכנסים
+            examples = [found[i] for i in dict.fromkeys(intake.examples) if i in found and i not in base][:MAX_EXAMPLES]
+            sources += [{"name": e["name"], "url": e["url"], "summary": e["summary"]} for e in examples]
         if web:  # ponytail: נספר חיפוש אחד לניסוח; Agno לא מחזיר כמה חיפושים OpenAI הריץ בפועל
             usage.append(("web_search", 1, 0, 0))
-        if result.status != RunStatus.completed:
-            raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
-        if not isinstance(result.content, Draft):  # סירוב או JSON לא תקין מגיעים כטקסט ולא כ-Draft
-            raise RuntimeError(f"המודל לא החזיר מסמך תקין: {str(result.content)[:300]}")
-        out = result.content.model_dump()
-        out["title"], out["body"] = clean_output(out["title"], out["body"])
-        if review and out["status"] == "agreement":
+        result = _run(build_writer(focus, examples, web), MODEL, messages, usage, Agreement)
+        title, body = clean_output(result.title, result.body)
+        out = {"status": "agreement", "questions": [], "title": title, "body": body}
+        if review:
             out |= _review(messages, out, usage)
     finally:  # גם ניסוח שנכשל אחרי הקריאה למודל עלה כסף
         store.record("draft", usage, conversation)

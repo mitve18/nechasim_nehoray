@@ -1,7 +1,10 @@
 """חילוץ טקסט מהסכמים: שכבת טקסט כשיש, OCR עם Tesseract לסריקות, וניקוי לפני אינדוקס.
 
+OCR בשתי שכבות: Tesseract על כל עמוד סרוק (אחרי זיהוי כיוון וחידוד ניגודיות), ועמוד שקיבל ציון נמוך
+נקרא שוב ב-OCR של Google Drive (fallback, חינם). הסנכרון מעביר את ה-fallback רק לקובץ חדש או ששונה.
+
 python -m app.extract            טבלת סיכום לכל הקבצים בתיקייה
-python -m app.extract <fileId>   הטקסט המלא של קובץ אחד
+python -m app.extract <fileId>   הטקסט המלא של קובץ אחד, כמו בסנכרון (כולל OCR של Drive לעמודים קשים)
 python -m app.extract --ocr <file.pdf>   OCR מקומי לקובץ, בלי Drive (לבדיקת ההתקנה של Tesseract)
 """
 import io
@@ -19,6 +22,10 @@ MIN_CHARS_PER_PAGE = 50  # פחות מזה בממוצע = סריקה בלי שכ
 DOCX_MIN_TEXT = 200  # מסמך Word עם פחות טקסט מזה ועם תמונות = עמודים סרוקים שהודבקו, ועוברים OCR
 OCR_LANG = "heb+eng"
 OCR_DPI = 300
+# ponytail: סף משוער. עמוד עברי נקי מקבל בדרך כלל 85+; לכייל לפי הציונים במאגר אם Drive נקרא מעט מדי או יותר מדי
+FALLBACK_BELOW = 75  # עמוד עם ציון Tesseract נמוך מזה נקרא שוב ב-fallback
+MIN_OSD_CONF = 2  # מתחת לזה זיהוי הכיוון של Tesseract לא אמין, והעמוד נשאר כמו שהוא
+UPSCALE_BELOW = 1600  # תמונה צרה מזה (סריקה ב-150 DPI, צילום מסך) מוגדלת פי 2: באותיות קטנות Tesseract טועה יותר
 WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/tiff", "image/heic", "image/heif"}
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -35,23 +42,31 @@ def supported(mime):
     return mime in ("application/pdf", DOCX, GDOC, DOC) or mime in IMAGE_TYPES or mime.startswith("text/")
 
 
-def extract(f, data):
+def extract(f, data, fallback=None):
     """מחזיר (טקסט נקי, שיטה, איכות OCR). f הוא ה-dict מ-drive.list_files, data הם ה-bytes של הקובץ.
-    איכות OCR: 0–100 כשהטקסט זוהה מתמונה, ו-None כשהוא נקרא ישירות מהקובץ."""
+    איכות OCR: 0–100 כשהטקסט זוהה מתמונה, ו-None כשהוא נקרא ישירות מהקובץ.
+    fallback: פונקציה תמונה ← טקסט, לעמודים ש-Tesseract קרא גרוע (ראו ocr)."""
     mime = f["mimeType"]
     if not supported(mime):
         # ponytail: DOC ישן/HEIC לא נתמכים; להוסיף המרה עם LibreOffice אם יופיעו במאגר
         raise Unsupported(f"סוג קובץ לא נתמך: {mime}")
     if mime == "application/pdf":
         pages = [p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages]
-        # ponytail: החלטה לכל הקובץ לפי ממוצע; עמודים סרוקים בודדים בתוך PDF טקסטואלי לא יעברו OCR
-        if sum(len(p.strip()) for p in pages) >= MIN_CHARS_PER_PAGE * len(pages):
+        # ההחלטה לכל עמוד: נספח או עמוד חתימות סרוקים בתוך PDF דיגיטלי עוברים OCR, ושאר העמודים לא
+        scanned = [i for i, p in enumerate(pages) if len(p.strip()) < MIN_CHARS_PER_PAGE]
+        if not scanned:
             return clean(pages), "text", None
-        text, quality = ocr(_pdf_images(data))
-        return _checked(clean(text), len(pages)), "ocr", quality
+        ocr_pages, quality = ocr(_pdf_images(data, scanned), fallback)
+        used = False
+        for i, t in zip(scanned, ocr_pages):
+            if len(t.strip()) > len(pages[i].strip()):  # עמוד שער דיגיטלי דליל נשאר עם הטקסט המקורי
+                pages[i], used = t, True
+        if len(scanned) == len(pages):  # סריקה מלאה: OCR שהחזיר מעט מדי = סריקה לא קריאה
+            return _checked(clean(pages), len(pages)), "ocr", quality
+        return (clean(pages), "ocr", quality) if used else (clean(pages), "text", None)
     if mime in IMAGE_TYPES:
         frames = _image_frames(data)  # TIFF סרוק יכול להכיל כמה עמודים
-        text, quality = ocr(frames)
+        text, quality = ocr(frames, fallback)
         return _checked(clean(text), len(frames)), "ocr", quality
     if mime == DOCX:
         import docx
@@ -61,7 +76,7 @@ def extract(f, data):
         if not images:
             return text, "docx", None
         # מסמך Word שבתוכו עמודים סרוקים כתמונות, וכמעט בלי טקסט: הטקסט מזוהה מהתמונות
-        ocr_text, quality = ocr(images)
+        ocr_text, quality = ocr(images, fallback)
         return _checked(clean([text, *ocr_text], mark_pages=False), len(images)), "ocr", quality  # תמונות, לא עמודים
     return clean([data.decode("utf-8-sig")]), "text", None  # GDOC, DOC (כבר הומר לטקסט) או text/*
 
@@ -109,19 +124,50 @@ def _checked(text, pages):
     return text
 
 
-def _pdf_images(data):
-    """עמודי ה-PDF כתמונות, אחד-אחד כדי לא להחזיק את כל הסריקה בזיכרון."""
+def _pdf_images(data, indexes):
+    """העמודים שנבחרו מה-PDF כתמונות, אחד-אחד כדי לא להחזיק את כל הסריקה בזיכרון."""
     import pypdfium2 as pdfium
     pdf = pdfium.PdfDocument(data)
-    for page in pdf:
-        yield page.render(scale=OCR_DPI / 72).to_pil()
+    for i in indexes:
+        yield pdf[i].render(scale=OCR_DPI / 72).to_pil()
 
 
-def ocr(images):
+def _prepare(img):
+    """לפני Tesseract: גווני אפור עם ניגודיות מלאה (רקע אפור של צילום או סריקה ישנה), הגדלה של תמונה קטנה,
+    וסיבוב לפי זיהוי הכיוון של Tesseract (OSD), לעמוד שנסרק הפוך או על הצד."""
+    import pytesseract
+    from PIL import Image, ImageOps
+    img = ImageOps.autocontrast(img.convert("L"), cutoff=1)
+    if img.width < UPSCALE_BELOW:
+        img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+    try:
+        osd = pytesseract.image_to_osd(img, output_type=pytesseract.Output.DICT)
+        if osd["rotate"] and osd["orientation_conf"] >= MIN_OSD_CONF:
+            img = img.rotate(-osd["rotate"], expand=True)  # rotate של PIL הוא נגד כיוון השעון
+    except pytesseract.TesseractError:  # מעט מדי טקסט לזיהוי כיוון (עמוד ריק, חותמת בלבד)
+        pass
+    return img
+
+
+def _score(tsv):
+    """(סכום הביטחון המשוקלל, מספר האותיות) מפלט ה-tsv של Tesseract."""
+    weighted, letters = 0.0, 0
+    for row in tsv.splitlines()[1:]:  # עמודות: ... conf, text
+        cols = row.split("\t")
+        word = cols[-1].strip()
+        if len(cols) == 12 and word and cols[10] != "-1":
+            weighted += float(cols[10]) * len(word)
+            letters += len(word)
+    return weighted, letters
+
+
+def ocr(images, fallback=None):
     """תמלול סריקה עם Tesseract. מחזיר (רשימת עמודים, ציון איכות 0–100).
 
     הציון הוא ממוצע הביטחון של Tesseract בכל מילה שזיהה, משוקלל לפי אורך המילה.
     הטקסט והציון מגיעים מאותה הרצה (txt ו-tsv), כך שהציון לא מאריך את ה-OCR.
+    עמוד עם ציון מתחת ל-FALLBACK_BELOW (או בלי מילים בכלל) נקרא שוב ב-fallback, כשיש. הציון נשאר של Tesseract:
+    הוא מתאר כמה הסריקה קשה, ומסמך עם ציון נמוך עדיין כדאי לבדוק מול המקור.
     """
     import pytesseract
     # ב-Linux tesseract ב-PATH; ב-Windows ה-installer לא מוסיף אותו ל-PATH, ולכן נופלים לנתיב ברירת המחדל
@@ -129,14 +175,16 @@ def ocr(images):
     pytesseract.pytesseract.tesseract_cmd = cmd
     pages, weighted, letters = [], 0.0, 0
     for img in images:
+        img = _prepare(img)
         text, tsv = pytesseract.run_and_get_multiple_output(img, extensions=["txt", "tsv"], lang=OCR_LANG)
+        w, n = _score(tsv)
+        weighted, letters = weighted + w, letters + n
+        if fallback and (not n or w / n < FALLBACK_BELOW):
+            try:
+                text = fallback(img) or text
+            except Exception as e:  # Drive לא זמין: נשארים עם Tesseract, והסנכרון ממשיך
+                print(f"OCR חלופי נכשל, נשאר Tesseract: {e!r}")
         pages.append(text)
-        for row in tsv.splitlines()[1:]:  # עמודות: ... conf, text
-            cols = row.split("\t")
-            word = cols[-1].strip()
-            if len(cols) == 12 and word and cols[10] != "-1":
-                weighted += float(cols[10]) * len(word)
-                letters += len(word)
     return pages, round(weighted / letters) if letters else 0
 
 
@@ -197,7 +245,7 @@ if __name__ == "__main__":
     files = drive.list_files(svc)
     if len(sys.argv) > 1:
         f = next(f for f in files if f["id"] == sys.argv[1])
-        print(extract(f, drive.download(svc, f))[0])
+        print(extract(f, drive.download(svc, f), fallback=lambda img: drive.ocr_image(svc, img))[0])
         sys.exit()
     for f in files:
         try:

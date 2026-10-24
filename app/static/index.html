@@ -3224,6 +3224,8 @@
         ) {
           messages.at(-1).content = $("title").value + "\n\n" + bodyText();
         }
+        // כבר יש הסכם בשיחה: זה תיקון. השרת מדלג על החיפוש ושאלות ההשלמה, והמקורות של הניסוח נשארים
+        const revise = messages.some((m) => m.isDoc);
         messages.push({ role: "user", content: text });
         add("user", text);
         busy(true, opts.deep_review ? 300 : opts.web_check ? 150 : 120);
@@ -3238,6 +3240,7 @@
               })),
               focus_file_ids: focus.map((x) => x.id),
               conversation,
+              revise,
               ...opts,
             }),
           });
@@ -3258,6 +3261,7 @@
             add("assistant", q);
             $("input").focus();
           } else {
+            if (revise) r.sources = sources;
             messages.push({
               role: "assistant",
               content: r.title + "\n\n" + r.body,

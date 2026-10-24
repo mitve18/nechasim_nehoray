@@ -46,6 +46,8 @@ alter table agreements add column if not exists metadata_version int;
 alter table agreements add column if not exists pages int;
 -- איכות ה-OCR (0–100) למסמכים סרוקים. null במסמך דיגיטלי, או בסרוק שעוד לא קיבל ציון (הסנכרון הבא משלים)
 alter table agreements add column if not exists ocr_quality int;
+-- md5 של התוכן מ-Drive: קובץ ש-modifiedTime שלו השתנה אבל התוכן זהה (שינוי שם) לא עובר OCR ומודל שוב
+alter table agreements add column if not exists md5 text;
 create table if not exists files (
     file_id text primary key,
     name text not null,
@@ -115,7 +117,8 @@ def _dicts(conn, sql, params=()):
 
 
 # דולר למיליון טוקנים: (קלט, קלט מהמטמון, פלט). מהמחירון של OpenAI, נבדק 10/2026. מחליפים מודל? מוסיפים אותו כאן
-PRICES = {"gpt-4o": (2.50, 1.25, 10.00), "gpt-5.5": (5.00, 0.50, 30.00), "text-embedding-3-small": (0.02, 0.02, 0.0),
+PRICES = {"gpt-4o": (2.50, 1.25, 10.00), "gpt-5.5": (5.00, 0.50, 30.00), "gpt-4.1-mini": (0.40, 0.10, 1.60),
+          "text-embedding-3-small": (0.02, 0.02, 0.0),
           "web_search": (25_000, 0, 0)}  # web_search: היחידה היא חיפוש ולא טוקן ($25 לאלף חיפושים)
 
 
@@ -210,6 +213,17 @@ def indexed(conn):
     return dict(conn.execute("select file_id, modified_time from agreements").fetchall())
 
 
+def checksums(conn):
+    """{file_id: md5} של מה שכבר במאגר. null במסמך מלפני העמודה, עד שהסנכרון הבא שומר אותו (touch)."""
+    return dict(conn.execute("select file_id, md5 from agreements").fetchall())
+
+
+def touch(conn, f):
+    """קובץ שהתוכן שלו לא השתנה: שם, קישור, modified_time ו-md5 מ-Drive, בלי חילוץ, מודל ו-embedding."""
+    conn.execute("update agreements set name = %s, url = %s, modified_time = %s, md5 = %s where file_id = %s",
+                 (f["name"], f.get("webViewLink"), f["modifiedTime"], f.get("md5Checksum"), f["id"]))
+
+
 def upsert(conn, f, method, text, pages=None, ocr_quality=None):
     usage = []
     try:
@@ -224,17 +238,17 @@ def _upsert(conn, f, method, text, pages, ocr_quality, usage):
         meta["pages"] = pages
     conn.execute(
         """insert into agreements (file_id, name, url, modified_time, method, summary, text, embedding,
-                                   metadata, end_date, metadata_version, pages, ocr_quality)
-           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s)
+                                   metadata, end_date, metadata_version, pages, ocr_quality, md5)
+           values (%s, %s, %s, %s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s)
            on conflict (file_id) do update set name=excluded.name, url=excluded.url,
              modified_time=excluded.modified_time, method=excluded.method, summary=excluded.summary,
              text=excluded.text, embedding=excluded.embedding, metadata=excluded.metadata,
              end_date=excluded.end_date, metadata_version=excluded.metadata_version, pages=excluded.pages,
-             ocr_quality=excluded.ocr_quality,
+             ocr_quality=excluded.ocr_quality, md5=excluded.md5,
              indexed_at=now()""",
         (f["id"], f["name"], f.get("webViewLink"), f["modifiedTime"], method, summary, text,
          embed(f"{f['name']}\n{summary}", usage), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages,
-         ocr_quality),
+         ocr_quality, f.get("md5Checksum")),
     )
 
 

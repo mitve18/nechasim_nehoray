@@ -139,6 +139,7 @@ class DraftRequest(BaseModel):
     conversation: str | None = Field(None, max_length=64)  # מזהה השיחה, לחיבור העלות לטיוטה
     web_check: bool = False  # "בדיקת דרישות חוק עדכניות באינטרנט"
     deep_review: bool = False  # "בדיקה משפטית מעמיקה"
+    revise: bool = False  # תיקון בצ'אט להסכם שכבר נוסח: ישר למנסח, בלי חיפוש ושאלות (draft.draft)
 
 
 DRAFTS_PER_HOUR = 30
@@ -174,7 +175,7 @@ async def api_draft(req: DraftRequest, request: Request):
     _draft_quota(request)
     try:
         return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids, req.conversation, req.web_check,
-                                       req.deep_review)
+                                       req.deep_review, req.revise)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק

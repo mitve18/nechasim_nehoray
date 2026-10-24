@@ -35,7 +35,7 @@ FILES = [
 @contextlib.contextmanager
 def _fake_backends(logged, downloads, summary_path):
     """Drive ו-Neon מזויפים. mock.patch מחזיר את הפונקציות האמיתיות בסוף, כדי לא לפגוע בבדיקות אחרות."""
-    def fake_extract(f, data):
+    def fake_extract(f, data, fallback=None):
         if f["id"] == "bad":
             raise RuntimeError("OCR נכשל")
         return ("t", "ocr", 88) if f["mimeType"] == PNG else ("t", "text", None)
@@ -45,7 +45,7 @@ def _fake_backends(logged, downloads, summary_path):
             mock.patch.multiple(sync.extract, extract=fake_extract, page_count=lambda f, data: None), \
             mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
                                 indexed=lambda conn: {"old": "1", "same": "1", "gone": "1"},
-                                retry_ids=lambda conn: set(), delete=lambda conn, ids: None,
+                                retry_ids=lambda conn: set(), checksums=lambda conn: {}, delete=lambda conn, ids: None,
                                 upsert=lambda conn, f, method, text, pages=None, quality=None: None,
                                 save_files=lambda conn, rows: None, prune_files=lambda conn, ids: None,
                                 pending_metadata=lambda conn: [], missing_pages=lambda conn: set(), missing_quality=lambda conn: set(),

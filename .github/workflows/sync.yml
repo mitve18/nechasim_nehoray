@@ -16,7 +16,13 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-heb
+      - run: |
+          sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-heb
+          # tessdata_best: מודלים מדויקים יותר (ואיטיים יותר) מאלה של Ubuntu. דורסים את הקבצים שהחבילות התקינו
+          dir=$(dirname "$(dpkg -L tesseract-ocr-heb | grep 'heb.traineddata$')")
+          for l in heb eng; do
+            sudo curl -fsSL -o "$dir/$l.traineddata" "https://github.com/tesseract-ocr/tessdata_best/raw/4.1.0/$l.traineddata"
+          done
       - run: pip install -r requirements.txt
       - run: python sync.py
         env:

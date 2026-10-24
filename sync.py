@@ -1,6 +1,6 @@
 """סנכרון מאגר ההסכמים מ-Drive למאגר הווקטורי.
 
-python sync.py          סנכרון: קבצים חדשים/ששונו (לפי modifiedTime) או שסומנו "נסה שוב", הסרת קבצים שנמחקו,
+python sync.py          סנכרון: קבצים חדשים/ששונו (לפי modifiedTime, ובלי שינוי שם בלבד: md5 זהה) או שסומנו "נסה שוב", הסרת קבצים שנמחקו,
                         והשלמת נתונים מובנים למסמכים קיימים שאין להם (backfill)
 python sync.py --list   רשימת הקבצים בתיקייה בלבד
 """
@@ -44,10 +44,16 @@ def sync():
             stats["removed"] = len(gone)
 
         # כל קובץ שנמצא מקבל סטטוס אחד, כך שאין קובץ שנדלג בשקט. בריצה שנעצרה לא נוגעים בכלום
-        rows = []
+        rows, md5s = [], store.checksums(conn)
         for f in [] if stats.get("aborted") else files:
             status, reason, attempted = UNCHANGED, "", False
-            if known.get(f["id"]) != f["modifiedTime"] or f["id"] in retry:
+            fid, md5 = f["id"], f.get("md5Checksum")
+            # אותו תוכן (md5 זהה), או md5 שעוד לא נשמר למסמך שלא השתנה: רק שם ו-md5, בלי OCR ובלי מודל
+            if fid in known and fid not in retry and md5 and (
+                    md5s.get(fid) == md5 or (md5s.get(fid) is None and known[fid] == f["modifiedTime"])):
+                if (known[fid], md5s.get(fid)) != (f["modifiedTime"], md5):
+                    store.touch(conn, f)
+            elif known.get(fid) != f["modifiedTime"] or fid in retry:
                 attempted = True
                 try:
                     if f.get("error"):  # קיצור דרך שאין גישה ליעד שלו
@@ -55,7 +61,8 @@ def sync():
                     if not extract.supported(f["mimeType"]):
                         raise extract.Unsupported(f"סוג קובץ לא נתמך: {f['mimeType']}")
                     data = drive.download(svc, f)
-                    text, method, quality = extract.extract(f, data)
+                    # עמוד ש-Tesseract קרא גרוע נקרא שוב ב-OCR של Drive. רק כאן: מסמכים קיימים לא עוברים OCR מחדש
+                    text, method, quality = extract.extract(f, data, fallback=lambda img: drive.ocr_image(svc, img))
                     store.upsert(conn, f, method, text, extract.page_count(f, data), quality)
                 except extract.Unsupported as e:  # לא תקלה: מסומן "לא נתמך" ולא מכשיל את הריצה
                     status, reason = UNSUPPORTED, str(e)

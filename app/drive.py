@@ -13,7 +13,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
-FILE_FIELDS = "id, name, mimeType, modifiedTime, webViewLink, size"
+FILE_FIELDS = "id, name, mimeType, modifiedTime, webViewLink, size, md5Checksum"  # md5: רק לקבצים בינאריים, לא ל-Google Docs
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DOC = "application/msword"
 GDOC = "application/vnd.google-apps.document"
@@ -115,6 +115,21 @@ def download(svc, f):
     if f["mimeType"] == GDOC:
         return _fetch(svc.files().export_media(fileId=f["id"], mimeType="text/plain"))
     return _fetch(svc.files().get_media(fileId=f["id"], supportsAllDrives=True))
+
+
+def ocr_image(svc, img):
+    """OCR של Google לעמוד סרוק אחד (חינם): Drive ממיר את התמונה ל-Google Docs עם זיהוי טקסט בעברית,
+    מייצאים טקסט ומוחקים את העותק. כמו ההמרה של DOC, העותק נוצר ב"האחסון שלי" ולא בתיקיית ההסכמים.
+    JPEG באפור, כי Drive מזהה טקסט רק בתמונות של עד 2MB."""
+    buf = io.BytesIO()
+    img.convert("L").save(buf, "JPEG", quality=85)
+    media = MediaIoBaseUpload(buf, mimetype="image/jpeg")
+    tmp = svc.files().create(body={"name": "tmp-ocr", "mimeType": GDOC, "parents": ["root"]}, media_body=media,
+                             ocrLanguage="he", fields="id").execute()
+    try:
+        return _fetch(svc.files().export_media(fileId=tmp["id"], mimeType="text/plain")).decode("utf-8-sig").strip()
+    finally:
+        svc.files().delete(fileId=tmp["id"]).execute()
 
 
 def _fetch(req):

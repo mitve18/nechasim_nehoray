@@ -57,7 +57,8 @@ def _agreement(conn, file_id, name, metadata=None, version=None, end_date=None):
 @contextlib.contextmanager
 def _sync_fakes(conn, listing, downloads):
     """sync.py מול ה-Postgres של הבדיקה, עם Drive, OCR ומודל מזויפים."""
-    def fake_extract(f, data):
+    def fake_extract(f, data, fallback=None):
+        assert callable(fallback)  # קובץ חדש או ששונה: עמוד גרוע יכול לעבור ל-OCR של Drive
         if f["id"] == "bad":
             raise RuntimeError("OCR החזיר 3 תווים ל-1 עמודים")
         text = "[עמוד 1]\n\nטקסט\n\n[עמוד 2]\n\nהמשך"  # כמו extract האמיתי במסמך של כמה עמודים
@@ -112,6 +113,19 @@ def test_sync_files_table_failed_unsupported_retry():
         with _sync_fakes(conn, listing, downloads):
             sync.sync()
         assert downloads == ["bad"], downloads  # בריצה הבאה רק מה שנכשל מנוסה שוב; ה-retry כבר התאפס
+
+        # שינוי שם: modifiedTime חדש ו-md5 זהה, ולכן בלי הורדה, OCR ומודל. md5 שעוד לא נשמר נשמר בלי עיבוד.
+        # תוכן חדש (md5 אחר או לא ידוע, ו-modifiedTime חדש) עובר עיבוד כרגיל
+        conn.execute("update agreements set md5 = 'abc' where file_id = 'new'")
+        changed = {"new": {"name": "סריקה חדשה.png", "modifiedTime": "9", "md5Checksum": "abc"},
+                   "same": {"md5Checksum": "s1"}, "old": {"modifiedTime": "3", "md5Checksum": "o2"}}
+        downloads.clear()
+        with _sync_fakes(conn, [f | changed.get(f["id"], {}) for f in listing], downloads):
+            sync.sync()
+        assert sorted(downloads) == ["bad", "old"], downloads
+        rows = {r[0]: r[1:] for r in conn.execute("select file_id, name, modified_time, md5 from agreements")}
+        assert rows["new"] == ("סריקה חדשה.png", "9", "abc") and rows["same"][1:] == ("1", "s1"), rows
+        assert rows["old"][1:] == ("3", "o2"), rows  # עובד מחדש, וה-md5 נשמר עם המסמך
 
 
 def test_backfill_selects_only_missing_or_stale():
@@ -256,10 +270,10 @@ def test_costs_per_draft_and_week_total():
         assert round(c["sync"]["cost"], 6) == 0.26 and c["sync"]["calls"] == 1
         assert round(c["total"], 6) == round(c["draft"]["cost"] + c["sync"]["cost"], 6)
 
-        # ניסוח באתר רושם את העלות עם מזהה השיחה, גם בלי מסמכי בסיס
+        # ניסוח באתר רושם את העלות עם מזהה השיחה, גם בלי מסמכי בסיס. סבב שאלות נעצר ב-Intake: קריאה אחת
         def fake_run(self, messages):
             return SimpleNamespace(status=RunStatus.completed, metrics=run.metrics,
-                                   content=draft.Draft(status="questions", questions=["מי הצדדים?"], title="", body=""))
+                                   content=draft.Intake(status="questions", questions=["מי הצדדים?"], examples=[]))
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), \
                 mock.patch.object(Agent, "run", fake_run):
             assert TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
@@ -274,8 +288,16 @@ def test_ask_cites_only_documents_the_tools_returned():
     logged = []
 
     def fake_run(self, messages):
+        if self.model.id == ask.READER_MODEL:  # הקורא של ask_documents: מקבל מסמך אחד ומחזיר רק קטעים
+            assert "<שאלה>סודיות?</שאלה>" in messages and "7.2 הסודיות" in messages
+            return SimpleNamespace(status=RunStatus.completed, content='"הסודיות תחול 5 שנים" סעיף 7.2, עמוד 2',
+                                   metrics=SimpleNamespace(input_tokens=500, cache_read_tokens=0, output_tokens=50))
         self.tools[0]("סודיות")  # search_documents: המודל "ראה" את d1
         assert "[עמוד 2]" in self.tools[2]("d1") and self.tools[2]("nope") == "אין מסמך עם המזהה הזה."
+        # map-reduce: מזהה לא קיים וכפילות מדולגים, וחוזר רק מה שהקורא חילץ, לא המסמך המלא
+        found = self.tools[3](["d1", "nope", "d1"], "סודיות?")
+        assert found.count("<מסמך") == 1 and 'file_id="d1"' in found and "סעיף 7.2, עמוד 2" in found, found
+        assert "מבוא" not in found
         answer = ask.Answer(answer="הסודיות היא 5 שנים [1]. וגם [2]", citations=[
             ask.Citation(n=1, file_id="d1", section="סעיף 7.2", page=2, quote="הסודיות תחול 5 שנים"),
             ask.Citation(n=2, file_id="invented", section="", page=None, quote="x")])
@@ -290,7 +312,7 @@ def test_ask_cites_only_documents_the_tools_returned():
                                                         "conversation": "q1"}).json()
     assert r["citations"] == [{"n": 1, "file_id": "d1", "section": "סעיף 7.2", "page": 2,
                                "quote": "הסודיות תחול 5 שנים", "name": "הסכם.pdf", "url": "https://drive/d1"}]
-    assert logged == [("ask", [("gpt-4o", 1000, 0, 100)], "q1")]
+    assert logged == [("ask", [("gpt-4.1-mini", 500, 0, 50), ("gpt-4o", 1000, 0, 100)], "q1")]
 
 
 def test_draft_web_check_and_deep_review():
@@ -301,33 +323,50 @@ def test_draft_web_check_and_deep_review():
         model = self.model.id
         calls.append((model, [t for t in self.tools if isinstance(t, dict)] if self.tools else []))
         m = SimpleNamespace(input_tokens=100, cache_read_tokens=0, output_tokens=10)
+        if model == draft.INTAKE_MODEL:
+            return SimpleNamespace(status=RunStatus.completed, metrics=m,
+                                   content=draft.Intake(status="ready", questions=[], examples=[]))
         if model == draft.REVIEW_MODEL:
             if not reviewed["ok"]:
                 raise TimeoutError("timeout")
             assert "<טיוטה>" in messages and "נטיית הניסוח" in messages
-            return SimpleNamespace(status=RunStatus.completed, metrics=m,
-                                   content=draft.Review(title="הסכם", body="גוף מתוקן", notes=["הוסף סעיף שיפוי"]))
+            return SimpleNamespace(status=RunStatus.completed, metrics=m, content=draft.Review(
+                edits=[draft.Edit(find="גוף", replace="גוף מתוקן"), draft.Edit(find="לא קיים", replace="x")],
+                notes=["הוסף סעיף שיפוי"]))
         assert ("דרישות חוק" in (self.additional_context or "")) == bool(calls[-1][1])
-        return SimpleNamespace(status=RunStatus.completed, metrics=m,
-                               content=draft.Draft(status="agreement", questions=[], title="הסכם", body="גוף"))
+        return SimpleNamespace(status=RunStatus.completed, metrics=m, content=draft.Agreement(title="הסכם", body="גוף"))
 
     msgs = [{"role": "user", "content": "סוג החוזה: הסכם שירותים\n\nנטיית הניסוח: מאוזנת"}]
     with mock.patch.object(Agent, "run", fake_run), \
             mock.patch.object(store, "record", lambda kind, usage, conv=None: logged.append(usage)):
         out = draft.draft(msgs, web=True, review=True)
-        assert out["body"] == "גוף מתוקן" and out["review_notes"] == ["הוסף סעיף שיפוי"]
-        assert calls == [("gpt-4o", [{"type": "web_search"}]), ("gpt-5.5", [])]
-        assert [u[0] for u in logged[-1]] == ["gpt-4o", "web_search", "gpt-5.5"]
+        # הבודק מחזיר תיקונים נקודתיים: מה שנמצא הוחל, ומה שלא נמצא מדווח בהערות
+        assert out["body"] == "גוף מתוקן" and out["review_notes"][0] == "הוסף סעיף שיפוי"
+        assert "1 מהתיקונים" in out["review_notes"][1]
+        assert calls == [("gpt-4.1-mini", []), ("gpt-4o", [{"type": "web_search"}]), ("gpt-5.5", [])]
+        assert [u[0] for u in logged[-1]] == ["gpt-4.1-mini", "web_search", "gpt-4o", "gpt-5.5"]
         assert round(store.cost("web_search", 1), 4) == 0.025
 
         reviewed["ok"] = False  # הבדיקה נכשלה: הטיוטה המקורית חוזרת עם הערה, והעלות של הניסוח עדיין נרשמת
         out = draft.draft(msgs, review=True)
         assert out["body"] == "גוף" and "נכשלה" in out["review_notes"][0]
-        assert [u[0] for u in logged[-1]] == ["gpt-4o"]
+        assert [u[0] for u in logged[-1]] == ["gpt-4.1-mini", "gpt-4o"]
 
         calls.clear()
         draft.draft(msgs)  # בלי האפשרויות: בלי חיפוש באינטרנט ובלי בדיקה
-        assert calls == [("gpt-4o", [])]
+        assert calls == [("gpt-4.1-mini", []), ("gpt-4o", [])]
+
+        calls.clear()  # תיקון בצ'אט: ישר ל-Writer, בלי Intake וחיפוש, ובלי מקורות חדשים
+        out = draft.draft(msgs + [{"role": "assistant", "content": "הסכם\n\nגוף"},
+                                  {"role": "user", "content": "תקן"}], ["b1"], revise=True)
+        assert calls == [("gpt-4o", [])] and out["sources"] == [] and out["status"] == "agreement"
+
+
+def test_apply_edits_only_where_the_text_is_unique():
+    edits = [draft.Edit(find="5 שנים", replace="7 שנים"), draft.Edit(find="הצד", replace="x"),
+             draft.Edit(find="", replace="y"), draft.Edit(find="7 שנים.", replace="7 שנים.\n4. שיפוי")]
+    body, skipped = draft.apply_edits("1. הצד א.\n2. הצד ב.\n3. הסודיות 5 שנים.", edits)
+    assert body == "1. הצד א.\n2. הצד ב.\n3. הסודיות 7 שנים.\n4. שיפוי" and skipped == 2  # "הצד" מופיע פעמיים
 
 
 def test_server_start_creates_tables_before_first_sync():
@@ -541,7 +580,7 @@ def test_draft_limits_and_errors():
             mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", boom):
         r = TestClient(main.app).post("/api/draft", json=body)
     assert r.status_code == 502 and "הניסוח נכשל" in r.json()["detail"] and "secret" not in r.text
-    model = draft.build_agent([]).model
+    model = draft.build_writer().model
     assert (model.timeout, model.max_retries) == (120, 1)
 
 
@@ -578,32 +617,40 @@ def test_whole_site_requires_login():
 
 def test_focus_file_in_agent_context():
     base = {"file_id": "b1", "name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "text": "טקסט הבסיס"}
-    sources = []
-    agent = draft.build_agent(sources, [base])
-    assert "טקסט הבסיס" in agent.additional_context and "הדוגמאות העיקריות" in agent.additional_context
-    assert sources == [{"name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "base": True}]
-    found = [base, {"name": "אחר.pdf", "url": "u", "summary": "s", "text": "t"}]
-    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q, usage=None, learn=False: found):
-        agent.tools[0]("שאילתה")
-    assert [s["name"] for s in sources] == ["בסיס.pdf", "אחר.pdf"]  # הבסיס לא נכפל, ונשאר ראשון
+    other = {"file_id": "o1", "name": "אחר.pdf", "url": "u", "summary": "תקציר אחר", "text": "טקסט מלא אחר"}
+    found = {}
+    intake = draft.build_intake([base], found)
+    assert "תקציר" in intake.additional_context and "טקסט הבסיס" not in intake.additional_context  # תקצירים בלבד
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
+                             search=lambda conn, q, usage=None, learn=False: [base, other]):
+        seen = intake.tools[0]("שאילתה")
+    assert "תקציר אחר" in seen and "טקסט מלא אחר" not in seen and set(found) == {"b1", "o1"}
+    writer = draft.build_writer([base], [other])
+    assert "טקסט הבסיס" in writer.additional_context and "הדוגמאות העיקריות" in writer.additional_context
+    assert "טקסט מלא אחר" in writer.additional_context  # הדוגמה שנבחרה נשלחת ל-Writer במלואה
 
     def fake_run(self, messages):
-        assert "טקסט הבסיס" in self.additional_context
-        return SimpleNamespace(status=RunStatus.completed,
-                               content=draft.Draft(status="agreement", questions=[], title="הסכם", body="גוף"))
+        if self.model.id == draft.INTAKE_MODEL:
+            self.tools[0]("שאילתה")  # בוחר דוגמה שנמצאה, מסמך בסיס (כפול) ו-file_id מומצא: רק הראשונה נכנסת
+            return SimpleNamespace(status=RunStatus.completed,
+                                   content=draft.Intake(status="ready", questions=[], examples=["o1", "b1", "invented"]))
+        assert "טקסט הבסיס" in self.additional_context and "טקסט מלא אחר" in self.additional_context
+        return SimpleNamespace(status=RunStatus.completed, content=draft.Agreement(title="הסכם", body="גוף"))
 
-    # כמה מסמכי בסיס: כולם בהקשר ובמקורות, בסדר הבחירה ובלי כפילויות; מעבר ל-3 כל אחד מקוצר
+    # כמה מסמכי בסיס: כולם בהקשר ובמקורות, בסדר הבחירה ובלי כפילויות; אחריהם הדוגמה מהחיפוש
     docs = {"b1": base, "b2": {**base, "file_id": "b2", "name": "בסיס2.pdf", "text": "טקסט שני"}}
-    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
-                             get_doc=lambda conn, fid: docs.get(fid)), mock.patch.object(Agent, "run", fake_run):
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), get_doc=lambda conn, fid: docs.get(fid),
+                             search=lambda conn, q, usage=None, learn=False: [base, other]), \
+            mock.patch.object(Agent, "run", fake_run):
         out = draft.draft([{"role": "user", "content": "נסח"}], ["b2", "b1", "b2"])
-        assert [(s["name"], s.get("base")) for s in out["sources"]] == [("בסיס2.pdf", True), ("בסיס.pdf", True)]
+        assert [(s["name"], s.get("base")) for s in out["sources"]] == [
+            ("בסיס2.pdf", True), ("בסיס.pdf", True), ("אחר.pdf", None)]
         assert out["title"] == "הסכם"
         r = TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
                                                           "focus_file_ids": ["b1", "missing"]})
         assert r.status_code == 404 and "לא נמצא" in r.json()["detail"]
     many = [{**base, "name": f"{i}.pdf", "text": "x" * draft.EXAMPLE_CHARS} for i in range(6)]
-    ctx = draft.build_agent([], many).additional_context
+    ctx = draft.build_writer(many).additional_context
     assert ctx.count("<מסמך בסיס") == 6 and ctx.count("x") == 6 * (draft.BASE_CHARS // 6)
 
 
@@ -675,7 +722,7 @@ def test_pdf_scanned_vs_digital_detection():
 
     ocr_calls = []
 
-    def fake_ocr(images):
+    def fake_ocr(images, fallback=None):
         pages = list(images)
         ocr_calls.append(len(pages))
         return ["טקסט שזוהה מהסריקה, ארוך מספיק כדי לעבור את בדיקת האיכות של 50 תווים לעמוד."] * len(pages), 77
@@ -685,6 +732,17 @@ def test_pdf_scanned_vs_digital_detection():
         assert method == "text" and "Ministry" in text and ocr_calls == [] and quality is None  # לא נשלח ל-OCR
         text, method, quality = extract.extract(pdf, scanned.getvalue())
         assert method == "ocr" and ocr_calls == [1] and "סריקה" in text and quality == 77  # זוהה כסרוק
+
+        # PDF דיגיטלי עם נספח סרוק: רק העמוד הסרוק עובר OCR, והטקסט של שני העמודים נשמר עם סימוני עמודים
+        from pypdf import PdfReader, PdfWriter
+        mixed, out = PdfWriter(), io.BytesIO()
+        for part in (digital, scanned.getvalue()):
+            mixed.append(PdfReader(io.BytesIO(part)))
+        mixed.write(out)
+        ocr_calls.clear()
+        text, method, quality = extract.extract(pdf, out.getvalue())
+        assert ocr_calls == [1] and method == "ocr" and quality == 77, (ocr_calls, method)
+        assert "Ministry" in text and "סריקה" in text and "[עמוד 2]" in text, text
 
 
 def test_iphone_photos_heic_and_rotation():
@@ -709,10 +767,46 @@ def test_iphone_photos_heic_and_rotation():
     exif[0x0112] = 6  # Orientation: להציג מסובב 90° עם כיוון השעון
     jpg = io.BytesIO()
     sideways.save(jpg, "JPEG", exif=exif, quality=95)
-    raw_text, _ = extract.ocr([sideways])
-    assert "agreement" not in " ".join(raw_text)  # בלי הסיבוב ה-OCR באמת נכשל, כך שהבדיקה משמעותית
     text, method, quality = extract.extract({"mimeType": "image/jpeg"}, jpg.getvalue())
     assert "agreement" in text and "Ministry" in text, text
+
+    # סריקה על הצד או הפוכה, בלי תג EXIF: זיהוי הכיוון של Tesseract (OSD) מסובב אותה לפני ה-OCR
+    import pytesseract
+    pytesseract.pytesseract.tesseract_cmd = shutil.which("tesseract") or extract.WINDOWS_TESSERACT
+    assert "agreement" not in pytesseract.image_to_string(sideways)  # בלי הסיבוב ה-OCR באמת נכשל
+    for turned in (sideways, page.rotate(180)):
+        pages, quality = extract.ocr([turned])
+        assert "agreement" in pages[0] and "Ministry" in pages[0] and quality >= 70, (pages, quality)
+
+
+def test_low_quality_page_goes_to_fallback():
+    """עמוד ש-Tesseract לא קרא (ריק או מטושטש) עובר ל-fallback; עמוד נקי לא. fallback שנכשל לא מפיל את ה-OCR."""
+    if not (shutil.which("tesseract") or Path(extract.WINDOWS_TESSERACT).exists()):
+        return skip("Tesseract לא מותקן")
+    from PIL import Image, ImageDraw, ImageFont
+    try:
+        font = ImageFont.truetype("arial.ttf", 36)
+    except OSError:
+        return skip("אין גופן TrueType לציור טקסט")
+    clean_page = Image.new("RGB", (1400, 360), "white")
+    ImageDraw.Draw(clean_page).multiline_text(
+        (40, 40), "This agreement is made between\nthe Ministry and the Company\nfor the night parking project.",
+        fill="black", font=font, spacing=20)
+    unreadable = Image.new("RGB", (1400, 360), "white")
+    calls = []
+
+    def fallback(img):
+        calls.append(img.size)
+        return "טקסט מה-OCR של Drive"
+
+    pages, _ = extract.ocr([clean_page, unreadable], fallback)
+    assert len(calls) == 1 and "agreement" in pages[0] and pages[1] == "טקסט מה-OCR של Drive", (calls, pages)
+
+    def broken(img):
+        raise ConnectionError("Drive לא זמין")
+
+    pages, _ = extract.ocr([unreadable], broken)
+    assert pages == [pages[0]] and "Drive" not in pages[0]  # נשאר הפלט של Tesseract
 
 
 def test_docx_with_scanned_pages_goes_through_ocr():
@@ -734,7 +828,7 @@ def test_docx_with_scanned_pages_goes_through_ocr():
 
     ocr_calls = []
 
-    def fake_ocr(images):
+    def fake_ocr(images, fallback=None):
         ocr_calls.append(len(images))
         return ["הסכם שכירות בין המשכיר לבין השוכר, לתקופה של שנתיים, כפי שזוהה מהעמוד הסרוק."], 82
 
