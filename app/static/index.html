@@ -36,6 +36,7 @@
         --brand-deep: #0b2a5c;
         --brand-soft: #ebf4fe;
         --brand-line: #cde3fa;
+        --watermark: 0.07;
         --accent: #48a6f4;
         --ring: rgba(72, 166, 244, 0.25);
         --warn-bg: #fff6e6;
@@ -71,6 +72,7 @@
         --brand-deep: #d6e5fa;
         --brand-soft: #1e2b3d;
         --brand-line: #2d4566;
+        --watermark: 0.1;
         --accent: #5cb2f6;
         --ring: rgba(92, 178, 246, 0.3);
         --warn-bg: #3a2d16;
@@ -121,6 +123,21 @@
         color: var(--text);
         border-inline-end: 1px solid var(--line);
         z-index: 3;
+        overflow: hidden;
+      }
+      /* סימן מים: חלק מהלוגו, גדול וחתוך בתחתית התפריט, מאחורי הקישורים */
+      .side::before {
+        content: "";
+        position: absolute;
+        inset-inline-end: -110px;
+        bottom: 70px;
+        width: 340px;
+        aspect-ratio: 560 / 458;
+        background: url("/static/logo.webp") center / contain no-repeat;
+        opacity: var(--watermark);
+        transform: rotate(-8deg);
+        pointer-events: none;
+        z-index: -1;
       }
       .brand {
         display: flex;
@@ -306,7 +323,8 @@
           font-size: 18px;
         }
         .brand small,
-        .side-sync {
+        .side-sync,
+        .side::before {
           display: none;
         }
         /* בפס העליון: רק האייקון, בפינה מול הלוגו */
@@ -1907,6 +1925,17 @@
         align-items: flex-start;
         gap: 12px;
       }
+      #toast {
+        transition: opacity 0.6s ease;
+      }
+      #toast.fade {
+        opacity: 0;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #toast {
+          transition: none;
+        }
+      }
       #toast-close {
         flex: none;
         padding: 0 4px;
@@ -2835,7 +2864,7 @@
               <strong>מסנכרן את המאגר…</strong>
               <span class="sub"
                 ><span id="sync-elapsed">0:00</span> · הסנכרון מושך מסמכים חדשים
-                מ-Drive ומעבד אותם, וזה יכול לקחת כמה דקות. אפשר לעבור לעמודים
+                מ-Drive ומעבד אותם, זה יכול לקחת כמה דקות. אפשר לעבור לעמודים
                 אחרים בינתיים.</span
               >
             </div>
@@ -3206,7 +3235,7 @@
         );
         indexed.forEach((f) => newIds.add(f.file_id));
         renderFiles();
-        toast(`✓ הסנכרון הושלם (${s.updated_at})`, 0);
+        toast(`✓ הסנכרון הושלם (${s.updated_at})`, 6000);
         if (document.hidden) document.title = "✓ " + TITLE;
       }
       const TITLE = document.title;
@@ -3277,14 +3306,21 @@
           );
         return data;
       }
-      // הודעה בתחתית המסך. ms = 0: נשארת עד שסוגרים אותה (למשל "הסנכרון הושלם")
+      // הודעה בתחתית המסך. ms = 0: נשארת עד שסוגרים אותה (למשל שגיאה שצריך לקרוא)
       function toast(text, ms = 7000) {
         $("toast-text").textContent = text;
         $("toast").hidden = false;
+        $("toast").classList.remove("fade");
         clearTimeout(toast.timer);
-        if (ms) toast.timer = setTimeout(() => ($("toast").hidden = true), ms);
+        if (ms) toast.timer = setTimeout(hideToast, ms);
       }
-      $("toast-close").onclick = () => ($("toast").hidden = true);
+      // נעלמת בהדרגה; אחרי ה-fade (0.6 שניות) מוסתרת לגמרי
+      function hideToast() {
+        clearTimeout(toast.timer);
+        $("toast").classList.add("fade");
+        toast.timer = setTimeout(() => ($("toast").hidden = true), 600);
+      }
+      $("toast-close").onclick = hideToast;
       const fmtDate = (d) =>
         d
           ? new Date(d.length === 10 ? d + "T12:00:00Z" : d).toLocaleDateString(
@@ -3567,12 +3603,12 @@
         };
         return b;
       }
-      async function downloadStatusDocx(title) {
-        const res = await fetch("/api/status/docx");
+      async function downloadStatus(title, ext) {
+        const res = await fetch("/api/status/" + ext);
         if (!res.ok) throw new Error();
         const a = el("a", {
           href: URL.createObjectURL(await res.blob()),
-          download: title + ".docx",
+          download: title + "." + ext,
         });
         a.click();
         URL.revokeObjectURL(a.href);
@@ -3635,7 +3671,10 @@
                 },
               ),
               feedbackButton("Word", "הורדת הדוח כקובץ Word", () =>
-                downloadStatusDocx(s.title),
+                downloadStatus(s.title, "docx"),
+              ),
+              feedbackButton("Excel", "הורדת הדוח כקובץ Excel", () =>
+                downloadStatus(s.title, "xlsx"),
               ),
             ),
           ),

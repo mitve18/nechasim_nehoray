@@ -1,4 +1,4 @@
-"""ייצוא עמוד "עלויות" לקובץ Excel מעוצב: גיליון RTL, סיכום לפי סוג, ועלות לכל טיוטה."""
+"""ייצוא לקובץ Excel מעוצב (גיליון RTL): עמוד "עלויות", וטבלת הסטטוס בעמוד "סנכרון"."""
 import io
 from datetime import datetime
 
@@ -33,6 +33,30 @@ def _row(ws, row, values, total=False):
             c.number_format = USD
         if total:
             c.font, c.fill = Font(bold=True, color=BRAND), TOTAL_FILL
+
+
+def _save(wb):
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def build_table(title, header, rows):
+    """טבלה פשוטה עם כותרת, כמו docx_export.build_table."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = title[:31]  # מגבלה של Excel
+    ws.sheet_view.rightToLeft = True
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=16, color=BRAND)
+    ws["A2"] = f"הופק {datetime.now():%d/%m/%Y %H:%M}"
+    ws["A2"].font = Font(color="6B7280")
+    _header(ws, 4, header)
+    for r, values in enumerate(rows, 5):
+        _row(ws, r, values)
+    for col, width in zip("AB", (40, 26)):
+        ws.column_dimensions[col].width = width
+    return _save(wb)
 
 
 def build_costs(c):
@@ -80,6 +104,4 @@ def build_costs(c):
     ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
 
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    return _save(wb)

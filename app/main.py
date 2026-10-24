@@ -307,6 +307,17 @@ def api_status_docx():
     )
 
 
+@app.get("/api/status/xlsx")
+def api_status_xlsx():
+    with store.connect() as conn:
+        rows = store.status_rows(conn)
+    return Response(
+        xlsx_export.build_table(STATUS_TITLE, STATUS_HEADER, [[r["label"], r["value"]] for r in rows]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(STATUS_TITLE + '.xlsx')}"},
+    )
+
+
 @app.get("/api/files")
 def api_files():
     with store.connect() as conn:

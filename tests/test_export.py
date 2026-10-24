@@ -116,7 +116,7 @@ def test_build_html_keeps_editor_formatting():
 
 def test_build_costs_xlsx():
     import openpyxl
-    from app.xlsx_export import build_costs
+    from app.xlsx_export import build_costs, build_table
     c = {"days": 7, "since": "01/10/2026", "total": 0.5, "unsaved": 0.1,
          "draft": {"cost": 0.3, "calls": 4}, "ask": {"cost": 0.15, "calls": 2}, "sync": {"cost": 0.05, "calls": 1},
          "drafts": [{"title": "הסכם", "created_at": "20/10/2026 10:00", "runs": 2, "cost": 0.2}]}
@@ -124,6 +124,8 @@ def test_build_costs_xlsx():
     assert ws.sheet_view.rightToLeft
     rows = [[v for v in r if v is not None] for r in ws.iter_rows(values_only=True)]
     assert ['סה"כ', 7, 0.5] in rows and ["הסכם", "20/10/2026 10:00", 2, 0.2] in rows
+    ws = openpyxl.load_workbook(io.BytesIO(build_table("סטטוס", ["מדד", "ערך"], [["מסמכים", "42"]]))).active
+    assert ws.sheet_view.rightToLeft and ["מסמכים", "42"] in [list(r) for r in ws.iter_rows(values_only=True)]
     assert rows[-1][0] == 'סה"כ' and abs(rows[-1][1] - 0.3) < 1e-9
 
 
