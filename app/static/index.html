@@ -6,11 +6,9 @@
     <title>מנסח ההסכמים</title>
     <meta name="theme-color" content="#ffffff" />
     <script>
-      // מצב בהיר/כהה נקבע לפני שהדף מצויר, כדי שבמצב כהה לא יהבהב לבן. בחירה שמורה גוברת על הגדרת המערכת
+      // מצב בהיר/כהה נקבע לפני שהדף מצויר, כדי שבמצב כהה לא יהבהב לבן. ברירת המחדל בהיר; הכפתור שומר את הבחירה
       try {
-        document.documentElement.dataset.theme =
-          localStorage.getItem("theme") ||
-          (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
       } catch {
         document.documentElement.dataset.theme = "light";
       }
