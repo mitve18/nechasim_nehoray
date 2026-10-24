@@ -227,17 +227,23 @@ class HistoryRequest(BaseModel):
     conversation: str | None = Field(None, max_length=64)
 
 
+def _days(days):
+    if days not in store.COST_DAYS:
+        raise HTTPException(400, "טווח לא נתמך")
+    return days
+
+
 @app.get("/api/costs")
-def api_costs():
+def api_costs(days: int = 7):
     """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל."""
     with store.connect() as conn:
-        return store.costs(conn)
+        return store.costs(conn, _days(days))
 
 
 @app.get("/api/costs/xlsx")
-def api_costs_xlsx():
+def api_costs_xlsx(days: int = 7):
     with store.connect() as conn:
-        c = store.costs(conn)
+        c = store.costs(conn, _days(days))
     name = quote(f"עלויות {date.today():%d-%m-%Y}.xlsx")
     return Response(
         xlsx_export.build_costs(c),
@@ -248,7 +254,7 @@ def api_costs_xlsx():
 
 @app.get("/api/history")
 def api_history():
-    """עמוד "טיוטות": הטיוטות מהשבוע האחרון."""
+    """עמוד "טיוטות": כל הטיוטות, מהחדשה לישנה."""
     with store.connect() as conn:
         return store.drafts_list(conn)
 
@@ -266,8 +272,21 @@ def api_history_get(draft_id: int):
     with store.connect() as conn:
         d = store.get_draft(conn, draft_id)
     if not d:
-        raise HTTPException(404, "ההסכם לא נמצא. ייתכן שעבר שבוע והוא נמחק")
+        raise HTTPException(404, "ההסכם לא נמצא. ייתכן שהוא נמחק")
     return d
+
+
+class RatingRequest(BaseModel):
+    rating: int = Field(ge=-1, le=1)
+
+
+@app.put("/api/history/{draft_id}/rating")
+def api_history_rate(draft_id: int, req: RatingRequest):
+    """המשוב "מרוצה מהנוסח?" מתחת לשיחה. אופציונלי, ואפשר לשנות אותו."""
+    with store.connect() as conn:
+        if not store.rate_draft(conn, draft_id, req.rating):
+            raise HTTPException(404, "ההסכם לא נמצא")
+    return {"ok": True}
 
 
 @app.delete("/api/history/{draft_id}")

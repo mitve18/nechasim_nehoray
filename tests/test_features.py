@@ -165,7 +165,7 @@ def test_files_panel_queries():
         assert [f["name"] for f in files] == ["broken.pdf", "doc.pdf", "הועלה.pdf"]
 
 
-def test_history_save_list_open_delete_and_week_retention():
+def test_history_save_list_open_delete_rate_and_no_expiry():
     with postgres() as conn:
         if conn is None:
             return skip("אין py-pglite או Node")
@@ -185,17 +185,39 @@ def test_history_save_list_open_delete_and_week_retention():
             got = c.get(f"/api/history/{first}").json()
             assert got["html"] == "<p><b>גוף</b></p>" and got["messages"] == msgs and got["sources"][0]["base"]
 
-            # שבוע בלי עדכון: לא מופיע, ונמחק בשמירה הבאה. שמירה עם המזהה שלו יוצרת אותו מחדש
-            conn.execute("update drafts set updated_at = now() - interval '8 days' where id = %s", (first,))
-            assert [h["id"] for h in c.get("/api/history").json()] == [second]
-            again = c.post("/api/history", json=body | {"id": first}).json()["id"]
-            assert again not in (first, second)
-            assert conn.execute("select count(*) from drafts where id = %s", (first,)).fetchone()[0] == 0
+            # בלי הגבלת זמן: טיוטה ישנה נשארת גם אחרי שמירה של אחרת
+            conn.execute("update drafts set updated_at = now() - interval '400 days' where id = %s", (first,))
+            c.post("/api/history", json=body | {"id": second})
+            assert [h["id"] for h in c.get("/api/history").json()] == [second, first]
+
+            # משוב: נשמר, אפשר לשנות, ומוחזר עם הטיוטה
+            assert c.put(f"/api/history/{first}/rating", json={"rating": 1}).json() == {"ok": True}
+            assert c.put(f"/api/history/{first}/rating", json={"rating": -1}).status_code == 200
+            assert c.get(f"/api/history/{first}").json()["rating"] == -1
+            assert c.put(f"/api/history/{first}/rating", json={"rating": 2}).status_code == 422
+            assert c.put("/api/history/999999/rating", json={"rating": 1}).status_code == 404
 
             assert c.delete(f"/api/history/{second}").json() == {"ok": True}
             assert c.delete(f"/api/history/{second}").status_code == 404
             assert c.get(f"/api/history/{second}").status_code == 404
             assert c.post("/api/history", json=body | {"html": "x" * 1_000_001}).status_code == 422
+
+
+def test_search_learns_from_draft_ratings():
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        _agreement(conn, "near", "קרוב.pdf")
+        _agreement(conn, "liked", "אהוב.pdf")
+        far = "[" + ",".join(["0.1"] * 1535 + ["0.2"]) + "]"  # קצת רחוק יותר מהשאילתה
+        conn.execute("update agreements set embedding = %s::vector where file_id = 'liked'", (far,))
+        for _ in range(3):
+            d = store.save_draft(conn, None, "ט", "<p>x</p>", "x", [], [{"name": "אהוב.pdf"}])
+            store.rate_draft(conn, d, 1)
+        with mock.patch.object(store, "embed", lambda text, usage=None: VEC):
+            assert [r["name"] for r in store.search(conn, "q", k=2)] == ["קרוב.pdf", "אהוב.pdf"]
+            assert [r["name"] for r in store.search(conn, "q", k=2, learn=True)] == ["אהוב.pdf", "קרוב.pdf"]
 
 
 def test_costs_per_draft_and_week_total():
@@ -219,6 +241,12 @@ def test_costs_per_draft_and_week_total():
 
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
             c = TestClient(main.app).get("/api/costs").json()
+        assert c["days"] == 7
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+            c30 = TestClient(main.app).get("/api/costs?days=30").json()
+            assert TestClient(main.app).get("/api/costs?days=8").status_code == 400
+            assert TestClient(main.app).get("/api/costs/xlsx?days=90").status_code == 200
+        assert c30["days"] == 30 and round(c30["sync"]["cost"] - c["sync"]["cost"], 6) == 2.5  # הסנכרון מלפני 8 ימים
         rows = {d["title"]: d for d in c["drafts"]}
         assert round(rows["טיוטה א"]["cost"], 6) == round(2 * 0.045 + 50 * 0.02 / 1e6, 6)
         assert rows["טיוטה א"]["runs"] == 2  # שני ניסוחים; ה-embedding של החיפוש לא נספר כבקשה
@@ -255,7 +283,7 @@ def test_ask_cites_only_documents_the_tools_returned():
             input_tokens=1000, cache_read_tokens=0, output_tokens=100))
 
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
-                             search=lambda conn, q, k=3, usage=None: [doc], get_doc=lambda conn, fid: doc if fid == "d1" else None,
+                             search=lambda conn, q, k=3, usage=None, learn=False: [doc], get_doc=lambda conn, fid: doc if fid == "d1" else None,
                              record=lambda kind, usage, conv=None: logged.append((kind, usage, conv))), \
             mock.patch.object(Agent, "run", fake_run):
         r = TestClient(main.app).post("/api/ask", json={"messages": [{"role": "user", "content": "כמה זמן הסודיות?"}],
@@ -555,7 +583,7 @@ def test_focus_file_in_agent_context():
     assert "טקסט הבסיס" in agent.additional_context and "הדוגמאות העיקריות" in agent.additional_context
     assert sources == [{"name": "בסיס.pdf", "url": "https://drive/b1", "summary": "תקציר", "base": True}]
     found = [base, {"name": "אחר.pdf", "url": "u", "summary": "s", "text": "t"}]
-    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q, usage=None: found):
+    with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), search=lambda conn, q, usage=None, learn=False: found):
         agent.tools[0]("שאילתה")
     assert [s["name"] for s in sources] == ["בסיס.pdf", "אחר.pdf"]  # הבסיס לא נכפל, ונשאר ראשון
 

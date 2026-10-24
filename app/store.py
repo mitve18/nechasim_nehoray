@@ -70,6 +70,8 @@ create table if not exists drafts (
 );
 -- מזהה השיחה שבה הטיוטה נוצרה. דרכו מחברים לטיוטה את העלויות מ-api_usage, כולל סבבי שאלות ותיקונים
 alter table drafts add column if not exists conversation text;
+-- המשוב של העובד על הטיוטה: 1 מרוצה, 0 בערך, 1- לא מרוצה. משמש את search לדירוג מסמכי המאגר
+alter table drafts add column if not exists rating smallint check (rating between -1 and 1);
 -- כל קריאה ל-OpenAI (ניסוח, חיפוש, סנכרון) עם הטוקנים והעלות בדולרים, לעמוד "עלויות"
 create table if not exists api_usage (
     id bigserial primary key,
@@ -252,10 +254,17 @@ def delete(conn, file_ids):
     conn.execute("delete from agreements where file_id = any(%s)", (list(file_ids),))
 
 
-def search(conn, query, k=3, usage=None):
+def search(conn, query, k=3, usage=None, learn=False):
+    """learn (בניסוח): מבין 3k המסמכים הקרובים, מסמך שטיוטות שנוסחו ממנו קיבלו משוב טוב עולה, ורע יורד."""
+    # ponytail: עד 0.06 במרחק הקוסינוס (3 משובים נטו); לכייל אם המשוב דוחק מסמכים רלוונטיים
     rows = conn.execute(
-        "select file_id, name, url, summary, text from agreements order by embedding <=> %s::vector limit %s",
-        (embed(query, usage), k),
+        """with fb as (select s->>'name' as name, sum(d.rating) as score
+                       from drafts d, jsonb_array_elements(d.sources) s where d.rating is not null group by 1)
+           select a.file_id, a.name, a.url, a.summary, a.text
+           from (select *, embedding <=> %s::vector as dist from agreements order by dist limit %s) a
+           left join fb on fb.name = a.name
+           order by a.dist - %s * greatest(-3, least(3, coalesce(fb.score, 0))) limit %s""",
+        (embed(query, usage), k * 3, 0.02 if learn else 0, k),
     ).fetchall()
     return [dict(zip(("file_id", "name", "url", "summary", "text"), r)) for r in rows]
 
@@ -414,15 +423,14 @@ def status(conn):
             "failed": bool(run and run[1])}
 
 
-HISTORY_DAYS = 7
-HISTORY_FIELDS = (f"id, title, left(text, 300) as preview, "
+COST_DAYS = (7, 30, 90)  # הטווחים לבחירה בעמוד "עלויות"
+HISTORY_FIELDS = (f"id, title, left(text, 300) as preview, rating, "
                   f"to_char(created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at, "
                   f"to_char(updated_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as updated_at")
 
 
 def save_draft(conn, draft_id, title, html, text, messages, sources, conversation=None):
-    """שומר הסכם בהיסטוריה: עדכון של הקיים, או חדש (גם כשהקיים כבר נמחק). מוחק הסכמים שלא נגעו בהם שבוע."""
-    conn.execute("delete from drafts where updated_at < now() - make_interval(days => %s)", (HISTORY_DAYS,))
+    """שומר הסכם בהיסטוריה: עדכון של הקיים, או חדש (גם כשהקיים כבר נמחק). טיוטות נמחקות רק ידנית."""
     values = (title, html, text, Jsonb(messages), Jsonb(sources), conversation)
     if draft_id:
         row = conn.execute("update drafts set title = %s, html = %s, text = %s, messages = %s, sources = %s, conversation = %s, "
@@ -436,9 +444,7 @@ def save_draft(conn, draft_id, title, html, text, messages, sources, conversatio
 
 def drafts_list(conn):
     """עמוד ההיסטוריה: מהחדש לישן, בלי ה-HTML והשיחה (נטענים רק כשפותחים הסכם)."""
-    return _dicts(conn, f"select {HISTORY_FIELDS} from drafts "
-                        "where updated_at >= now() - make_interval(days => %s) order by drafts.updated_at desc",
-                  (HISTORY_DAYS,))
+    return _dicts(conn, f"select {HISTORY_FIELDS} from drafts order by drafts.updated_at desc")
 
 
 def get_draft(conn, draft_id):
@@ -450,24 +456,29 @@ def delete_draft(conn, draft_id):
     return conn.execute("delete from drafts where id = %s returning id", (draft_id,)).fetchone() is not None
 
 
-def costs(conn):
-    """עמוד "עלויות": סה"כ בשבוע האחרון לפי סוג, העלות של כל טיוטה מהשבוע, ושיחות שלא נשמרו כטיוטה."""
+def rate_draft(conn, draft_id, rating):
+    return conn.execute("update drafts set rating = %s where id = %s returning id",
+                        (rating, draft_id)).fetchone() is not None
+
+
+def costs(conn, days=7):
+    """עמוד "עלויות": סה"כ ב-days הימים האחרונים לפי סוג, העלות של כל טיוטה מהתקופה, ושיחות שלא נשמרו כטיוטה."""
     week = "now() - make_interval(days => %s)"
     kinds = {r["kind"]: r for r in _dicts(
         conn, f"select kind, sum(cost_usd)::float as cost, count(*) as calls from api_usage where at >= {week} "
-              "group by kind", (HISTORY_DAYS,))}
+              "group by kind", (days,))}
     drafts = _dicts(conn, f"""
         select d.id, d.title, to_char(d.created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at,
                sum(u.cost_usd)::float as cost, count(u.id) filter (where u.model <> %s) as runs
         from drafts d left join api_usage u on u.conversation = d.conversation
         where d.updated_at >= {week}
-        group by d.id order by d.created_at desc""", (EMBED_MODEL, HISTORY_DAYS))
+        group by d.id order by d.created_at desc""", (EMBED_MODEL, days))
     unsaved = conn.execute(f"""
         select coalesce(sum(cost_usd), 0)::float from api_usage u
         where kind = 'draft' and at >= {week}
           and not exists (select 1 from drafts d where d.conversation = u.conversation)""",
-                           (HISTORY_DAYS,)).fetchone()[0]
+                           (days,)).fetchone()[0]
     since = conn.execute(f"select to_char(min(at) at time zone '{TZ}', 'DD/MM/YYYY') from api_usage").fetchone()[0]
-    return {"days": HISTORY_DAYS, "total": sum(k["cost"] for k in kinds.values()),
+    return {"days": days, "total": sum(k["cost"] for k in kinds.values()),
             **{k: kinds.get(k, {"cost": 0, "calls": 0}) for k in ("draft", "ask", "sync")},
             "drafts": drafts, "unsaved": unsaved, "since": since}

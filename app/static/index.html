@@ -1125,6 +1125,52 @@
         color: var(--brand-deep);
         font-variant-numeric: tabular-nums;
       }
+      .seg {
+        display: inline-flex;
+        margin-top: 12px;
+        padding: 3px;
+        gap: 2px;
+        background: var(--brand-soft);
+        border: 1px solid var(--brand-line);
+        border-radius: 10px;
+      }
+      .seg button {
+        padding: 6px 14px;
+        border: 0;
+        border-radius: 8px;
+        background: none;
+        font-size: 14px;
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--card);
+        color: var(--brand-deep);
+        box-shadow: var(--shadow);
+      }
+      .rate {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0;
+        padding: 12px 14px;
+        border: 1px dashed var(--brand-line);
+        border-radius: 10px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .rate-opts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .rate-opts button {
+        padding: 5px 12px;
+        font-size: 13.5px;
+        border-radius: 99px;
+      }
+      .rate-opts button[aria-pressed="true"] {
+        background: var(--brand-soft);
+        border-color: var(--brand);
+        color: var(--brand-deep);
+      }
       .c-head {
         display: flex;
         align-items: center;
@@ -2413,6 +2459,23 @@
                   תקופת ההודעה ל-30 יום". אפשר גם לערוך ישירות בחלונית ההסכם.
                 </p>
                 <div id="chat" aria-live="polite"></div>
+                <div class="rate" id="rate" role="group" aria-labelledby="rate-q" hidden>
+                  <span id="rate-q">מרוצים מנוסח ההסכם?</span>
+                  <div class="rate-opts">
+                    <button type="button" data-rating="1" aria-pressed="false">
+                      כן, מצוין
+                    </button>
+                    <button type="button" data-rating="0" aria-pressed="false">
+                      בערך
+                    </button>
+                    <button type="button" data-rating="-1" aria-pressed="false">
+                      לא
+                    </button>
+                  </div>
+                  <small id="rate-thanks" hidden
+                    >תודה! המשוב עוזר למערכת לבחור מסמכי בסיס טובים יותר.</small
+                  >
+                </div>
                 <form id="form">
                   <label for="input" class="hint">הבקשה שלך</label>
                   <textarea
@@ -2739,12 +2802,12 @@
           <header class="page-h">
             <h1 tabindex="-1">טיוטות</h1>
             <p>
-              הטיוטות שנוסחו באתר בשבוע האחרון. פתיחה של טיוטה מחזירה אותה
-              לעריכה, יחד עם השיחה שבה נוצרה. השינויים נשמרים אוטומטית, וטיוטה
-              שלא נגעו בה שבוע נמחקת.
+              כל הטיוטות שנוסחו באתר. פתיחה של טיוטה מחזירה אותה לעריכה, יחד
+              עם השיחה שבה נוצרה. השינויים נשמרים אוטומטית, וטיוטה נמחקת רק
+              כשמוחקים אותה.
             </p>
           </header>
-          <section aria-label="טיוטות מהשבוע האחרון">
+          <section aria-label="טיוטות">
             <ul id="history"></ul>
             <p class="files-note" id="history-note" hidden></p>
           </section>
@@ -2754,15 +2817,26 @@
           <header class="page-h">
             <h1 tabindex="-1">עלויות</h1>
             <p>
-              ההוצאות על OpenAI API בשבוע האחרון: ניסוח טיוטות, שאלות על
+              ההוצאות על OpenAI API בתקופה שנבחרה: ניסוח טיוטות, שאלות על
               המסמכים, וסנכרון ועיבוד של מסמכים חדשים. העלות מחושבת מהטוקנים של
               כל קריאה לפי המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI
               הוא הקובע.
             </p>
+            <div class="seg" role="group" aria-label="תקופה" id="c-days">
+              <button type="button" data-days="7" aria-pressed="true">
+                7 ימים
+              </button>
+              <button type="button" data-days="30" aria-pressed="false">
+                30 ימים
+              </button>
+              <button type="button" data-days="90" aria-pressed="false">
+                90 ימים
+              </button>
+            </div>
           </header>
           <div class="tiles">
             <div class="tile">
-              <span>סה"כ ב-7 הימים האחרונים</span>
+              <span id="c-total-l">סה"כ ב-7 הימים האחרונים</span>
               <b id="c-total">—</b>
             </div>
             <div class="tile">
@@ -2787,7 +2861,7 @@
               <button
                 type="button"
                 id="c-xlsx"
-                onclick="location.href = '/api/costs/xlsx'"
+                onclick="location.href = '/api/costs/xlsx?days=' + costDays"
               >
                 ⬇ ייצוא לאקסל
               </button>
@@ -3086,6 +3160,7 @@
 
       // html: טיוטה שנפתחה מעמוד הטיוטות, עם העיצוב שלו. בלי html, כל שורה בטקסט מהמודל היא פסקה
       function showDoc(r, html) {
+        showRating(r.rating ?? null);
         $("doc").hidden = false;
         $("placeholder").hidden = true;
         $("title").value = r.title;
@@ -3183,6 +3258,7 @@
       });
 
       $("reset").addEventListener("click", () => {
+        $("rate").hidden = true;
         messages = [];
         historyId = null;
         conversation = newConversation();
@@ -4059,7 +4135,7 @@
         }
         $("history-note").hidden = !!list?.length;
         $("history-note").textContent = list
-          ? "עדיין לא נוסחו טיוטות בשבוע האחרון."
+          ? "עדיין לא נוסחו טיוטות."
           : "הטיוטות לא זמינות כרגע.";
         $("history").replaceChildren(
           ...(list || []).map((h) =>
@@ -4129,6 +4205,27 @@
         showResult(true);
         location.hash = "#draft";
       }
+      // "מרוצים מנוסח ההסכם?": אופציונלי. המשוב נשמר עם הטיוטה, וחיפוש מסמכי הבסיס בניסוחים הבאים מתחשב בו
+      function showRating(rating) {
+        $("rate").hidden = false;
+        $("rate-thanks").hidden = rating == null;
+        for (const b of $("rate").querySelectorAll("[data-rating]"))
+          b.setAttribute("aria-pressed", +b.dataset.rating === rating);
+      }
+      for (const b of $("rate").querySelectorAll("[data-rating]"))
+        b.onclick = async () => {
+          if (!historyId) await saveHistory();
+          if (!historyId) return toast("שמירת המשוב נכשלה");
+          try {
+            await api(`/api/history/${historyId}/rating`, {
+              method: "PUT",
+              body: JSON.stringify({ rating: +b.dataset.rating }),
+            });
+            showRating(+b.dataset.rating);
+          } catch (e) {
+            toast(e.message);
+          }
+        };
       async function deleteHistory(h) {
         if (!confirm(`למחוק את הטיוטה "${h.title}"?`)) return;
         try {
@@ -4144,16 +4241,25 @@
       // סכומים קטנים מאגורה מוצגים עם 4 ספרות, כדי שניסוח של סנטים בודדים לא יופיע כ-$0.00
       const usd = (v) =>
         v == null ? "—" : "$" + v.toFixed(v > 0 && v < 0.01 ? 4 : 2);
+      let costDays = 7;
+      for (const b of $("c-days").children)
+        b.onclick = () => {
+          costDays = +b.dataset.days;
+          for (const x of $("c-days").children)
+            x.setAttribute("aria-pressed", x === b);
+          loadCosts();
+        };
       async function loadCosts() {
         let c;
         try {
-          c = await api("/api/costs");
+          c = await api("/api/costs?days=" + costDays);
         } catch {
           $("c-note").textContent = "העלויות לא זמינות כרגע.";
           $("c-note").hidden = false;
           return;
         }
         $("c-note").hidden = true;
+        $("c-total-l").textContent = `סה"כ ב-${c.days} הימים האחרונים`;
         $("c-total").textContent = usd(c.total);
         $("c-draft").textContent = usd(c.draft.cost);
         $("c-draft-n").textContent = c.draft.calls + " קריאות ל-API";
@@ -4192,7 +4298,7 @@
                   el("td", {
                     colSpan: 4,
                     className: "c-empty",
-                    textContent: "אין טיוטות מהשבוע האחרון.",
+                    textContent: "אין טיוטות מהתקופה הזו.",
                   }),
                 ),
               ]),

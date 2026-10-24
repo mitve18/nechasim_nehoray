@@ -91,7 +91,7 @@ def build_agent(sources, focus=(), usage=None, web=False):
             query: תיאור המסמך המבוקש: סוג, צדדים, תחום ונושאים עיקריים.
         """
         with store.connect() as conn:
-            examples = store.search(conn, query, usage=usage)
+            examples = store.search(conn, query, usage=usage, learn=True)
         known = {s["name"] for s in sources}
         sources.extend({"name": e["name"], "url": e["url"], "summary": e["summary"]}
                        for e in examples if e["name"] not in known)
