@@ -263,8 +263,15 @@
         text-decoration: none;
       }
       /* במצב בהיר: רקע לבן, כדי שהטקסט הכהה יבלוט יותר מאשר על האפור-כחול של --bg */
+      /* והנפשה כמו בשאר הכפתורים: מעבר רך של הרקע וצל (--lift), בלי הרמה, כדי שלא ירצד מתחת לסמן */
       :root:not([data-theme="dark"]) .side-sync {
         background: var(--card);
+        transition:
+          background 0.15s,
+          box-shadow 0.15s;
+      }
+      :root:not([data-theme="dark"]) .side-sync:hover {
+        box-shadow: var(--lift);
       }
       .side-sync:hover {
         background: var(--brand-soft);
