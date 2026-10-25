@@ -16,10 +16,13 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
+from app.extract import chunk
+
 log = logging.getLogger(__name__)
 EMBED_MODEL = "text-embedding-3-small"
 SUMMARY_MODEL = "gpt-4o"
 METADATA_VERSION = 1  # מעלים כשמוסיפים שדות ל-DocInfo; הסנכרון הבא משלים אותם לכל המסמכים הקיימים
+CHUNK_VERSION = 1  # מעלים כשמשנים את extract.chunk; הסנכרון הבא חותך מחדש את כל המאגר מהטקסט השמור, בלי OCR
 
 SCHEMA = """
 create extension if not exists vector;
@@ -99,6 +102,22 @@ do $$ begin
         alter table api_usage add constraint api_usage_kind_check check (kind in ('draft', 'sync', 'ask'));
     end if;
 end $$;
+-- המסמכים כקטעים לחיפוש (extract.chunk): embedding לכל קטע, ו-tsv למילים מדויקות (גוש, מספר תוכנית, שם צד).
+-- 'simple' ולא שפה: ל-Postgres אין stemmer לעברית. את הצורות (בהסכם/הסכם) מכסה החיפוש הווקטורי
+create table if not exists chunks (
+    file_id text not null references agreements on delete cascade,
+    n int not null,
+    section text,
+    page int,
+    text text not null,
+    embedding vector(1536) not null,
+    tsv tsvector generated always as (to_tsvector('simple', text)) stored,
+    primary key (file_id, n)
+);
+create index if not exists chunks_embedding on chunks using hnsw (embedding vector_cosine_ops);
+create index if not exists chunks_tsv on chunks using gin (tsv);
+-- הגרסה של החיתוך. null = עוד לא נחתך; הסנכרון הבא משלים מהטקסט השמור
+alter table agreements add column if not exists chunk_version int;
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
@@ -169,11 +188,21 @@ def record(kind, usage, conversation=None):
 
 
 def embed(text, usage=None):
-    r = OpenAI().embeddings.create(model=EMBED_MODEL, input=text[:20000])
-    if usage is not None:
-        usage.append((EMBED_MODEL, r.usage.prompt_tokens, 0, 0))
-    v = r.data[0].embedding
-    return "[" + ",".join(map(str, v)) + "]"
+    return embed_many([text], usage)[0]
+
+
+EMBED_BATCH = 100  # טקסטים בקריאה אחת: 100 קטעים של עד 2,000 תווים, הרבה מתחת לתקרת הטוקנים של בקשה
+
+
+def embed_many(texts, usage=None):
+    """embeddings לכמה טקסטים, בכמה שפחות קריאות. מחזיר מחרוזות בפורמט של pgvector, באותו סדר."""
+    out = []
+    for i in range(0, len(texts), EMBED_BATCH):
+        r = OpenAI().embeddings.create(model=EMBED_MODEL, input=[t[:20000] for t in texts[i:i + EMBED_BATCH]])
+        if usage is not None:
+            usage.append((EMBED_MODEL, r.usage.prompt_tokens, 0, 0))
+        out += ["[" + ",".join(map(str, d.embedding)) + "]" for d in r.data]
+    return out
 
 
 class Amount(BaseModel):
@@ -266,6 +295,29 @@ def _upsert(conn, f, method, text, pages, ocr_quality, usage):
          embed(f"{f['name']}\n{summary}", usage), Jsonb(meta), _date(meta.get("end_date")), METADATA_VERSION, pages,
          ocr_quality, f.get("md5Checksum")),
     )
+    # אם החיתוך נכשל, המסמך כבר במאגר בלי קטעים (chunk_version null), והסנכרון הבא משלים אותו
+    save_chunks(conn, f["id"], f["name"], text, usage)
+
+
+def save_chunks(conn, file_id, name, text, usage=None):
+    """מחליף את הקטעים של מסמך. השם והסעיף נכנסים ל-embedding, כדי שקטע כמו "התמורה תשולם תוך 30 יום"
+    יימצא גם בחיפוש לפי סוג ההסכם או הצד."""
+    parts = chunk(text)
+    vectors = embed_many([f"{name} | {c['section']}\n{c['text']}" for c in parts], usage)
+    with conn.transaction():
+        conn.execute("delete from chunks where file_id = %s", (file_id,))
+        with conn.cursor() as cur:
+            cur.executemany("insert into chunks (file_id, n, section, page, text, embedding) "
+                            "values (%s, %s, %s, %s, %s, %s::vector)",
+                            [(file_id, n, c["section"], c["page"], c["text"], v)
+                             for n, (c, v) in enumerate(zip(parts, vectors))])
+        conn.execute("update agreements set chunk_version = %s where file_id = %s", (CHUNK_VERSION, file_id))
+
+
+def pending_chunks(conn):
+    """מסמכים שעוד לא נחתכו, או שנחתכו בגרסה ישנה של extract.chunk."""
+    return _dicts(conn, "select file_id, name, text from agreements where coalesce(chunk_version, 0) < %s "
+                        "order by name", (CHUNK_VERSION,))
 
 
 def pending_metadata(conn):
@@ -299,6 +351,32 @@ def search(conn, query, k=3, usage=None, learn=False):
     return [dict(zip(("file_id", "name", "url", "summary", "text"), r)) for r in rows]
 
 
+RRF_K = 60  # הקבוע המקובל של Reciprocal Rank Fusion: מקטין את המשקל של ההבדלים בין המקומות הראשונים
+RRF_DEPTH = 40  # כמה תוצאות מכל אחד משני החיפושים נכנסות למיזוג
+
+
+def search_chunks(conn, query, k=8, usage=None):
+    """חיפוש היברידי בקטעים: קרבה וקטורית (משמעות) ומילים מדויקות (tsvector), ממוזגים ב-RRF.
+    קטע שמופיע גבוה באחד מהם, או בשניהם, עולה. מחזיר [{file_id, name, url, section, page, text}].
+    המילים מחוברות ב-OR ולא ב-AND (plainto_tsquery): בשאלה חופשית כמעט אף קטע לא מכיל את כל המילים."""
+    return _dicts(conn, """
+        with vec as (
+            select file_id, n, row_number() over (order by d) as r
+            from (select file_id, n, embedding <=> %(v)s::vector as d from chunks order by d limit %(depth)s) x),
+        q as (select replace(plainto_tsquery('simple', %(q)s)::text, '&', '|')::tsquery as t),
+        kw as (
+            select file_id, n, row_number() over (order by rank desc) as r
+            from (select file_id, n, ts_rank_cd(tsv, q.t) as rank from chunks, q where tsv @@ q.t
+                  order by rank desc limit %(depth)s) x),
+        fused as (
+            select file_id, n, sum(1.0 / (%(rrf)s + r)) as score
+            from (select * from vec union all select * from kw) u group by file_id, n)
+        select c.file_id, a.name, a.url, c.section, c.page, c.text
+        from fused join chunks c using (file_id, n) join agreements a using (file_id)
+        order by fused.score desc, c.file_id, c.n limit %(k)s""",
+        {"v": embed(query, usage), "q": query, "depth": RRF_DEPTH, "rrf": RRF_K, "k": k})
+
+
 def catalog(conn):
     """כל המסמכים בלי הטקסט, לשאלות על כל המאגר ("אילו הסכמים מסתיימים השנה")."""
     return _dicts(conn, "select file_id, name, url, summary, metadata from agreements order by name")
@@ -311,8 +389,8 @@ def missing_page_marks(conn):
 
 
 def save_text(conn, file_id, text):
-    """הטקסט בלבד. התקציר וה-embedding לא משתנים, ולכן בלי קריאה למודל."""
-    conn.execute("update agreements set text = %s where file_id = %s", (text, file_id))
+    """הטקסט בלבד. התקציר וה-embedding לא משתנים, ולכן בלי קריאה למודל. הקטעים נחתכים מחדש בסנכרון הבא."""
+    conn.execute("update agreements set text = %s, chunk_version = null where file_id = %s", (text, file_id))
 
 
 def get_doc(conn, file_id):

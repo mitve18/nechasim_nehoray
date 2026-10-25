@@ -3,6 +3,7 @@
 Intake (INTAKE_MODEL, זול): מחפש במאגר ורואה רק תקצירים. מחליט אם לשאול שאלות השלמה, ובוחר מסמכים לדוגמה.
   רוב סבבי השאלות נעצרים כאן, בלי לשלם על הטקסט המלא של הדוגמאות.
 Writer (MODEL): מנסח, עם הטקסט המלא רק של מסמכי הבסיס והדוגמאות שנבחרו. תיקון בצ'אט מגיע ישר אליו, בלי חיפוש.
+  כותב טקסט רגיל ולא JSON, ומוזרם לממשק (stream), כך שההסכם מופיע על המסך תוך כדי כתיבה.
 Reviewer (REVIEW_MODEL, רק ב"בדיקה משפטית מעמיקה"): מחזיר תיקונים נקודתיים והערות, לא את כל ההסכם מחדש.
 החיבור ביניהם בקוד רגיל ולא ב-Team של Agno: הסדר קבוע, ומודל "מנהל" היה מוסיף קריאה ועלות בכל סבב.
 
@@ -16,6 +17,7 @@ from typing import Literal
 
 from agno.agent import Agent
 from agno.models.openai import OpenAIResponses
+from agno.run.agent import RunContentEvent, RunOutput
 from agno.run.base import RunStatus
 from pydantic import BaseModel, Field
 
@@ -66,7 +68,8 @@ WRITER_INSTRUCTIONS = [
     "מהמאגר לוקחים נוסח ומבנה, לא נתונים.",
     "אם אין בהקשר מסמכים מהמאגר, נסח לפי מבנה מקובל של מסמכים מאותו סוג בישראל.",
     "כשהעובד מבקש תיקון למסמך שכבר נוסח, החזר את המסמך המלא והמעודכן, ושנה רק את מה שהתבקש.",
-    "ה-body הוא טקסט רגיל בלי Markdown (בלי #, ** או רשימות עם תבליטים).",
+    "השורה הראשונה היא כותרת המסמך בלבד. אחריה שורה ריקה, ואז גוף המסמך.",
+    "כתוב טקסט רגיל בלי Markdown (בלי #, ** או רשימות עם תבליטים).",
 ]
 
 
@@ -74,11 +77,6 @@ class Intake(BaseModel):
     status: Literal["questions", "ready"]
     questions: list[str]
     examples: list[str] = Field(description="file_id של המסמכים לדוגמה, מתוצאות החיפוש")
-
-
-class Agreement(BaseModel):
-    title: str
-    body: str
 
 
 def build_intake(focus, found, usage=None):
@@ -137,7 +135,6 @@ def build_writer(focus=(), examples=(), web=False):
         additional_context="\n\n".join(parts) or None,
         tools=[{"type": "web_search"}] if web else None,  # web_search רץ אצל OpenAI
         tool_call_limit=3 if web else None,
-        output_schema=Agreement,
     )
 
 
@@ -209,9 +206,39 @@ def _run(agent, model, messages, usage, schema):
     return result.content
 
 
-def draft(messages, focus_file_ids=(), conversation=None, web=False, review=False, revise=False):
-    """messages: [{role: user|assistant, content}]. מחזיר dict עם status, questions, title, body, sources.
-    focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError אם אחד מהם לא במאגר.
+class Truncated(RuntimeError):
+    """ההסכם ארוך מ-MAX_OUTPUT_TOKENS ונחתך. ההודעה מוצגת לעובד, בניגוד לשגיאות אחרות."""
+
+
+def _write(agent, messages, usage):
+    """ה-Writer בהזרמה: אירוע delta לכל קטע טקסט, ובסוף (return) הטקסט המלא.
+    ב-Agno הפריט האחרון הוא RunOutput (yield_run_output), או RunErrorEvent כשהריצה נכשלה."""
+    last = None
+    for last in agent.run(messages, stream=True, yield_run_output=True):
+        if isinstance(last, RunContentEvent) and isinstance(last.content, str) and last.content:
+            yield {"type": "delta", "text": last.content}
+    if not isinstance(last, RunOutput):
+        raise RuntimeError(f"הניסוח נכשל: {getattr(last, 'content', None)}")
+    usage.append(store.agent_usage(last, MODEL))  # גם כשהתשובה לא תקינה: הקריאה כבר חויבה
+    if last.status != RunStatus.completed or not isinstance(last.content, str) or not last.content.strip():
+        raise RuntimeError(f"הניסוח נכשל: status={last.status} {str(last.content)[:300]}")
+    # בלי סכימה, הסכם שהגיע לתקרה לא נכשל אלא נקטע באמצע. בלי הבדיקה הזו העובד היה מקבל הסכם חסר
+    if last.metrics and (last.metrics.output_tokens or 0) >= MAX_OUTPUT_TOKENS:
+        raise Truncated("ההסכם ארוך מדי ונקטע באמצע. נסה לבקש מסמך קצר יותר, או לנסח אותו בחלקים")
+    return last.content
+
+
+def _split(text):
+    """הפלט של ה-Writer: השורה הראשונה היא הכותרת, והשאר הוא הגוף."""
+    title, _, body = text.strip().partition("\n")
+    return title, body
+
+
+def stream(messages, focus_file_ids=(), conversation=None, web=False, review=False, revise=False):
+    """אירועי הניסוח לממשק, לפי הסדר: delta (עוד טקסט של ההסכם), reviewing (הטיוטה מוכנה, ו-REVIEW_MODEL בודק
+    אותה), ובסוף result: dict עם status, questions, title, body, sources (ו-review_notes בבדיקה מעמיקה).
+    messages: [{role: user|assistant, content}].
+    focus_file_ids: מסמכי בסיס מהמאגר (אופציונלי). LookupError מיד, לפני ההזרמה, אם אחד מהם לא במאגר.
     conversation: מזהה השיחה מהדפדפן. העלות נרשמת איתו, כדי שעמוד "עלויות" יחבר אותה לטיוטה.
     web: חיפוש דרישות חוק עדכניות באינטרנט. review: בדיקה משפטית מעמיקה של הטיוטה ב-REVIEW_MODEL.
     revise: תיקון בצ'אט להסכם שכבר נוסח. ישר ל-Writer, בלי Intake, חיפוש ודוגמאות: ההסכם עצמו בשיחה.
@@ -224,6 +251,10 @@ def draft(messages, focus_file_ids=(), conversation=None, web=False, review=Fals
                 if not doc:
                     raise LookupError("מסמך בסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
                 focus.append(doc)
+    return _events(messages, focus, conversation, web, review, revise)
+
+
+def _events(messages, focus, conversation, web, review, revise):
     sources = [{"name": f["name"], "url": f["url"], "summary": f["summary"], "base": True} for f in focus]
     usage, examples = [], []
     try:
@@ -231,22 +262,31 @@ def draft(messages, focus_file_ids=(), conversation=None, web=False, review=Fals
             found = {}
             intake = _run(build_intake(focus, found, usage), INTAKE_MODEL, messages, usage, Intake)
             if intake.status == "questions":
-                return {"status": "questions", "questions": intake.questions, "title": "", "body": "",
-                        "sources": sources}
+                yield {"type": "result", "status": "questions", "questions": intake.questions, "title": "",
+                       "body": "", "sources": sources}
+                return
             base = {f["file_id"] for f in focus}
             # רק מסמכים שהחיפוש באמת החזיר: file_id מומצא או מסמך בסיס כפול לא נכנסים
             examples = [found[i] for i in dict.fromkeys(intake.examples) if i in found and i not in base][:MAX_EXAMPLES]
             sources += [{"name": e["name"], "url": e["url"], "summary": e["summary"]} for e in examples]
         if web:  # ponytail: נספר חיפוש אחד לניסוח; Agno לא מחזיר כמה חיפושים OpenAI הריץ בפועל
             usage.append(("web_search", 1, 0, 0))
-        result = _run(build_writer(focus, examples, web), MODEL, messages, usage, Agreement)
-        title, body = clean_output(result.title, result.body)
+        text = yield from _write(build_writer(focus, examples, web), messages, usage)
+        title, body = clean_output(*_split(text))
         out = {"status": "agreement", "questions": [], "title": title, "body": body}
         if review:
+            yield {"type": "reviewing", "title": title, "body": body}
             out |= _review(messages, out, usage)
-    finally:  # גם ניסוח שנכשל אחרי הקריאה למודל עלה כסף
+        yield {"type": "result", **out, "sources": sources}
+    finally:  # גם ניסוח שנכשל, או שהעובד סגר את החלון באמצעו (GeneratorExit), עלה כסף
         store.record("draft", usage, conversation)
-    return out | {"sources": sources}
+
+
+def draft(*args, **kwargs):
+    """אותם פרמטרים כמו stream, בלי הזרמה: רק ה-result (לטרמינל ולבדיקות)."""
+    for ev in stream(*args, **kwargs):
+        pass
+    return {k: v for k, v in ev.items() if k != "type"}
 
 
 def _plain(line):

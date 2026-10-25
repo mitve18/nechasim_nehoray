@@ -262,6 +262,10 @@
         font-size: 13px;
         text-decoration: none;
       }
+      /* במצב בהיר: רקע לבן, כדי שהטקסט הכהה יבלוט יותר מאשר על האפור-כחול של --bg */
+      :root:not([data-theme="dark"]) .side-sync {
+        background: var(--card);
+      }
       .side-sync:hover {
         background: var(--brand-soft);
       }
@@ -3292,9 +3296,14 @@
         }
         // כבר יש הסכם בשיחה: זה תיקון. השרת מדלג על החיפוש ושאלות ההשלמה, והמקורות של הניסוח נשארים
         const revise = messages.some((m) => m.isDoc);
+        // ההזרמה כותבת על החלונית. אם הניסוח נכשל באמצע, ההסכם הקודם חוזר במקום הטקסט החלקי
+        const prev = $("doc").hidden
+          ? null
+          : { title: $("title").value, html: $("body").innerHTML };
         messages.push({ role: "user", content: text });
         add("user", text);
         busy(true, opts.deep_review ? 300 : opts.web_check ? 150 : 120);
+        let frame = 0; // ציור שממתין לפריים הבא. בכישלון מבטלים אותו, כדי שלא יצייר טקסט חלקי על ההסכם ששוחזר
         try {
           const res = await fetch("/api/draft", {
             method: "POST",
@@ -3317,7 +3326,26 @@
               typeof d === "string" ? d : "שגיאת שרת (" + res.status + ")",
             );
           }
-          const r = await res.json();
+          // ההסכם מוצג תוך כדי כתיבה. ציור אחד לכל פריים, ולא לכל קטע טקסט שמגיע
+          let r = null,
+            live = "";
+          await readEvents(res, (ev) => {
+            if (ev.type === "delta") {
+              live += ev.text;
+              frame ||= requestAnimationFrame(() => {
+                frame = 0;
+                showLive(live);
+              });
+            } else if (ev.type === "reviewing") {
+              cancelAnimationFrame(frame);
+              showLive(ev.title + "\n" + ev.body);
+              const t = $("typing")?.lastElementChild;
+              if (t) t.firstChild.textContent = "בבדיקה משפטית… ";
+            } else if (ev.type === "error") throw new Error(ev.message);
+            else if (ev.type === "result") r = ev;
+          });
+          cancelAnimationFrame(frame);
+          if (!r) throw new Error("החיבור לשרת נותק לפני שהניסוח הסתיים");
           busy(false);
           if (r.status === "questions") {
             const q =
@@ -3345,8 +3373,16 @@
             saveHistory();
           }
         } catch (err) {
+          cancelAnimationFrame(frame);
           busy(false);
           messages.pop();
+          if (prev) {
+            $("title").value = prev.title;
+            $("body").innerHTML = prev.html;
+          } else {
+            $("doc").hidden = true;
+            $("placeholder").hidden = false;
+          }
           // הטופס עצמו נכשל: חוזרים אליו עם כל מה שמולא, כדי לנסות שוב בלחיצה
           if (!messages.length) {
             $("chat").replaceChildren();
@@ -3358,6 +3394,34 @@
           }
           add("error", "הניסוח נכשל: " + err.message + ". נסה שוב.");
         }
+      }
+
+      // התשובה של /api/draft: שורת JSON לכל אירוע (delta, reviewing, result, error), עד סוף החיבור
+      async function readEvents(res, onEvent) {
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          for (const l of lines) if (l.trim()) onEvent(JSON.parse(l));
+        }
+      }
+
+      // טקסט שעוד נכתב: השורה הראשונה היא הכותרת. הניקוי (Markdown, כותרת כפולה) מגיע ב-result
+      function showLive(text) {
+        const [title, ...lines] = text.trimStart().split("\n");
+        $("loading").hidden = true;
+        $("doc").hidden = false;
+        $("placeholder").hidden = true;
+        $("title").value = title;
+        $("body").replaceChildren(
+          ...lines
+            .filter((l) => l.trim())
+            .map((l) => el("p", { textContent: l })),
+        );
       }
 
       const DOC_MSG =

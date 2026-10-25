@@ -9,6 +9,7 @@ uvicorn app.main:app --reload
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
 import secrets
@@ -22,7 +23,7 @@ from urllib.parse import parse_qs, quote
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -219,20 +220,39 @@ def _draft_quota(request: Request):
     _daily["count"] += 1
 
 
+DRAFT_FAILED = "הניסוח נכשל: שירות הניסוח לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות"
+
+
 @app.post("/api/draft")
 async def api_draft(req: DraftRequest, request: Request):
     msgs = [m.model_dump() for m in req.messages if m.role in ("user", "assistant")]
     if not msgs or msgs[-1]["role"] != "user":
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
     _draft_quota(request)
-    try:
-        return await run_in_threadpool(draft.draft, msgs, req.focus_file_ids, req.conversation, req.web_check,
-                                       req.deep_review, req.revise)
+    try:  # מסמכי הבסיס נבדקים כאן, לפני ההזרמה, כדי שמסמך חסר יחזיר 404 ולא 200 עם שגיאה
+        events = await run_in_threadpool(draft.stream, msgs, req.focus_file_ids, req.conversation, req.web_check,
+                                          req.deep_review, req.revise)
     except LookupError as e:
         raise HTTPException(404, str(e))
-    except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק
+    except Exception:  # הפרטים ללוג של השרת בלבד, לא לממשק
         log.exception("הניסוח נכשל")
-        raise HTTPException(502, "הניסוח נכשל: שירות הניסוח לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
+        raise HTTPException(502, DRAFT_FAILED)
+
+    def ndjson():
+        """שורת JSON לכל אירוע (draft.stream). הסטטוס 200 כבר נשלח, ולכן שגיאה באמצע היא אירוע error.
+        Starlette מריץ generator רגיל ב-threadpool, כך שהקריאות למודל לא חוסמות את השרת."""
+        try:
+            for ev in events:
+                yield json.dumps(ev, ensure_ascii=False) + "\n"
+        except draft.Truncated as e:
+            yield json.dumps({"type": "error", "message": str(e)}, ensure_ascii=False) + "\n"
+        except Exception:
+            log.exception("הניסוח נכשל")
+            yield json.dumps({"type": "error", "message": DRAFT_FAILED}, ensure_ascii=False) + "\n"
+
+    # בלי no-cache ו-X-Accel-Buffering, פרוקסי בדרך (Render) עלול לצבור את כל התשובה ולשלוח אותה רק בסוף
+    return StreamingResponse(ndjson(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 class AskRequest(BaseModel):

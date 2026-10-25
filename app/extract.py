@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import shutil
+import textwrap
 from collections import Counter
 
 import pillow_heif
@@ -222,6 +223,42 @@ def clean(pages, mark_pages=True):
 def strip_pages(text):
     """הטקסט בלי סימוני העמודים, לדוגמאות שהמודל מנסח מהן (שלא יעתיק [עמוד 3] לטיוטה)."""
     return PAGE_MARK.sub("\n\n", text).strip()
+
+
+# ponytail: גודל בתווים ולא בטוקנים. בעברית בערך 3 תווים לטוקן, כלומר קטעים של עד כ-700 טוקנים
+CHUNK_MAX = 2000
+CHUNK_MIN = 400  # אחרי סעיף קצר מזה, הסעיף הבא מצטרף אליו: "5. סודיות" לבד לא אומר כלום לחיפוש
+SECTION_START = re.compile(r"^\d{1,3}\.\s+\S")  # סעיף ראשי ("7. "), לא תת-סעיף ("7.2"): הוא נשאר בתוך הסעיף שלו
+PAGE_LINE = re.compile(r"\[עמוד (\d+)\]")
+
+
+def chunk(text):
+    """הטקסט השמור (אחרי clean) כקטעים לחיפוש: [{section, page, text}].
+    גבול בין קטעים בתחילת כל סעיף ראשי. סעיף ארוך מ-CHUNK_MAX מתפצל בגבול פסקה, והפסקה האחרונה חוזרת
+    בתחילת הקטע הבא (חפיפה), כדי שמשפט שנחתך בגבול יימצא. page: העמוד שבו הקטע מתחיל (null בלי סימוני עמודים).
+    section: השורה הראשונה של הסעיף, כמו "7. שיפוי". במסמך בלי מספור כל הקטעים תחת השורה הראשונה במסמך."""
+    sections, page = [], None
+    for line in text.split("\n"):
+        line = line.strip()
+        if m := PAGE_LINE.fullmatch(line):
+            page = int(m[1])
+            continue
+        if not line:
+            continue
+        if not sections or (SECTION_START.match(line) and sum(len(l) for _, l in sections[-1]["lines"]) >= CHUNK_MIN):
+            sections.append({"section": line[:80], "lines": []})
+        # פסקה ארוכה במיוחד (Word, OCR בלי שבירות שורה) נחתכת ברווחים, כדי שכל קטע יישאר עד CHUNK_MAX
+        sections[-1]["lines"] += [(page, l) for l in textwrap.wrap(line, CHUNK_MAX // 2)]
+    chunks = []
+    for s in sections:
+        piece = []
+        for pg, line in s["lines"]:
+            if piece and sum(len(l) + 1 for _, l in piece) + len(line) > CHUNK_MAX:
+                chunks.append((s["section"], piece))
+                piece = piece[-1:] if len(piece[-1][1]) + len(line) < CHUNK_MAX else []
+            piece.append((pg, line))
+        chunks.append((s["section"], piece))
+    return [{"section": s, "page": p[0][0], "text": "\n".join(l for _, l in p)} for s, p in chunks]
 
 
 def _demo():

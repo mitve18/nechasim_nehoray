@@ -88,6 +88,7 @@ def sync():
             store.prune_files(conn, [f["id"] for f in files])
             fill_missing(conn, svc, files, stats)
             backfill(conn, stats)
+            backfill_chunks(conn, stats)
         store.log_run(conn, stats)
     stats["listed"] = len(files)
     stats["in_db"] = len(known) - stats["removed"] + stats["added"]
@@ -152,6 +153,24 @@ def backfill(conn, stats):
         print(f"הושלם    נתונים מובנים  {doc['name']}")
 
 
+def backfill_chunks(conn, stats):
+    """חותך לקטעים מסמכים שעוד לא נחתכו (או בגרסה ישנה, store.CHUNK_VERSION), מהטקסט ששמור במסד:
+    בלי Drive, בלי OCR ובלי מודל שפה, רק embeddings. מסמך שנכשל נבחר שוב בריצה הבאה."""
+    for doc in store.pending_chunks(conn):
+        usage = []
+        try:
+            store.save_chunks(conn, doc["file_id"], doc["name"], doc["text"], usage)
+        except Exception as e:
+            stats["errors"].append({"file": doc["name"], "error": f"חיתוך לקטעים: {str(e)[:250]}"})
+            print(f"נכשל     חיתוך לקטעים  {doc['name']}  ({e})")
+            continue
+        finally:
+            store.log_usage(conn, "sync", usage)
+        stats["chunked"] = stats.get("chunked", 0) + 1
+    if stats.get("chunked"):
+        print(f"נחתכו לקטעים {stats['chunked']} מסמכים קיימים")
+
+
 def summary(stats):
     """סיכום הריצה ב-Markdown: טבלת מספרים, שמות הקבצים שהשתנו, ובלוק מתקפל עם כל הקבצים שנמצאו."""
     def esc(s):
@@ -168,6 +187,8 @@ def summary(stats):
               f"תיקייה שנסרקה: `{stats['folder']}`"]
     if backfilled:
         lines += ["", f"**הושלמו נתונים מובנים ל-{len(backfilled)} מסמכים**", *(f"- {esc(n)}" for n in backfilled)]
+    if stats.get("chunked"):
+        lines += ["", f"**נחתכו לקטעים {stats['chunked']} מסמכים קיימים** (לחיפוש בסעיפים)"]
     counted, scored, failed = stats.get("pages_counted", 0), stats.get("ocr_scored", 0), stats.get("fill_failed", [])
     if counted or scored or failed:  # השלמות למסמכים ותיקים: קורות פעם אחת לכל מסמך
         lines += ["", f"**נספרו עמודים ל-{counted} מסמכים · חושב ציון איכות OCR ל-{scored} מסמכים**"]

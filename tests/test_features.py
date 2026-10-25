@@ -8,6 +8,7 @@ python tests/test_features.py   (או pytest)
 import contextlib
 import hashlib
 import io
+import json
 import os
 import shutil
 import sys
@@ -23,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from agno.agent import Agent  # noqa: E402
+from agno.run.agent import RunContentEvent, RunOutput  # noqa: E402
 from agno.run.base import RunStatus  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pg import postgres  # noqa: E402
@@ -32,6 +34,12 @@ from app import draft, drive, extract, github, main, store  # noqa: E402
 
 PDF, PNG = "application/pdf", "image/png"
 VEC = "[" + ",".join(["0.1"] * 1536) + "]"
+
+
+def _streamed(text, metrics=None):
+    """מה ש-Agent.run(stream=True, yield_run_output=True) מחזיר ל-Writer: קטעי טקסט, ובסוף RunOutput."""
+    return iter([RunContentEvent(content=text[:3]), RunContentEvent(content=text[3:]),
+                 RunOutput(content=text, status=RunStatus.completed, metrics=metrics)])
 META = {"doc_type": "הסכם", "parties": ["א", "ב"], "plan_number": None, "location": None, "gush_helka": None,
         "start_date": None, "end_date": "2027-01-31", "amounts": None, "pages": None}
 
@@ -67,7 +75,8 @@ def _sync_fakes(conn, listing, downloads):
     env = {k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"} | {"DRIVE_FOLDER_ID": "folder"}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(conn),
                              analyze=lambda name, text, usage=None: ("תקציר", dict(META)),
-                             embed=lambda text, usage=None: VEC), \
+                             embed=lambda text, usage=None: VEC,
+                             embed_many=lambda texts, usage=None: [VEC] * len(texts)), \
             mock.patch.multiple(sync.drive, service=lambda: None, list_files=lambda svc, folder: listing,
                                 download=lambda svc, f: downloads.append(f["id"]) or b"data"), \
             mock.patch.multiple(sync.extract, extract=fake_extract, page_count=lambda f, data: 3), \
@@ -108,6 +117,9 @@ def test_sync_files_table_failed_unsupported_retry():
         meta = conn.execute("select metadata->>'pages', end_date, ocr_quality from agreements where file_id = 'new'").fetchone()
         assert meta == ("3", date(2027, 1, 31), 91), meta  # מספר העמודים האמיתי, וציון ה-OCR נשמר
         assert conn.execute("select ocr_quality from agreements where file_id = 'old'").fetchone() == (None,)
+        # כל מסמך שעובד נחתך לקטעים, עם העמוד שבו הקטע מתחיל; מה שנמחק מ-Drive נמחק עם הקטעים שלו (cascade)
+        chunks = conn.execute("select file_id, section, page, text from chunks order by file_id").fetchall()
+        assert ("new", "טקסט", 1, "טקסט\nהמשך") in chunks and {c[0] for c in chunks} == {"new", "same", "old"}, chunks
 
         downloads.clear()
         with _sync_fakes(conn, listing, downloads):
@@ -234,6 +246,47 @@ def test_search_learns_from_draft_ratings():
             assert [r["name"] for r in store.search(conn, "q", k=2, learn=True)] == ["אהוב.pdf", "קרוב.pdf"]
 
 
+def test_chunk_by_section_with_pages_and_overlap():
+    paras = [f"פסקה {i} " + "ב" * 600 for i in range(5)]
+    text = "\n".join(["[עמוד 1]", "", "הסכם שכירות", "הואיל " + "א" * 450, "1. הגדרות", "קצר", "2. התמורה",
+                      "", "[עמוד 2]", "", *paras])
+    parts = extract.chunk(text)
+    assert [(p["section"], p["page"]) for p in parts] == [
+        ("הסכם שכירות", 1), ("1. הגדרות", 1), ("1. הגדרות", 2)]  # "1." קצר, ולכן "2." מצטרף אליו
+    assert "2. התמורה" in parts[1]["text"] and "[עמוד" not in "".join(p["text"] for p in parts)
+    assert parts[2]["text"].split("\n")[0] == parts[1]["text"].split("\n")[-1] == paras[2]  # חפיפה של פסקה
+    assert all(len(p["text"]) <= extract.CHUNK_MAX for p in parts)
+    long = extract.chunk("מילה " * 2000)  # פסקה אחת של 10,000 תווים, בלי שבירות שורה
+    assert len(long) > 1 and all(len(p["text"]) <= extract.CHUNK_MAX for p in long) and long[0]["page"] is None
+    assert extract.chunk("") == []
+
+
+def test_hybrid_search_and_chunk_backfill():
+    with postgres() as conn:
+        if conn is None:
+            return skip("אין py-pglite או Node")
+        store.init(conn)
+        _agreement(conn, "a", "שכירות.pdf")
+        _agreement(conn, "b", "מקרקעין.pdf")
+        conn.execute("update agreements set text = %s where file_id = 'b'",
+                     ("[עמוד 1]\n\nמבוא " + "א" * 450 + "\n\n[עמוד 3]\n\n4. המקרקעין: גוש 6123 חלקה 45",))
+        far = "[" + ",".join(["0.1"] * 768 + ["-0.1"] * 768) + "]"  # הקטע עם המספר רחוק מהשאילתה בווקטורים
+        with mock.patch.multiple(store, embed=lambda text, usage=None: VEC,
+                                 embed_many=lambda texts, usage=None: [far if "6123" in t else VEC for t in texts]):
+            stats = {"errors": []}
+            sync.backfill_chunks(conn, stats)  # מסמכים קיימים נחתכים מהטקסט השמור, בלי Drive
+            assert stats["chunked"] == 2 and store.pending_chunks(conn) == []
+            # רק מילות המפתח מוצאות את הקטע, ו-RRF מעלה אותו מעל קטעים שקרובים יותר בווקטורים
+            top = store.search_chunks(conn, "גוש 6123", k=3)[0]
+            assert (top["file_id"], top["page"], top["section"]) == ("b", 3, "4. המקרקעין: גוש 6123 חלקה 45"), top
+            assert top["name"] == "מקרקעין.pdf" and top["url"] == "https://drive/b"
+            assert [c["file_id"] for c in store.search_chunks(conn, "שאלה בלי מילים מהמאגר", k=3)] != []  # ווקטורים לבד
+        store.save_text(conn, "a", "טקסט חדש")  # טקסט שהשתנה נחתך מחדש בסנכרון הבא
+        assert [d["file_id"] for d in store.pending_chunks(conn)] == ["a"]
+        store.delete(conn, ["b"])
+        assert conn.execute("select count(*) from chunks where file_id = 'b'").fetchone() == (0,)
+
+
 def test_costs_per_draft_and_week_total():
     assert store.cost("gpt-4o", 1_000_000, 400_000, 100_000) == 0.6 * 2.5 + 0.4 * 1.25 + 0.1 * 10
     run = SimpleNamespace(metrics=SimpleNamespace(input_tokens=10_000, cache_read_tokens=0, output_tokens=2_000))
@@ -292,7 +345,8 @@ def test_ask_cites_only_documents_the_tools_returned():
             assert "<שאלה>סודיות?</שאלה>" in messages and "7.2 הסודיות" in messages
             return SimpleNamespace(status=RunStatus.completed, content='"הסודיות תחול 5 שנים" סעיף 7.2, עמוד 2',
                                    metrics=SimpleNamespace(input_tokens=500, cache_read_tokens=0, output_tokens=50))
-        self.tools[0]("סודיות")  # search_documents: המודל "ראה" את d1
+        found = self.tools[0]("סודיות")  # search_documents: המודל "ראה" את d1, כקטע עם סעיף ועמוד
+        assert 'section="7.2 סודיות" page="2"' in found and "מבוא" not in found, found
         assert "[עמוד 2]" in self.tools[2]("d1") and self.tools[2]("nope") == "אין מסמך עם המזהה הזה."
         # map-reduce: מזהה לא קיים וכפילות מדולגים, וחוזר רק מה שהקורא חילץ, לא המסמך המלא
         found = self.tools[3](["d1", "nope", "d1"], "סודיות?")
@@ -305,7 +359,9 @@ def test_ask_cites_only_documents_the_tools_returned():
             input_tokens=1000, cache_read_tokens=0, output_tokens=100))
 
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
-                             search=lambda conn, q, k=3, usage=None, learn=False: [doc], get_doc=lambda conn, fid: doc if fid == "d1" else None,
+                             search_chunks=lambda conn, q, k=8, usage=None: [
+                                 doc | {"section": "7.2 סודיות", "page": 2, "text": "7.2 הסודיות תחול 5 שנים"}],
+                             get_doc=lambda conn, fid: doc if fid == "d1" else None,
                              record=lambda kind, usage, conv=None: logged.append((kind, usage, conv))), \
             mock.patch.object(Agent, "run", fake_run):
         r = TestClient(main.app).post("/api/ask", json={"messages": [{"role": "user", "content": "כמה זמן הסודיות?"}],
@@ -319,7 +375,7 @@ def test_draft_web_check_and_deep_review():
     calls, logged = [], []
     reviewed = {"ok": True}
 
-    def fake_run(self, messages):
+    def fake_run(self, messages, **kw):
         model = self.model.id
         calls.append((model, [t for t in self.tools if isinstance(t, dict)] if self.tools else []))
         m = SimpleNamespace(input_tokens=100, cache_read_tokens=0, output_tokens=10)
@@ -333,8 +389,8 @@ def test_draft_web_check_and_deep_review():
             return SimpleNamespace(status=RunStatus.completed, metrics=m, content=draft.Review(
                 edits=[draft.Edit(find="גוף", replace="גוף מתוקן"), draft.Edit(find="לא קיים", replace="x")],
                 notes=["הוסף סעיף שיפוי"]))
-        assert ("דרישות חוק" in (self.additional_context or "")) == bool(calls[-1][1])
-        return SimpleNamespace(status=RunStatus.completed, metrics=m, content=draft.Agreement(title="הסכם", body="גוף"))
+        assert ("דרישות חוק" in (self.additional_context or "")) == bool(calls[-1][1]) and kw["stream"]
+        return _streamed("הסכם\n\nגוף", m)
 
     msgs = [{"role": "user", "content": "סוג החוזה: הסכם שירותים\n\nנטיית הניסוח: מאוזנת"}]
     with mock.patch.object(Agent, "run", fake_run), \
@@ -564,7 +620,7 @@ def test_draft_limits_and_errors():
     body = {"messages": [{"role": "user", "content": "נסח"}]}
     with mock.patch.multiple(main, PASSWORD="", TOKEN="t", DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
                              _drafts=main.defaultdict(main.deque)), \
-            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", lambda *a: ok):
+            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "stream", lambda *a: iter([ok])):
         a, b = TestClient(main.app, cookies={"sid": "a"}), TestClient(main.app, cookies={"sid": "b"})
         assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
         r = a.post("/api/draft", json=body)
@@ -573,13 +629,22 @@ def test_draft_limits_and_errors():
         r = b.post("/api/draft", json=body)  # 40 ניסוחים באתר היום
         assert r.status_code == 429 and "היומית" in r.json()["detail"]
 
-    def boom(m, f):
+    def boom(*a):
         raise RuntimeError("openai 500: secret-internal-detail")
 
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", _daily={"date": None, "count": 0}), \
-            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "draft", boom):
-        r = TestClient(main.app).post("/api/draft", json=body)
-    assert r.status_code == 502 and "הניסוח נכשל" in r.json()["detail"] and "secret" not in r.text
+    def boom_midway(*a):  # נכשל אחרי שההזרמה התחילה: הסטטוס כבר 200, והשגיאה מגיעה כאירוע
+        yield {"type": "delta", "text": "הסכם"}
+        boom()
+
+    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", _daily={"date": None, "count": 0}),             mock.patch.dict(os.environ, {"RENDER": ""}):
+        with mock.patch.object(draft, "stream", boom):
+            r = TestClient(main.app).post("/api/draft", json=body)
+        assert r.status_code == 502 and "ניסוח נכשל" in r.json()["detail"] and "secret" not in r.text
+        with mock.patch.object(draft, "stream", boom_midway):
+            r = TestClient(main.app).post("/api/draft", json=body)
+        events = [json.loads(line) for line in r.text.splitlines()]
+        assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+        assert [e["type"] for e in events] == ["delta", "error"] and "secret" not in r.text
     model = draft.build_writer().model
     assert (model.timeout, model.max_retries) == (120, 1)
 
@@ -650,13 +715,13 @@ def test_focus_file_in_agent_context():
     assert "טקסט הבסיס" in writer.additional_context and "הדוגמאות העיקריות" in writer.additional_context
     assert "טקסט מלא אחר" in writer.additional_context  # הדוגמה שנבחרה נשלחת ל-Writer במלואה
 
-    def fake_run(self, messages):
+    def fake_run(self, messages, **kw):
         if self.model.id == draft.INTAKE_MODEL:
             self.tools[0]("שאילתה")  # בוחר דוגמה שנמצאה, מסמך בסיס (כפול) ו-file_id מומצא: רק הראשונה נכנסת
             return SimpleNamespace(status=RunStatus.completed,
                                    content=draft.Intake(status="ready", questions=[], examples=["o1", "b1", "invented"]))
         assert "טקסט הבסיס" in self.additional_context and "טקסט מלא אחר" in self.additional_context
-        return SimpleNamespace(status=RunStatus.completed, content=draft.Agreement(title="הסכם", body="גוף"))
+        return _streamed("הסכם\n\nגוף")
 
     # כמה מסמכי בסיס: כולם בהקשר ובמקורות, בסדר הבחירה ובלי כפילויות; אחריהם הדוגמה מהחיפוש
     docs = {"b1": base, "b2": {**base, "file_id": "b2", "name": "בסיס2.pdf", "text": "טקסט שני"}}
