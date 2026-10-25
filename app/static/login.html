@@ -164,7 +164,10 @@
     </form>
     <script>
       const q = new URLSearchParams(location.search);
-      document.getElementById("err").hidden = !q.has("error");
+      const err = document.getElementById("err");
+      err.hidden = !q.has("error");
+      if (q.get("error") === "locked")
+        err.textContent = "יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד 15 דקות.";
       document.getElementById("next").value = q.get("next") || "/"; // השרת מוודא שזו כתובת בתוך האתר
     </script>
   </body>

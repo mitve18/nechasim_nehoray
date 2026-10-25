@@ -11,8 +11,9 @@ jobs:
     runs-on: ubuntu-24.04  # גרסה קבועה: ubuntu-latest עובר ל-Ubuntu 26, ושם tesseract-ocr-heb עוד לא נבדק
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      # מקובעים ל-commit ולא לתגית: תגית אפשר להזיז לקוד אחר. Dependabot מעדכן אותם (.github/dependabot.yml)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.13"
           cache: pip
@@ -23,6 +24,12 @@ jobs:
           for l in heb eng; do
             sudo curl -fsSL -o "$dir/$l.traineddata" "https://github.com/tesseract-ocr/tessdata_best/raw/4.1.0/$l.traineddata"
           done
+          # ה-checksum של הקבצים מ-4.1.0. קובץ שהשתנה עוצר את הסנכרון במקום לרוץ עם מודל לא ידוע
+          (cd "$dir" && sha256sum -c - <<'SUMS'
+          dbaa827aea6bc21215638447f17783a1004987c2d0bf5573d111fee397abdae5  heb.traineddata
+          8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba  eng.traineddata
+          SUMS
+          )
       - run: pip install -r requirements.txt
       - run: python sync.py
         env:

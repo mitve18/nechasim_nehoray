@@ -1,18 +1,22 @@
 """מאגר ההסכמים ב-Postgres (Neon) עם pgvector. embeddings דרך OpenAI, תקציר ונתונים מובנים דרך Agent של Agno."""
+import atexit
 import json
+import logging
 import os
+import threading
 from datetime import date
 from typing import Literal
 
-import psycopg
 from agno.agent import Agent
 from agno.models.openai import OpenAIResponses
 from agno.run.base import RunStatus
 from openai import OpenAI
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 from pydantic import BaseModel, Field
 
+log = logging.getLogger(__name__)
 EMBED_MODEL = "text-embedding-3-small"
 SUMMARY_MODEL = "gpt-4o"
 METADATA_VERSION = 1  # מעלים כשמוסיפים שדות ל-DocInfo; הסנכרון הבא משלים אותם לכל המסמכים הקיימים
@@ -100,8 +104,20 @@ TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את ט�
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
 
 
+_pool, _pool_lock = None, threading.Lock()
+
+
 def connect():
-    return psycopg.connect(os.environ["DATABASE_URL"], autocommit=True, connect_timeout=15)
+    """חיבור מה-pool, ל-with. חיבור חדש ל-Neon לוקח 100–300ms, וכך רק הבקשה הראשונה משלמת עליו.
+    check: Neon סוגר חיבורים כשהמסד נרדם, אז כל חיבור נבדק לפני שהוא יוצא מה-pool."""
+    global _pool
+    with _pool_lock:
+        if _pool is None:
+            _pool = ConnectionPool(os.environ["DATABASE_URL"], min_size=1, max_size=5, max_idle=240,
+                                   kwargs={"autocommit": True, "connect_timeout": 15},
+                                   check=ConnectionPool.check_connection)
+            atexit.register(_pool.close)  # בלי זה sync.py מחכה בסיום לתהליכוני ה-pool
+    return _pool.connection(timeout=15)
 
 
 def init(conn):
@@ -149,7 +165,7 @@ def record(kind, usage, conversation=None):
         with connect() as conn:
             log_usage(conn, kind, usage, conversation)
     except Exception as e:
-        print(f"רישום העלות נכשל: {e!r}")
+        log.warning(f"רישום העלות נכשל: {e!r}")
 
 
 def embed(text, usage=None):

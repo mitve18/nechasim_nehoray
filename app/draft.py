@@ -10,6 +10,7 @@ python -m app.draft "תיאור ההסכם"   בדיקה מהטרמינל
 """
 import difflib
 import json
+import logging
 import re
 from typing import Literal
 
@@ -21,6 +22,7 @@ from pydantic import BaseModel, Field
 from app import store
 from app.extract import strip_pages
 
+log = logging.getLogger(__name__)
 MODEL = "gpt-4o"
 INTAKE_MODEL = "gpt-4.1-mini"  # שאלות השלמה ובחירת דוגמאות. המחירים של כל המודלים ב-store.PRICES
 REVIEW_MODEL = "gpt-5.5"  # "בדיקה משפטית מעמיקה": מודל חזק יותר שעובר על הטיוטה
@@ -186,7 +188,7 @@ def _review(messages, out, usage):
         if result.status != RunStatus.completed or not isinstance(result.content, Review):
             raise RuntimeError(f"status={result.status}")
     except Exception as e:
-        print(f"הבדיקה המשפטית נכשלה: {e!r}")
+        log.warning(f"הבדיקה המשפטית נכשלה: {e!r}")
         return {"review_notes": ["הבדיקה המשפטית המעמיקה נכשלה, וזו הטיוטה בלעדיה. אפשר לנסות שוב בהסכם חדש."]}
     body, skipped = apply_edits(out["body"], result.content.edits)
     notes = list(result.content.notes)

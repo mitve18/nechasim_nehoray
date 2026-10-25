@@ -1,0 +1,11 @@
+# PR שבועי לעדכוני אבטחה וגרסאות: חבילות Python (requirements.txt) וה-actions שב-workflow
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

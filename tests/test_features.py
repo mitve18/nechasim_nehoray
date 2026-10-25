@@ -607,6 +607,27 @@ def test_whole_site_requires_login():
         assert "max-age=2592000" in cookie and "httponly" in cookie  # 30 יום
         assert c.get("/").status_code == 200
 
+        assert c.get("/").headers["x-frame-options"] == "DENY"
+        assert "frame-ancestors 'none'" in c.get("/login").headers["content-security-policy"]
+
+    # העוגייה חתומה עם זמן הכניסה: אחרי 30 יום, או עוגייה ישנה בלי זמן, השרת מבקש כניסה מחדש
+    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"):
+        old = main.session_cookie(time.time() - main.SESSION_DAYS * 24 * 3600 - 1)
+        for cookie in (old, "token-of-secret", "9999999999.forged", main.session_cookie()[:-1] + "x"):
+            assert TestClient(main.app, cookies={"session": cookie}).get("/api/me").status_code == 401, cookie
+        assert TestClient(main.app, cookies={"session": main.session_cookie()}).get("/api/me").status_code == 200
+
+    # ניחוש סיסמה: אחרי LOGIN_FAILS כישלונות מאותו IP, גם הסיסמה הנכונה נחסמת עד שהחלון עובר
+    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret", _login_fails=main.defaultdict(main.deque)), \
+            mock.patch.object(main.asyncio, "sleep", mock.AsyncMock()):
+        c = TestClient(main.app, follow_redirects=False)
+        ip = {"x-forwarded-for": "6.6.6.6, 1.2.3.4"}  # הראשון מזויף; נספר האחרון, שהפרוקסי הוסיף
+        for _ in range(main.LOGIN_FAILS):
+            assert c.post("/login", data={"password": "nope"}, headers=ip).headers["location"].startswith("/login?error=1")
+        r = c.post("/login", data={"password": "secret"}, headers=ip)
+        assert "error=locked" in r.headers["location"] and "session" not in r.cookies
+        assert c.post("/login", data={"password": "secret"}, headers={"x-forwarded-for": "5.5.5.5"}).headers["location"] == "/"
+
     with mock.patch.multiple(main, PASSWORD="", TOKEN="t"):
         with mock.patch.dict(os.environ, {"RENDER": "true"}):  # ב-Render בלי סיסמה: חסום, לא פתוח לכולם
             c = TestClient(main.app, follow_redirects=False)

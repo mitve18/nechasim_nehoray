@@ -6,6 +6,7 @@
 python -m app.ask "השאלה"   בדיקה מהטרמינל
 """
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from agno.agent import Agent
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from app import store
 
+log = logging.getLogger(__name__)
 MODEL = "gpt-4o"
 READER_MODEL = "gpt-4.1-mini"  # הקורא של ask_documents: חלון של מיליון טוקנים, ובערך שישית מהמחיר של MODEL
 SEARCH_CHARS = 30000  # לכל מסמך בתוצאות החיפוש: 5 מסמכים + השיחה נכנסים בחלון של 128K טוקנים
@@ -116,7 +118,7 @@ def build_agent(seen, usage):
                 usage.append(store.agent_usage(r, READER_MODEL))  # list.append בטוח בין threads
                 found = r.content if r.status == RunStatus.completed else "הקריאה נכשלה"
             except Exception as e:  # מסמך אחד שנכשל לא מפיל את התשובה; ה-Agent יודע שהוא חסר
-                print(f"קריאת מסמך נכשלה: {d['name']}: {e!r}")
+                log.warning(f"קריאת מסמך נכשלה: {d['name']}: {e!r}")
                 found = "הקריאה נכשלה"
             return f'<מסמך file_id="{d["file_id"]}" name="{d["name"]}">\n{found}\n</מסמך>'
 

@@ -3,11 +3,13 @@
 משתני סביבה: GH_DISPATCH_TOKEN (fine-grained token, Actions: Read and write, רק ל-repo הזה) ו-GH_REPO (owner/repo).
 """
 import json
+import logging
 import os
 import threading
 import time
 import urllib.request
 
+log = logging.getLogger(__name__)
 WORKFLOW = "sync.yml"
 REF = "main"  # הענף שממנו ה-workflow רץ
 MIN_INTERVAL = 5 * 60
@@ -59,7 +61,7 @@ def _deferred():
     try:
         trigger()
     except Exception as e:  # אין למי להחזיר את השגיאה; הסנכרון הלילי יאסוף את הקבצים
-        print(f"הפעלת סנכרון דחויה נכשלה: {e}")
+        log.warning(f"הפעלת סנכרון דחויה נכשלה: {e}")
 
 
 def running():

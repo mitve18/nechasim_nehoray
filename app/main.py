@@ -9,6 +9,7 @@ uvicorn app.main:app --reload
 import asyncio
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import time
@@ -26,12 +27,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+log = logging.getLogger(__name__)
 
 from app import ask, docx_export, draft, drive, github, store, xlsx_export  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
 PASSWORD = os.environ.get("APP_PASSWORD", "")
-TOKEN = hmac.new(PASSWORD.encode(), b"agreements-drafter-session", hashlib.sha256).hexdigest()
+TOKEN = hmac.new(PASSWORD.encode(), b"agreements-drafter-session", hashlib.sha256).hexdigest()  # מפתח החתימה של העוגייה
 
 @asynccontextmanager
 async def lifespan(app):
@@ -46,9 +49,9 @@ def _migrate():
     try:
         with store.connect() as conn:
             store.init(conn)
-        print("המיגרציות הסתיימו")
+        log.info("המיגרציות הסתיימו")
     except Exception as e:  # מסד לא זמין לא מונע מהאתר לעלות; הניסוח והייצוא עדיין עובדים
-        print(f"המיגרציות בהפעלת השרת נכשלו: {e}")
+        log.warning(f"המיגרציות בהפעלת השרת נכשלו: {e}")
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -58,15 +61,36 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")  # לוגו �
 SESSION_DAYS = 30
 
 
+def _sign(ts):
+    return hmac.new(TOKEN.encode(), ts.encode(), hashlib.sha256).hexdigest()
+
+
+def session_cookie(now=None):
+    """"זמן הכניסה.חתימה". הזמן חתום, כך שהשרת עצמו (לא רק הדפדפן) מפסיק לקבל עוגייה אחרי SESSION_DAYS."""
+    ts = str(int(now or time.time()))
+    return f"{ts}.{_sign(ts)}"
+
+
 def is_writer(request: Request):
-    """מחובר: APP_PASSWORD מוגדר ובדפדפן יש את עוגיית הכניסה."""
-    return bool(PASSWORD) and hmac.compare_digest(request.cookies.get("session", ""), TOKEN)
+    """מחובר: APP_PASSWORD מוגדר, ובדפדפן עוגיית כניסה חתומה שעוד לא עברו עליה SESSION_DAYS."""
+    ts, _, sig = request.cookies.get("session", "").partition(".")
+    return (bool(PASSWORD) and ts.isdigit() and hmac.compare_digest(sig, _sign(ts))
+            and time.time() - int(ts) < SESSION_DAYS * 24 * 3600)
 
 
 def writer(request: Request):
     """תנאי לפעולות שכותבות ל-Drive או מפעילות סנכרון. כשהאתר פתוח במחשב מקומי (בלי סיסמה) הן חסומות."""
     if not is_writer(request):
         raise HTTPException(403, "הפעולה זמינה רק אחרי כניסה עם סיסמה")
+
+
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",  # האתר לא נטען בתוך אתר אחר (clickjacking)
+    # בלי script-src: index.html בנוי על סקריפטים inline. מה שכאן לא שובר כלום
+    "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+}
 
 
 @app.middleware("http")
@@ -85,6 +109,15 @@ async def require_login(request: Request, call_next):
     return RedirectResponse("/login?next=" + quote(path), 303)
 
 
+@app.middleware("http")  # נרשם אחרון ולכן עוטף את require_login: הכותרות נוספות גם להפניות ול-401
+async def security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.update(SECURITY_HEADERS)
+    if request.headers.get("x-forwarded-proto") == "https":
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return resp
+
+
 def _safe_next(target):
     """חזרה לדף שביקשו, רק בתוך האתר: לא "//אתר-אחר" ולא כתובת מלאה."""
     return target if target.startswith("/") and not target.startswith("//") and "\\" not in target else "/"
@@ -100,17 +133,36 @@ def login_page():
     return FileResponse(STATIC / "login.html")
 
 
+LOGIN_FAILS, LOGIN_WINDOW = 10, 15 * 60
+_login_fails = defaultdict(deque)  # IP ← זמני הניסיונות הכושלים ב-LOGIN_WINDOW האחרון
+
+
+def _client_ip(request):
+    """ה-IP האחרון ב-X-Forwarded-For הוא זה שהפרוקסי של Render הוסיף. את הראשונים הדפדפן יכול לזייף.
+    ponytail: אם Render יוסיף עוד פרוקסי בדרך, כל המשתמשים יחלקו מגבלה אחת. אז לעבור לכותרת ש-Render מתעד"""
+    return request.headers.get("x-forwarded-for", "").split(",")[-1].strip() or request.client.host
+
+
 @app.post("/login")
 async def login(request: Request):
-    """טופס HTML רגיל (בלי תלות ב-python-multipart): password ו-next."""
+    """טופס HTML רגיל (בלי תלות ב-python-multipart): password ו-next.
+    עד LOGIN_FAILS ניסיונות כושלים לכל IP ב-15 דקות. השהייה לבדה לא עוצרת ניסיונות שנשלחים במקביל."""
     form = parse_qs((await request.body()).decode())
     password, target = form.get("password", [""])[0], _safe_next(form.get("next", ["/"])[0])
+    ip, now = _client_ip(request), time.time()
+    fails = _login_fails[ip]
+    while fails and fails[0] <= now - LOGIN_WINDOW:
+        fails.popleft()
+    if len(fails) >= LOGIN_FAILS:
+        return RedirectResponse("/login?error=locked&next=" + quote(target), 303)
     if not PASSWORD or not hmac.compare_digest(password.encode(), PASSWORD.encode()):
+        fails.append(now)
         await asyncio.sleep(1)  # מאט ניחוש סיסמאות
         return RedirectResponse("/login?error=1&next=" + quote(target), 303)
+    _login_fails.pop(ip, None)
     resp = RedirectResponse(target, 303)
     https = request.headers.get("x-forwarded-proto") == "https"
-    resp.set_cookie("session", TOKEN, httponly=True, secure=https, samesite="lax", max_age=SESSION_DAYS * 24 * 3600)
+    resp.set_cookie("session", session_cookie(), httponly=True, secure=https, samesite="lax", max_age=SESSION_DAYS * 24 * 3600)
     # מזהה לכל דפדפן, למגבלת הניסוחים. עוגיית session זהה לכולם (סיסמה אחת), ולכן היא לא מבדילה בין משתמשים
     resp.set_cookie("sid", secrets.token_urlsafe(16), httponly=True, secure=https, samesite="lax",
                     max_age=SESSION_DAYS * 24 * 3600)
@@ -179,7 +231,7 @@ async def api_draft(req: DraftRequest, request: Request):
     except LookupError as e:
         raise HTTPException(404, str(e))
     except Exception as e:  # הפרטים ללוג של השרת בלבד, לא לממשק
-        print(f"הניסוח נכשל: {e!r}")
+        log.exception("הניסוח נכשל")
         raise HTTPException(502, "הניסוח נכשל: שירות הניסוח לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
 
 
@@ -198,7 +250,7 @@ async def api_ask(req: AskRequest, request: Request):
     try:
         return await run_in_threadpool(ask.ask, msgs, req.conversation)
     except Exception as e:
-        print(f"התשובה נכשלה: {e!r}")
+        log.exception("התשובה נכשלה")
         raise HTTPException(502, "לא הצלחתי לענות: שירות המודל לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
 
 
@@ -350,8 +402,9 @@ def _sync(defer):
         return None
     try:
         return github.trigger(defer)
-    except Exception as e:
-        return {"started": False, "error": f"הפעלת הסנכרון נכשלה: {e}"}
+    except Exception:  # הפרטים (תשובת GitHub) ללוג בלבד
+        log.exception("הפעלת הסנכרון נכשלה")
+        return {"started": False, "error": "הפעלת הסנכרון נכשלה. נסה שוב בעוד כמה דקות"}
 
 
 @app.post("/api/files/{file_id}/retry", dependencies=[Depends(writer)])
@@ -369,8 +422,9 @@ def api_sync():
         raise HTTPException(404, "הסנכרון מהאתר לא מוגדר")
     try:
         return github.trigger()
-    except Exception as e:
-        raise HTTPException(502, f"הפעלת הסנכרון נכשלה: {e}")
+    except Exception:
+        log.exception("הפעלת הסנכרון נכשלה")
+        raise HTTPException(502, "הפעלת הסנכרון נכשלה. נסה שוב בעוד כמה דקות")
 
 
 @app.get("/api/sync", dependencies=[Depends(writer)])
@@ -418,8 +472,7 @@ async def api_upload(request: Request, name: str):
 
 @app.get("/admin/sync", response_class=HTMLResponse)
 def sync_log():
-    with store.connect() as conn:
-        store.init(conn)
+    with store.connect() as conn:  # המיגרציות כבר רצו בהפעלת השרת (lifespan)
         runs = store.recent_runs(conn)
 
     def names(r, key):

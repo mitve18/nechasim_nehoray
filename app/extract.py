@@ -8,6 +8,7 @@ python -m app.extract <fileId>   הטקסט המלא של קובץ אחד, כמ�
 python -m app.extract --ocr <file.pdf>   OCR מקומי לקובץ, בלי Drive (לבדיקת ההתקנה של Tesseract)
 """
 import io
+import logging
 import os
 import re
 import shutil
@@ -18,6 +19,7 @@ from pypdf import PdfReader
 
 pillow_heif.register_heif_opener()  # תמונות HEIC/HEIF מאייפון נפתחות כמו כל תמונה
 
+log = logging.getLogger(__name__)
 MIN_CHARS_PER_PAGE = 50  # פחות מזה בממוצע = סריקה בלי שכבת טקסט
 DOCX_MIN_TEXT = 200  # מסמך Word עם פחות טקסט מזה ועם תמונות = עמודים סרוקים שהודבקו, ועוברים OCR
 OCR_LANG = "heb+eng"
@@ -183,7 +185,7 @@ def ocr(images, fallback=None):
             try:
                 text = fallback(img) or text
             except Exception as e:  # Drive לא זמין: נשארים עם Tesseract, והסנכרון ממשיך
-                print(f"OCR חלופי נכשל, נשאר Tesseract: {e!r}")
+                log.warning(f"OCR חלופי נכשל, נשאר Tesseract: {e!r}")
         pages.append(text)
     return pages, round(weighted / letters) if letters else 0
 
