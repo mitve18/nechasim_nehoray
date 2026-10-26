@@ -118,6 +118,32 @@ create index if not exists chunks_embedding on chunks using hnsw (embedding vect
 create index if not exists chunks_tsv on chunks using gin (tsv);
 -- הגרסה של החיתוך. null = עוד לא נחתך; הסנכרון הבא משלים מהטקסט השמור
 alter table agreements add column if not exists chunk_version int;
+-- משתמשי האתר. email נשמר באותיות קטנות. session_version עולה בהשבתה ובאיפוס סיסמה, וכך מנתק עוגיות קיימות
+create table if not exists users (
+    id bigserial primary key,
+    email text not null unique,
+    name text not null,
+    password_hash text not null,
+    role text not null default 'user' check (role in ('admin', 'user')),
+    active boolean not null default true,
+    session_version int not null default 1,
+    created_at timestamptz not null default now(),
+    last_login_at timestamptz
+);
+-- הבעלים של כל טיוטה. טיוטות מלפני המשתמשים (null) משויכות ל-admin הראשון (bootstrap_admin), ועד אז אף אחד לא רואה אותן
+alter table drafts add column if not exists user_id bigint references users;
+create index if not exists drafts_user on drafts (user_id, updated_at desc);
+-- שיחות "שאלו על המסמכים". messages כולל את הציטוטים של כל תשובה, כדי להציג אותה שוב כמו שהייתה
+create table if not exists chats (
+    id bigserial primary key,
+    user_id bigint not null references users,
+    title text not null,
+    messages jsonb not null,
+    conversation text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+create index if not exists chats_user on chats (user_id, updated_at desc);
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
@@ -537,36 +563,135 @@ HISTORY_FIELDS = (f"id, title, left(text, 300) as preview, rating, "
                   f"to_char(updated_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as updated_at")
 
 
-def save_draft(conn, draft_id, title, html, text, messages, sources, conversation=None):
-    """שומר הסכם בהיסטוריה: עדכון של הקיים, או חדש (גם כשהקיים כבר נמחק). טיוטות נמחקות רק ידנית."""
+# כל פונקציה של טיוטות ושיחות מקבלת user_id ומסננת לפיו: משתמש לא רואה, משנה או מוחק משאב של משתמש אחר (IDOR)
+
+def save_draft(conn, user_id, draft_id, title, html, text, messages, sources, conversation=None):
+    """שומר הסכם בהיסטוריה: עדכון של הקיים, או חדש (גם כשהקיים נמחק, או כשה-id של משתמש אחר: הטיוטה שלו
+    לא משתנה, ונוצרת טיוטה חדשה של המשתמש הנוכחי עם התוכן שלו). טיוטות נמחקות רק ידנית."""
     values = (title, html, text, Jsonb(messages), Jsonb(sources), conversation)
     if draft_id:
         row = conn.execute("update drafts set title = %s, html = %s, text = %s, messages = %s, sources = %s, conversation = %s, "
-                           "updated_at = now() where id = %s returning id", (*values, draft_id)).fetchone()
+                           "updated_at = now() where id = %s and user_id = %s returning id",
+                           (*values, draft_id, user_id)).fetchone()
         if row:
             return row[0]
-    return conn.execute("insert into drafts (title, html, text, messages, sources, conversation) "
-                        "values (%s, %s, %s, %s, %s, %s) "
-                        "returning id", values).fetchone()[0]
+    return conn.execute("insert into drafts (title, html, text, messages, sources, conversation, user_id) "
+                        "values (%s, %s, %s, %s, %s, %s, %s) "
+                        "returning id", (*values, user_id)).fetchone()[0]
 
 
-def drafts_list(conn):
+def drafts_list(conn, user_id):
     """עמוד ההיסטוריה: מהחדש לישן, בלי ה-HTML והשיחה (נטענים רק כשפותחים הסכם)."""
-    return _dicts(conn, f"select {HISTORY_FIELDS} from drafts order by drafts.updated_at desc")
+    return _dicts(conn, f"select {HISTORY_FIELDS} from drafts where user_id = %s order by drafts.updated_at desc",
+                  (user_id,))
 
 
-def get_draft(conn, draft_id):
-    rows = _dicts(conn, f"select {HISTORY_FIELDS}, html, messages, sources, conversation from drafts where id = %s", (draft_id,))
+def get_draft(conn, user_id, draft_id):
+    rows = _dicts(conn, f"select {HISTORY_FIELDS}, html, messages, sources, conversation from drafts "
+                        "where id = %s and user_id = %s", (draft_id, user_id))
     return rows[0] if rows else None
 
 
-def delete_draft(conn, draft_id):
-    return conn.execute("delete from drafts where id = %s returning id", (draft_id,)).fetchone() is not None
+def delete_draft(conn, user_id, draft_id):
+    return conn.execute("delete from drafts where id = %s and user_id = %s returning id",
+                        (draft_id, user_id)).fetchone() is not None
 
 
-def rate_draft(conn, draft_id, rating):
-    return conn.execute("update drafts set rating = %s where id = %s returning id",
-                        (rating, draft_id)).fetchone() is not None
+def rate_draft(conn, user_id, draft_id, rating):
+    return conn.execute("update drafts set rating = %s where id = %s and user_id = %s returning id",
+                        (rating, draft_id, user_id)).fetchone() is not None
+
+
+CHAT_FIELDS = f"id, title, to_char(updated_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as updated_at"
+
+
+def chat_owned(conn, user_id, chat_id):
+    return conn.execute("select 1 from chats where id = %s and user_id = %s", (chat_id, user_id)).fetchone() is not None
+
+
+def save_chat(conn, user_id, chat_id, title, messages, conversation=None):
+    """שיחה חדשה (chat_id=None), או עדכון של שיחה של המשתמש. None אם chat_id לא שלו או שנמחק."""
+    if chat_id:
+        row = conn.execute("update chats set messages = %s, conversation = %s, updated_at = now() "
+                           "where id = %s and user_id = %s returning id",
+                           (Jsonb(messages), conversation, chat_id, user_id)).fetchone()
+        return row and row[0]
+    return conn.execute("insert into chats (user_id, title, messages, conversation) values (%s, %s, %s, %s) "
+                        "returning id", (user_id, title, Jsonb(messages), conversation)).fetchone()[0]
+
+
+def chats_list(conn, user_id, limit=50):
+    return _dicts(conn, f"select {CHAT_FIELDS} from chats where user_id = %s order by chats.updated_at desc limit %s",
+                  (user_id, limit))
+
+
+def get_chat(conn, user_id, chat_id):
+    rows = _dicts(conn, f"select {CHAT_FIELDS}, messages, conversation from chats where id = %s and user_id = %s",
+                  (chat_id, user_id))
+    return rows[0] if rows else None
+
+
+def delete_chat(conn, user_id, chat_id):
+    return conn.execute("delete from chats where id = %s and user_id = %s returning id",
+                        (chat_id, user_id)).fetchone() is not None
+
+
+USER_FIELDS = (f"id, email, name, role, active, "
+               f"to_char(created_at at time zone '{TZ}', 'DD/MM/YYYY') as created_at, "
+               f"to_char(last_login_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as last_login_at")
+
+
+def user_for_session(conn, user_id, version):
+    """המשתמש של עוגייה, רק אם הוא פעיל וה-session_version שלו לא השתנה מאז הכניסה."""
+    rows = _dicts(conn, "select id, email, name, role from users where id = %s and session_version = %s and active",
+                  (user_id, version))
+    return rows[0] if rows else None
+
+
+def user_for_login(conn, email):
+    rows = _dicts(conn, "select id, password_hash, active, session_version from users where email = %s", (email,))
+    return rows[0] if rows else None
+
+
+def touch_login(conn, user_id):
+    conn.execute("update users set last_login_at = now() where id = %s", (user_id,))
+
+
+def create_user(conn, email, name, password_hash, role="user", active=True):
+    """id של המשתמש החדש, או None אם הכתובת כבר רשומה."""
+    row = conn.execute("insert into users (email, name, password_hash, role, active) values (%s, %s, %s, %s, %s) "
+                       "on conflict (email) do nothing returning id",
+                       (email, name, password_hash, role, active)).fetchone()
+    return row and row[0]
+
+
+def users_list(conn):
+    return _dicts(conn, f"select {USER_FIELDS} from users order by users.created_at")
+
+
+def update_user(conn, user_id, active=None, role=None, password_hash=None):
+    """שינוי של admin. השבתה, שינוי תפקיד או סיסמה מעלים את session_version, וכך מנתקים את המשתמש מיד.
+    False אם אין משתמש כזה."""
+    return conn.execute(
+        "update users set active = coalesce(%s, active), role = coalesce(%s, role), "
+        "password_hash = coalesce(%s, password_hash), session_version = session_version + 1 "
+        "where id = %s returning id", (active, role, password_hash, user_id)).fetchone() is not None
+
+
+def needs_admin(conn):
+    return conn.execute("select not exists (select 1 from users where role = 'admin')").fetchone()[0]
+
+
+def bootstrap_admin(conn, email, name, password_hash):
+    """admin ראשון מ-ADMIN_EMAIL ו-ADMIN_PASSWORD, רק כשעוד אין admin. מקבל את הטיוטות שנוצרו לפני המשתמשים.
+    כתובת שכבר רשומה (נרשמה לפני שהוגדר admin) הופכת ל-admin פעיל, עם הסיסמה מהמשתנים."""
+    with conn.transaction():
+        user_id = conn.execute(
+            "insert into users (email, name, password_hash, role) values (%s, %s, %s, 'admin') "
+            "on conflict (email) do update set role = 'admin', active = true, password_hash = excluded.password_hash, "
+            "session_version = users.session_version + 1 returning id", (email, name, password_hash)).fetchone()[0]
+        conn.execute("update drafts set user_id = %s where user_id is null", (user_id,))
+    return user_id
 
 
 def costs(conn, days=7):

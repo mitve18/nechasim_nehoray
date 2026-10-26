@@ -174,13 +174,14 @@ def apply_edits(body, edits):
     return body, skipped
 
 
-def _review(messages, out, usage):
+def _review(messages, out, usage, tag):
     """"בדיקה משפטית מעמיקה": REVIEW_MODEL מתקן את הטיוטה. כישלון לא מאבד את הטיוטה: היא חוזרת עם הערה."""
     request = "\n\n".join(m["content"] for m in messages if m["role"] == "user")
     agent = Agent(model=OpenAIResponses(id=REVIEW_MODEL, timeout=300, max_retries=1),
                   instructions=REVIEW_INSTRUCTIONS, output_schema=Review)
     try:
-        result = agent.run(f"<בקשת העובד>\n{request}\n</בקשת העובד>\n\n<טיוטה>\n{out['title']}\n\n{out['body']}\n</טיוטה>")
+        result = agent.run(f"<בקשת העובד>\n{request}\n</בקשת העובד>\n\n<טיוטה>\n{out['title']}\n\n{out['body']}\n</טיוטה>",
+                           **tag)
         usage.append(store.agent_usage(result, REVIEW_MODEL))
         if result.status != RunStatus.completed or not isinstance(result.content, Review):
             raise RuntimeError(f"status={result.status}")
@@ -195,9 +196,9 @@ def _review(messages, out, usage):
     return {"title": title, "body": body, "review_notes": notes}
 
 
-def _run(agent, model, messages, usage, schema):
+def _run(agent, model, messages, usage, schema, tag):
     """ריצה של Agent אחד: העלות נרשמת גם כשהתשובה לא תקינה (הקריאה כבר חויבה)."""
-    result = agent.run(messages)
+    result = agent.run(messages, **tag)
     usage.append(store.agent_usage(result, model))
     if result.status != RunStatus.completed:
         raise RuntimeError(f"הניסוח נכשל: status={result.status} {result.content}")
@@ -210,11 +211,11 @@ class Truncated(RuntimeError):
     """ההסכם ארוך מ-MAX_OUTPUT_TOKENS ונחתך. ההודעה מוצגת לעובד, בניגוד לשגיאות אחרות."""
 
 
-def _write(agent, messages, usage):
+def _write(agent, messages, usage, tag):
     """ה-Writer בהזרמה: אירוע delta לכל קטע טקסט, ובסוף (return) הטקסט המלא.
     ב-Agno הפריט האחרון הוא RunOutput (yield_run_output), או RunErrorEvent כשהריצה נכשלה."""
     last = None
-    for last in agent.run(messages, stream=True, yield_run_output=True):
+    for last in agent.run(messages, stream=True, yield_run_output=True, **tag):
         if isinstance(last, RunContentEvent) and isinstance(last.content, str) and last.content:
             yield {"type": "delta", "text": last.content}
     if not isinstance(last, RunOutput):
@@ -234,7 +235,7 @@ def _split(text):
     return title, body
 
 
-def stream(messages, focus_file_ids=(), conversation=None, web=False, review=False, revise=False):
+def stream(messages, focus_file_ids=(), conversation=None, web=False, review=False, revise=False, user_id=None):
     """אירועי הניסוח לממשק, לפי הסדר: delta (עוד טקסט של ההסכם), reviewing (הטיוטה מוכנה, ו-REVIEW_MODEL בודק
     אותה), ובסוף result: dict עם status, questions, title, body, sources (ו-review_notes בבדיקה מעמיקה).
     messages: [{role: user|assistant, content}].
@@ -242,7 +243,9 @@ def stream(messages, focus_file_ids=(), conversation=None, web=False, review=Fal
     conversation: מזהה השיחה מהדפדפן. העלות נרשמת איתו, כדי שעמוד "עלויות" יחבר אותה לטיוטה.
     web: חיפוש דרישות חוק עדכניות באינטרנט. review: בדיקה משפטית מעמיקה של הטיוטה ב-REVIEW_MODEL.
     revise: תיקון בצ'אט להסכם שכבר נוסח. ישר ל-Writer, בלי Intake, חיפוש ודוגמאות: ההסכם עצמו בשיחה.
-    המקורות חוזרים ריקים, והממשק משאיר את המקורות של הניסוח."""
+    המקורות חוזרים ריקים, והממשק משאיר את המקורות של הניסוח.
+    user_id: המשתמש המחובר. עובר ל-Agno עם conversation כ-session_id, לתיוג ומעקב בלבד: Agno לא שומר כאן
+    כלום (אין db), וההיסטוריה נשמרת בטבלת drafts."""
     focus = []
     if focus_file_ids and not revise:
         with store.connect() as conn:
@@ -251,16 +254,17 @@ def stream(messages, focus_file_ids=(), conversation=None, web=False, review=Fal
                 if not doc:
                     raise LookupError("מסמך בסיס לא נמצא במאגר. ייתכן שעוד לא אונדקס")
                 focus.append(doc)
-    return _events(messages, focus, conversation, web, review, revise)
+    return _events(messages, focus, conversation, web, review, revise, user_id)
 
 
-def _events(messages, focus, conversation, web, review, revise):
+def _events(messages, focus, conversation, web, review, revise, user_id):
+    tag = {"user_id": user_id and str(user_id), "session_id": conversation}
     sources = [{"name": f["name"], "url": f["url"], "summary": f["summary"], "base": True} for f in focus]
     usage, examples = [], []
     try:
         if not revise:
             found = {}
-            intake = _run(build_intake(focus, found, usage), INTAKE_MODEL, messages, usage, Intake)
+            intake = _run(build_intake(focus, found, usage), INTAKE_MODEL, messages, usage, Intake, tag)
             if intake.status == "questions":
                 yield {"type": "result", "status": "questions", "questions": intake.questions, "title": "",
                        "body": "", "sources": sources}
@@ -271,12 +275,12 @@ def _events(messages, focus, conversation, web, review, revise):
             sources += [{"name": e["name"], "url": e["url"], "summary": e["summary"]} for e in examples]
         if web:  # ponytail: נספר חיפוש אחד לניסוח; Agno לא מחזיר כמה חיפושים OpenAI הריץ בפועל
             usage.append(("web_search", 1, 0, 0))
-        text = yield from _write(build_writer(focus, examples, web), messages, usage)
+        text = yield from _write(build_writer(focus, examples, web), messages, usage, tag)
         title, body = clean_output(*_split(text))
         out = {"status": "agreement", "questions": [], "title": title, "body": body}
         if review:
             yield {"type": "reviewing", "title": title, "body": body}
-            out |= _review(messages, out, usage)
+            out |= _review(messages, out, usage, tag)
         yield {"type": "result", **out, "sources": sources}
     finally:  # גם ניסוח שנכשל, או שהעובד סגר את החלון באמצעו (GeneratorExit), עלה כסף
         store.record("draft", usage, conversation)

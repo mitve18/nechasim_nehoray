@@ -23,8 +23,17 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      # חובה: כל האתר מאחורי הסיסמה הזו. בלעדיה האתר מציג "לא מוגדר" ולא נפתח לאף אחד
-      - key: APP_PASSWORD
+      # חובה: מפתח החתימה של עוגיית הכניסה. בלעדיו האתר מציג "לא מוגדר" ולא נפתח לאף אחד.
+      # python -c "import secrets; print(secrets.token_urlsafe(48))". החלפה מנתקת את כל המחוברים
+      - key: SECRET_KEY
+        sync: false
+      # ה-admin הראשון. נוצר בהפעלה רק כשעוד אין admin במסד, ומקבל את הטיוטות הקיימות. אחרי הכניסה הראשונה אפשר למחוק
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # אופציונלי: דומיינים (מופרדים בפסיק) שהרשמה מהם נפתחת מיד. כל כתובת אחרת ממתינה לאישור ב-/admin/users
+      - key: SIGNUP_DOMAINS
         sync: false
       # כפתור הסנכרון: fine-grained token רק ל-repo הזה, Actions: Read and write
       - key: GH_DISPATCH_TOKEN

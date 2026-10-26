@@ -1,24 +1,25 @@
 """שרת הווב: ניסוח הסכמים, ייצוא ל-Word, פאנל קבצים ודוחות.
 
-כל האתר מאחורי סיסמה (APP_PASSWORD): מסך כניסה בפעם הראשונה, ועוגייה שזוכרת את המשתמש ל-30 יום.
-פתוחים בלי כניסה רק /login, /healthz (בדיקת התקינות של Render) והקבצים הסטטיים (לוגו ו-favicon למסך הכניסה).
-בלי APP_PASSWORD: ב-Render האתר חסום ("לא מוגדר"), כדי שלא ייפתח לכולם בטעות. במחשב מקומי הוא פתוח לפיתוח.
+כל האתר מאחורי כניסה אישית (אימייל וסיסמה, ראה app/auth.py), ועוגייה שזוכרת את המשתמש ל-30 יום.
+פתוחים בלי כניסה רק /login, /register, /healthz (בדיקת התקינות של Render) והקבצים הסטטיים.
+בלי SECRET_KEY האתר חסום ("לא מוגדר"), כדי שלא ייפתח לכולם בטעות.
+טיוטות ושיחות שייכות למשתמש. ארכיון ההסכמים, הסנכרון וההעלאה משותפים. עלויות, לוג סנכרון וניהול משתמשים: admin.
+
+הרשמה עצמית: כתובת מדומיין ב-SIGNUP_DOMAINS נפתחת מיד, וכל כתובת אחרת ממתינה לאישור של admin.
 
 uvicorn app.main:app --reload
 """
 import asyncio
-import hashlib
-import hmac
 import json
 import logging
 import os
-import secrets
 import time
 from collections import defaultdict, deque
 from datetime import date
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import parse_qs, quote
+from typing import Literal
+from urllib.parse import parse_qs, quote, urlparse
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -31,11 +32,10 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger(__name__)
 
-from app import ask, docx_export, draft, drive, github, store, xlsx_export  # noqa: E402
+from app import ask, auth, docx_export, draft, drive, github, store, xlsx_export  # noqa: E402
 
 STATIC = Path(__file__).parent / "static"
-PASSWORD = os.environ.get("APP_PASSWORD", "")
-TOKEN = hmac.new(PASSWORD.encode(), b"agreements-drafter-session", hashlib.sha256).hexdigest()  # מפתח החתימה של העוגייה
+SIGNUP_DOMAINS = {d.strip().lower().lstrip("@") for d in os.environ.get("SIGNUP_DOMAINS", "").split(",") if d.strip()}
 
 @asynccontextmanager
 async def lifespan(app):
@@ -50,39 +50,40 @@ def _migrate():
     try:
         with store.connect() as conn:
             store.init(conn)
+            _bootstrap_admin(conn)
         log.info("המיגרציות הסתיימו")
-    except Exception as e:  # מסד לא זמין לא מונע מהאתר לעלות; הניסוח והייצוא עדיין עובדים
+    except Exception as e:  # מסד לא זמין לא מונע מהאתר לעלות
         log.warning(f"המיגרציות בהפעלת השרת נכשלו: {e}")
+
+
+def _bootstrap_admin(conn):
+    """admin ראשון מ-ADMIN_EMAIL ו-ADMIN_PASSWORD, רק כשעוד אין admin במסד. אחרי שנוצר, אפשר למחוק את המשתנים."""
+    email, password = auth.clean_email(os.environ.get("ADMIN_EMAIL", "")), os.environ.get("ADMIN_PASSWORD", "")
+    if not (email and password) or not store.needs_admin(conn):
+        return
+    if problem := auth.password_problem(password):
+        log.warning(f"ADMIN_PASSWORD לא תקינה ({problem}). ה-admin לא נוצר")
+        return
+    store.bootstrap_admin(conn, email, email.split("@")[0], auth.hash_password(password))
+    log.info(f"נוצר admin: {email}")
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")  # לוגו ו-favicon
 
 
-SESSION_DAYS = 30
+def _session_user(request):
+    """המשתמש המחובר: עוגייה חתומה בתוקף, ומשתמש פעיל במסד עם אותו session_version."""
+    parsed = auth.parse(request.cookies.get("session"))
+    if not parsed:
+        return None
+    with store.connect() as conn:
+        return store.user_for_session(conn, *parsed)
 
 
-def _sign(ts):
-    return hmac.new(TOKEN.encode(), ts.encode(), hashlib.sha256).hexdigest()
-
-
-def session_cookie(now=None):
-    """"זמן הכניסה.חתימה". הזמן חתום, כך שהשרת עצמו (לא רק הדפדפן) מפסיק לקבל עוגייה אחרי SESSION_DAYS."""
-    ts = str(int(now or time.time()))
-    return f"{ts}.{_sign(ts)}"
-
-
-def is_writer(request: Request):
-    """מחובר: APP_PASSWORD מוגדר, ובדפדפן עוגיית כניסה חתומה שעוד לא עברו עליה SESSION_DAYS."""
-    ts, _, sig = request.cookies.get("session", "").partition(".")
-    return (bool(PASSWORD) and ts.isdigit() and hmac.compare_digest(sig, _sign(ts))
-            and time.time() - int(ts) < SESSION_DAYS * 24 * 3600)
-
-
-def writer(request: Request):
-    """תנאי לפעולות שכותבות ל-Drive או מפעילות סנכרון. כשהאתר פתוח במחשב מקומי (בלי סיסמה) הן חסומות."""
-    if not is_writer(request):
-        raise HTTPException(403, "הפעולה זמינה רק אחרי כניסה עם סיסמה")
+def admin(request: Request):
+    if request.state.user["role"] != "admin":
+        raise HTTPException(403, "הפעולה זמינה רק למנהל")
 
 
 SECURITY_HEADERS = {
@@ -92,25 +93,41 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "same-origin",
 }
+OPEN_PATHS = ("/login", "/register", "/healthz")
 
 
 @app.middleware("http")
 async def require_login(request: Request, call_next):
+    """כל דף ו-API דורשים משתמש מחובר. המשתמש נשמר ב-request.state.user לשימוש ה-endpoints."""
     path = request.url.path
-    if path in ("/login", "/healthz") or path.startswith("/static/"):  # כל השאר דורש כניסה
+    if path in OPEN_PATHS or path.startswith("/static/"):
         return await call_next(request)
-    if not PASSWORD:
-        if os.environ.get("RENDER"):  # Render מגדיר את המשתנה הזה. בלי סיסמה לא פותחים את האתר לכולם בטעות
-            return HTMLResponse("<h1 dir='rtl'>האתר לא מוגדר: חסר APP_PASSWORD ב-Render ← Environment</h1>", 503)
-        return await call_next(request)  # פיתוח מקומי
-    if is_writer(request):
+    if not auth.SECRET:  # בלי מפתח חתימה אין כניסה, ולא פותחים את האתר לכולם בטעות
+        return HTMLResponse("<h1 dir='rtl'>האתר לא מוגדר: חסר SECRET_KEY ב-Render ← Environment</h1>", 503)
+    try:
+        request.state.user = await run_in_threadpool(_session_user, request)
+    except Exception:
+        log.exception("בדיקת המשתמש נכשלה")
+        return JSONResponse({"detail": "מסד הנתונים לא זמין כרגע. נסה שוב בעוד דקה"}, 503)
+    if request.state.user:
         return await call_next(request)
-    if path.startswith(("/api/", "/admin/")):
+    if path.startswith("/api/"):
         return JSONResponse({"detail": "נדרשת כניסה"}, 401)
     return RedirectResponse("/login?next=" + quote(path), 303)
 
 
-@app.middleware("http")  # נרשם אחרון ולכן עוטף את require_login: הכותרות נוספות גם להפניות ול-401
+@app.middleware("http")
+async def same_origin(request: Request, call_next):
+    """CSRF: בקשה שמשנה משהו ונשלחה מאתר אחר נחסמת. דפדפנים שולחים Origin בכל POST, PUT, PATCH ו-DELETE.
+    בנוסף ל-SameSite=Lax של העוגייה."""
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin is not None \
+            and urlparse(origin).netloc != request.headers.get("host"):
+        return JSONResponse({"detail": "בקשה ממקור לא מורשה"}, 403)
+    return await call_next(request)
+
+
+@app.middleware("http")  # נרשם אחרון ולכן עוטף את השאר: הכותרות נוספות גם להפניות, ל-401 ול-403
 async def security_headers(request: Request, call_next):
     resp = await call_next(request)
     resp.headers.update(SECURITY_HEADERS)
@@ -130,12 +147,15 @@ def healthz():
 
 
 @app.get("/login")
+@app.get("/register")
 def login_page():
-    return FileResponse(STATIC / "login.html")
+    return FileResponse(STATIC / "login.html")  # אותו דף לכניסה ולהרשמה
 
 
 LOGIN_FAILS, LOGIN_WINDOW = 10, 15 * 60
-_login_fails = defaultdict(deque)  # IP ← זמני הניסיונות הכושלים ב-LOGIN_WINDOW האחרון
+REGISTRATIONS = 5  # הרשמות לכל IP ב-LOGIN_WINDOW
+# ponytail: בזיכרון התהליך, מתאפס בהפעלה מחדש. מספיק לשרת אחד ב-Render
+_login_fails = defaultdict(deque)  # IP, "email:..." או "reg:IP" ← זמני הניסיונות ב-LOGIN_WINDOW האחרון
 
 
 def _client_ip(request):
@@ -144,29 +164,93 @@ def _client_ip(request):
     return request.headers.get("x-forwarded-for", "").split(",")[-1].strip() or request.client.host
 
 
+def _attempts(key, now):
+    times = _login_fails[key]
+    while times and times[0] <= now - LOGIN_WINDOW:
+        times.popleft()
+    return times
+
+
+async def _form(request):
+    """טופס HTML רגיל (בלי תלות ב-python-multipart)."""
+    form = parse_qs((await request.body()).decode())
+    return lambda name: form.get(name, [""])[0]
+
+
+def _login_response(request, target, user_id, version):
+    resp = RedirectResponse(target, 303)
+    resp.set_cookie("session", auth.cookie(user_id, version), httponly=True, samesite="lax",
+                    secure=request.headers.get("x-forwarded-proto") == "https",
+                    max_age=auth.SESSION_DAYS * 24 * 3600)
+    return resp
+
+
+def _check_login(email, password):
+    """המשתמש אם הסיסמה נכונה, אחרת None. bcrypt רץ גם כשאין משתמש כזה (auth.check_password)."""
+    with store.connect() as conn:
+        user = store.user_for_login(conn, email)
+        if not auth.check_password(password, user and user["password_hash"]):
+            return None
+        if user["active"]:
+            store.touch_login(conn, user["id"])
+        return user
+
+
 @app.post("/login")
 async def login(request: Request):
-    """טופס HTML רגיל (בלי תלות ב-python-multipart): password ו-next.
-    עד LOGIN_FAILS ניסיונות כושלים לכל IP ב-15 דקות. השהייה לבדה לא עוצרת ניסיונות שנשלחים במקביל."""
-    form = parse_qs((await request.body()).decode())
-    password, target = form.get("password", [""])[0], _safe_next(form.get("next", ["/"])[0])
+    """email, password ו-next. עד LOGIN_FAILS ניסיונות כושלים לכל IP ולכל כתובת ב-15 דקות.
+    השהייה לבדה לא עוצרת ניסיונות שנשלחים במקביל."""
+    field = await _form(request)
+    email, password, target = auth.clean_email(field("email")) or "", field("password"), _safe_next(field("next") or "/")
     ip, now = _client_ip(request), time.time()
-    fails = _login_fails[ip]
-    while fails and fails[0] <= now - LOGIN_WINDOW:
-        fails.popleft()
-    if len(fails) >= LOGIN_FAILS:
+    tries = [_attempts(ip, now), _attempts("email:" + email, now)]
+    if any(len(t) >= LOGIN_FAILS for t in tries):
         return RedirectResponse("/login?error=locked&next=" + quote(target), 303)
-    if not PASSWORD or not hmac.compare_digest(password.encode(), PASSWORD.encode()):
-        fails.append(now)
+    user = await run_in_threadpool(_check_login, email, password) if email else None
+    if not user:
+        for t in tries:
+            t.append(now)
         await asyncio.sleep(1)  # מאט ניחוש סיסמאות
         return RedirectResponse("/login?error=1&next=" + quote(target), 303)
+    if not user["active"]:  # רק אחרי סיסמה נכונה, כך שזה לא מגלה אילו כתובות רשומות
+        return RedirectResponse("/login?error=pending", 303)
     _login_fails.pop(ip, None)
-    resp = RedirectResponse(target, 303)
-    https = request.headers.get("x-forwarded-proto") == "https"
-    resp.set_cookie("session", session_cookie(), httponly=True, secure=https, samesite="lax", max_age=SESSION_DAYS * 24 * 3600)
-    # מזהה לכל דפדפן, למגבלת הניסוחים. עוגיית session זהה לכולם (סיסמה אחת), ולכן היא לא מבדילה בין משתמשים
-    resp.set_cookie("sid", secrets.token_urlsafe(16), httponly=True, secure=https, samesite="lax",
-                    max_age=SESSION_DAYS * 24 * 3600)
+    _login_fails.pop("email:" + email, None)
+    return _login_response(request, target, user["id"], user["session_version"])
+
+
+@app.post("/register")
+async def register(request: Request):
+    """הרשמה עצמית: email, name ו-password. כתובת מ-SIGNUP_DOMAINS נכנסת מיד; כל אחת אחרת ממתינה ל-admin."""
+    field = await _form(request)
+    email, name, password = auth.clean_email(field("email")), field("name").strip()[:100], field("password")
+    tries = _attempts("reg:" + _client_ip(request), time.time())
+    if len(tries) >= REGISTRATIONS:
+        return RedirectResponse("/register?error=locked", 303)
+    if not email:
+        return RedirectResponse("/register?error=email", 303)
+    if not name:
+        return RedirectResponse("/register?error=name", 303)
+    if auth.password_problem(password):
+        return RedirectResponse("/register?error=password", 303)
+    tries.append(time.time())
+    active = email.rsplit("@", 1)[1] in SIGNUP_DOMAINS
+
+    def create():
+        with store.connect() as conn:
+            return store.create_user(conn, email, name, auth.hash_password(password), active=active)
+
+    user_id = await run_in_threadpool(create)
+    if not user_id:
+        return RedirectResponse("/register?error=exists", 303)
+    log.info(f"משתמש נרשם: {email} ({'פעיל' if active else 'ממתין לאישור'})")
+    return _login_response(request, "/", user_id, 1) if active else RedirectResponse("/login?registered=1", 303)
+
+
+@app.post("/logout")
+def logout():
+    resp = RedirectResponse("/login", 303)
+    resp.delete_cookie("session")
     return resp
 
 
@@ -177,8 +261,8 @@ def index():
 
 @app.get("/api/me")
 def me(request: Request):
-    """מה הממשק מציג: העלאה וסנכרון (רק למחובר, ורק כשהסנכרון מהאתר מוגדר)."""
-    return {"writer": is_writer(request), "sync": github.configured()}
+    """מי מחובר, ומה הממשק מציג: העלאה (לכל מחובר), סנכרון (כשהוא מוגדר), עלויות וניהול (admin)."""
+    return {"writer": True, "sync": github.configured(), "user": request.state.user}
 
 
 class Message(BaseModel):
@@ -198,19 +282,18 @@ class DraftRequest(BaseModel):
 DRAFTS_PER_HOUR = 30
 DAILY_DRAFT_LIMIT = int(os.environ.get("DAILY_DRAFT_LIMIT", "200"))
 # ponytail: בזיכרון התהליך, מתאפס בהפעלה מחדש ולא משותף בין תהליכים. מספיק לשרת אחד ב-Render
-_drafts = defaultdict(deque)  # sid ← זמני הניסוחים בשעה האחרונה
+_drafts = defaultdict(deque)  # user_id ← זמני הניסוחים בשעה האחרונה
 _daily = {"date": None, "count": 0}
 
 
-def _draft_quota(request: Request):
-    """עד DRAFTS_PER_HOUR ניסוחים בשעה לכל דפדפן, ו-DAILY_DRAFT_LIMIT לכל האתר ביום (UTC). מעבר לזה 429."""
+def _draft_quota(user_id):
+    """עד DRAFTS_PER_HOUR ניסוחים בשעה לכל משתמש, ו-DAILY_DRAFT_LIMIT לכל האתר ביום (UTC). מעבר לזה 429."""
     now, today = time.time(), date.today()
     if _daily["date"] != today:
         _daily.update(date=today, count=0)
     if _daily["count"] >= DAILY_DRAFT_LIMIT:
         raise HTTPException(429, "הגענו לתקרת הניסוחים היומית של האתר. אפשר לנסות שוב מחר")
-    key = request.cookies.get("sid") or request.headers.get("x-forwarded-for", "").split(",")[0] or request.client.host
-    times = _drafts[key]
+    times = _drafts[user_id]
     while times and times[0] <= now - 3600:
         times.popleft()
     if len(times) >= DRAFTS_PER_HOUR:
@@ -228,10 +311,11 @@ async def api_draft(req: DraftRequest, request: Request):
     msgs = [m.model_dump() for m in req.messages if m.role in ("user", "assistant")]
     if not msgs or msgs[-1]["role"] != "user":
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות של המשתמש")
-    _draft_quota(request)
+    user_id = request.state.user["id"]
+    _draft_quota(user_id)
     try:  # מסמכי הבסיס נבדקים כאן, לפני ההזרמה, כדי שמסמך חסר יחזיר 404 ולא 200 עם שגיאה
         events = await run_in_threadpool(draft.stream, msgs, req.focus_file_ids, req.conversation, req.web_check,
-                                          req.deep_review, req.revise)
+                                          req.deep_review, req.revise, user_id)
     except LookupError as e:
         raise HTTPException(404, str(e))
     except Exception:  # הפרטים ללוג של השרת בלבד, לא לממשק
@@ -258,20 +342,72 @@ async def api_draft(req: DraftRequest, request: Request):
 class AskRequest(BaseModel):
     messages: list[Message] = Field(max_length=40)
     conversation: str | None = Field(None, max_length=64)
+    chat_id: int | None = None  # המשך של שיחה שמורה. None: שיחה חדשה, שנשמרת אחרי התשובה הראשונה
+
+
+ASK_HISTORY = 40  # הודעות קודמות שנשלחות למודל משיחה שמורה
+
+
+def _ask_history(user_id, chat_id):
+    with store.connect() as conn:
+        chat = store.get_chat(conn, user_id, chat_id)
+    if not chat:
+        raise HTTPException(404, "השיחה לא נמצאה. ייתכן שהיא נמחקה")
+    return chat["messages"]
+
+
+def _save_chat(user_id, chat_id, messages, conversation):
+    """None אם השמירה נכשלה: התשובה עדיין מגיעה לממשק, רק בלי היסטוריה."""
+    try:
+        with store.connect() as conn:
+            return store.save_chat(conn, user_id, chat_id, messages[0]["content"][:80], messages, conversation)
+    except Exception:
+        log.exception("שמירת השיחה נכשלה")
+        return None
 
 
 @app.post("/api/ask")
 async def api_ask(req: AskRequest, request: Request):
-    """עמוד "שאלו על המסמכים". אותה מכסה כמו הניסוח, כי גם כאן כל שאלה היא קריאה למודל."""
+    """עמוד "שאלו על המסמכים". אותה מכסה כמו הניסוח, כי גם כאן כל שאלה היא קריאה למודל.
+    בשיחה שמורה ההיסטוריה נלקחת מהמסד (של המשתמש בלבד) ולא מהדפדפן; מהבקשה נלקחת רק השאלה החדשה."""
     msgs = [m.model_dump() for m in req.messages if m.role in ("user", "assistant")]
     if not msgs or msgs[-1]["role"] != "user":
         raise HTTPException(400, "ההודעה האחרונה חייבת להיות שאלה")
-    _draft_quota(request)
+    user_id = request.state.user["id"]
+    history = await run_in_threadpool(_ask_history, user_id, req.chat_id) if req.chat_id else msgs[:-1]
+    _draft_quota(user_id)
+    context = [{"role": m["role"], "content": m["content"]} for m in history[-ASK_HISTORY:]] + msgs[-1:]
     try:
-        return await run_in_threadpool(ask.ask, msgs, req.conversation)
-    except Exception as e:
+        r = await run_in_threadpool(ask.ask, context, req.conversation, user_id)
+    except Exception:
         log.exception("התשובה נכשלה")
         raise HTTPException(502, "לא הצלחתי לענות: שירות המודל לא הגיב או החזיר שגיאה. נסה שוב בעוד כמה דקות")
+    saved = history + msgs[-1:] + [{"role": "assistant", "content": r["answer"], "citations": r["citations"]}]
+    return r | {"chat_id": await run_in_threadpool(_save_chat, user_id, req.chat_id, saved, req.conversation)}
+
+
+@app.get("/api/chats")
+def api_chats(request: Request):
+    """רשימת השיחות של המשתמש בצד המסך, מהאחרונה לראשונה."""
+    with store.connect() as conn:
+        return store.chats_list(conn, request.state.user["id"])
+
+
+@app.get("/api/chats/{chat_id}")
+def api_chat(chat_id: int, request: Request):
+    with store.connect() as conn:
+        chat = store.get_chat(conn, request.state.user["id"], chat_id)
+    if not chat:
+        raise HTTPException(404, "השיחה לא נמצאה. ייתכן שהיא נמחקה")
+    return chat
+
+
+@app.delete("/api/chats/{chat_id}")
+def api_chat_delete(chat_id: int, request: Request):
+    with store.connect() as conn:
+        if not store.delete_chat(conn, request.state.user["id"], chat_id):
+            raise HTTPException(404, "השיחה לא נמצאה")
+    return {"ok": True}
 
 
 class DocxRequest(BaseModel):
@@ -306,14 +442,14 @@ def _days(days):
     return days
 
 
-@app.get("/api/costs")
+@app.get("/api/costs", dependencies=[Depends(admin)])
 def api_costs(days: int = 7):
     """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל."""
     with store.connect() as conn:
         return store.costs(conn, _days(days))
 
 
-@app.get("/api/costs/xlsx")
+@app.get("/api/costs/xlsx", dependencies=[Depends(admin)])
 def api_costs_xlsx(days: int = 7):
     with store.connect() as conn:
         c = store.costs(conn, _days(days))
@@ -326,24 +462,24 @@ def api_costs_xlsx(days: int = 7):
 
 
 @app.get("/api/history")
-def api_history():
-    """עמוד "טיוטות": כל הטיוטות, מהחדשה לישנה."""
+def api_history(request: Request):
+    """עמוד "טיוטות": הטיוטות של המשתמש, מהחדשה לישנה."""
     with store.connect() as conn:
-        return store.drafts_list(conn)
+        return store.drafts_list(conn, request.state.user["id"])
 
 
 @app.post("/api/history")
-def api_history_save(req: HistoryRequest):
+def api_history_save(req: HistoryRequest, request: Request):
     """נקרא אחרי כל ניסוח ובזמן עריכה (בהשהיה), כך שההסכם בהיסטוריה תמיד בגרסה האחרונה שלו."""
     with store.connect() as conn:
-        return {"id": store.save_draft(conn, req.id, req.title, req.html, req.text, req.messages, req.sources,
-                                       req.conversation)}
+        return {"id": store.save_draft(conn, request.state.user["id"], req.id, req.title, req.html, req.text,
+                                       req.messages, req.sources, req.conversation)}
 
 
 @app.get("/api/history/{draft_id}")
-def api_history_get(draft_id: int):
+def api_history_get(draft_id: int, request: Request):
     with store.connect() as conn:
-        d = store.get_draft(conn, draft_id)
+        d = store.get_draft(conn, request.state.user["id"], draft_id)
     if not d:
         raise HTTPException(404, "ההסכם לא נמצא. ייתכן שהוא נמחק")
     return d
@@ -354,19 +490,76 @@ class RatingRequest(BaseModel):
 
 
 @app.put("/api/history/{draft_id}/rating")
-def api_history_rate(draft_id: int, req: RatingRequest):
+def api_history_rate(draft_id: int, req: RatingRequest, request: Request):
     """המשוב "מרוצה מהנוסח?" מתחת לשיחה. אופציונלי, ואפשר לשנות אותו."""
     with store.connect() as conn:
-        if not store.rate_draft(conn, draft_id, req.rating):
+        if not store.rate_draft(conn, request.state.user["id"], draft_id, req.rating):
             raise HTTPException(404, "ההסכם לא נמצא")
     return {"ok": True}
 
 
 @app.delete("/api/history/{draft_id}")
-def api_history_delete(draft_id: int):
+def api_history_delete(draft_id: int, request: Request):
     with store.connect() as conn:
-        if not store.delete_draft(conn, draft_id):
+        if not store.delete_draft(conn, request.state.user["id"], draft_id):
             raise HTTPException(404, "ההסכם לא נמצא")
+    return {"ok": True}
+
+
+# ---- ניהול משתמשים (admin) ----
+
+class NewUser(BaseModel):
+    email: str = Field(max_length=254)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(max_length=200)
+    role: Literal["admin", "user"] = "user"
+
+
+class UserChange(BaseModel):
+    active: bool | None = None  # False: השבתה, True: אישור משתמש שנרשם או הפעלה מחדש
+    role: Literal["admin", "user"] | None = None
+    password: str | None = Field(None, max_length=200)  # סיסמה חדשה למי ששכח
+
+
+def _new_password(password):
+    if problem := auth.password_problem(password):
+        raise HTTPException(400, problem)
+    return auth.hash_password(password)
+
+
+@app.get("/admin/users", dependencies=[Depends(admin)])
+def admin_users_page():
+    return FileResponse(STATIC / "admin.html")
+
+
+@app.get("/api/admin/users", dependencies=[Depends(admin)])
+def api_users():
+    with store.connect() as conn:
+        return store.users_list(conn)
+
+
+@app.post("/api/admin/users", dependencies=[Depends(admin)])
+def api_user_create(req: NewUser):
+    email = auth.clean_email(req.email)
+    if not email:
+        raise HTTPException(400, "כתובת האימייל לא תקינה")
+    hashed = _new_password(req.password)
+    with store.connect() as conn:
+        user_id = store.create_user(conn, email, req.name.strip(), hashed, req.role)
+    if not user_id:
+        raise HTTPException(409, "הכתובת הזו כבר רשומה")
+    return {"id": user_id}
+
+
+@app.patch("/api/admin/users/{user_id}", dependencies=[Depends(admin)])
+def api_user_update(user_id: int, req: UserChange, request: Request):
+    """השבתה, אישור, תפקיד או סיסמה חדשה. כל שינוי מנתק את המשתמש מכל הדפדפנים (session_version)."""
+    if user_id == request.state.user["id"] and (req.active is False or req.role == "user"):
+        raise HTTPException(400, "אי אפשר להשבית את עצמך או להסיר ממך את הרשאות המנהל")
+    hashed = _new_password(req.password) if req.password is not None else None
+    with store.connect() as conn:
+        if not store.update_user(conn, user_id, req.active, req.role, hashed):
+            raise HTTPException(404, "המשתמש לא נמצא")
     return {"ok": True}
 
 
@@ -427,7 +620,7 @@ def _sync(defer):
         return {"started": False, "error": "הפעלת הסנכרון נכשלה. נסה שוב בעוד כמה דקות"}
 
 
-@app.post("/api/files/{file_id}/retry", dependencies=[Depends(writer)])
+@app.post("/api/files/{file_id}/retry")
 def api_retry(file_id: str):
     with store.connect() as conn:
         name = store.mark_retry(conn, file_id)
@@ -436,7 +629,7 @@ def api_retry(file_id: str):
     return {"name": name, "sync": _sync(defer=True)}
 
 
-@app.post("/api/sync", dependencies=[Depends(writer)])
+@app.post("/api/sync")
 def api_sync():
     if not github.configured():
         raise HTTPException(404, "הסנכרון מהאתר לא מוגדר")
@@ -447,7 +640,7 @@ def api_sync():
         raise HTTPException(502, "הפעלת הסנכרון נכשלה. נסה שוב בעוד כמה דקות")
 
 
-@app.get("/api/sync", dependencies=[Depends(writer)])
+@app.get("/api/sync")
 def api_sync_status():
     if not github.configured():
         return {"running": False}
@@ -466,7 +659,7 @@ async def _read_body(request, limit):
     return bytes(data)
 
 
-@app.post("/api/upload", dependencies=[Depends(writer)])
+@app.post("/api/upload")
 async def api_upload(request: Request, name: str):
     """קובץ אחד לכל בקשה: הגוף הוא תוכן הקובץ, והשם ב-?name=. נבדק בשרת לפני ההעלאה ל-Drive."""
     data = await _read_body(request, drive.MAX_UPLOAD)
@@ -490,7 +683,7 @@ async def api_upload(request: Request, name: str):
             "sync": _sync(defer=True)}
 
 
-@app.get("/admin/sync", response_class=HTMLResponse)
+@app.get("/admin/sync", response_class=HTMLResponse, dependencies=[Depends(admin)])
 def sync_log():
     with store.connect() as conn:  # המיגרציות כבר רצו בהפעלת השרת (lifespan)
         runs = store.recent_runs(conn)

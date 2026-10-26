@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ניהול משתמשים · מנסח ההסכמים</title>
+    <script>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+      } catch {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* אותה פלטה כמו באתר (index.html) */
+      :root {
+        --bg: #f4f7fb;
+        --card: #fff;
+        --text: #1b2433;
+        --muted: #5d6b7d;
+        --line: #e1e7ef;
+        --brand: #1a6dc8;
+        --brand-dark: #1459a8;
+        --brand-deep: #0b2a5c;
+        --ring: rgba(72, 166, 244, 0.25);
+        --hover: #f0f5fc;
+        --warn-bg: #fff6e6;
+        --warn: #8a4b08;
+        --err-bg: #fdecee;
+        --err: #9b1c2c;
+        --ok-bg: #e5f4ea;
+        --ok: #1d6b3d;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #17191e;
+        --card: #21252d;
+        --text: #e5e9ef;
+        --muted: #9aa4b2;
+        --line: #323844;
+        --brand: #2f7fd9;
+        --brand-dark: #4791e6;
+        --brand-deep: #d6e5fa;
+        --hover: #2a2f38;
+        --warn-bg: #3a2c14;
+        --warn: #f5c77e;
+        --err-bg: #3d1f25;
+        --err: #ff9fab;
+        --ok-bg: #1f3a2a;
+        --ok: #9fe0b5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px 16px 48px;
+        font-family: "Inter", "Noto Sans Hebrew", system-ui, "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 600;
+        color: var(--brand-deep);
+      }
+      h2 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+      a {
+        color: var(--brand);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .scroll {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: right;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      tr.pending {
+        background: var(--warn-bg);
+      }
+      .tag {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .tag.on {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .tag.off {
+        background: var(--err-bg);
+        color: var(--err);
+      }
+      .tag.wait {
+        background: var(--warn-bg);
+        color: var(--warn);
+        border: 1px solid currentColor;
+      }
+      .actions {
+        display: flex;
+        gap: 6px;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        color: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--hover);
+      }
+      button.primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--brand-dark);
+      }
+      button:focus-visible,
+      input:focus,
+      select:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--ring);
+      }
+      form.add {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px;
+        align-items: end;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      input,
+      select {
+        width: 100%;
+        font: inherit;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--card);
+        color: inherit;
+      }
+      .msg {
+        margin: 12px 0 0;
+        font-size: 14px;
+      }
+      .msg.error {
+        color: var(--err);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>ניהול משתמשים</h1>
+        <a href="/">← חזרה לאתר</a>
+      </header>
+
+      <section class="card">
+        <h2>משתמשים</h2>
+        <p class="muted">
+          משתמשים שנרשמו מכתובת מחוץ לחברה ממתינים לאישור. שינוי של משתמש (השבתה, תפקיד או סיסמה)
+          מנתק אותו מכל הדפדפנים.
+        </p>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>שם</th>
+                <th>אימייל</th>
+                <th>תפקיד</th>
+                <th>מצב</th>
+                <th>נרשם</th>
+                <th>כניסה אחרונה</th>
+                <th><span hidden>פעולות</span></th>
+              </tr>
+            </thead>
+            <tbody id="users"></tbody>
+          </table>
+        </div>
+        <p class="msg" id="list-msg" role="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>הוספת משתמש</h2>
+        <form class="add" id="add">
+          <div>
+            <label for="a-name">שם</label>
+            <input id="a-name" maxlength="100" required />
+          </div>
+          <div>
+            <label for="a-email">אימייל</label>
+            <input id="a-email" type="email" dir="ltr" required />
+          </div>
+          <div>
+            <label for="a-pw">סיסמה זמנית</label>
+            <input id="a-pw" type="text" minlength="10" autocomplete="off" required />
+          </div>
+          <div>
+            <label for="a-role">תפקיד</label>
+            <select id="a-role">
+              <option value="user">משתמש</option>
+              <option value="admin">מנהל</option>
+            </select>
+          </div>
+          <button class="primary">הוספה</button>
+        </form>
+        <p class="msg" id="add-msg" role="status"></p>
+      </section>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let me = null;
+
+      async function api(url, opts = {}) {
+        const res = await fetch(url, {
+          ...opts,
+          headers: opts.body ? { "Content-Type": "application/json" } : {},
+        });
+        if (res.status === 401) location.assign("/login?next=/admin/users");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok)
+          throw new Error(typeof data.detail === "string" ? data.detail : "הפעולה נכשלה");
+        return data;
+      }
+
+      function el(tag, props = {}, ...children) {
+        const node = Object.assign(document.createElement(tag), props);
+        node.append(...children.filter((c) => c != null && c !== false));
+        return node;
+      }
+
+      function button(text, onclick, primary) {
+        return el("button", { type: "button", textContent: text, onclick, className: primary ? "primary" : "" });
+      }
+
+      async function change(u, body, done) {
+        try {
+          await api("/api/admin/users/" + u.id, { method: "PATCH", body: JSON.stringify(body) });
+          $("list-msg").className = "msg";
+          $("list-msg").textContent = done;
+        } catch (e) {
+          $("list-msg").className = "msg error";
+          $("list-msg").textContent = e.message;
+        }
+        load();
+      }
+
+      async function load() {
+        let users;
+        try {
+          me = me || (await api("/api/me")).user;
+          users = await api("/api/admin/users");
+        } catch (e) {
+          $("list-msg").className = "msg error";
+          $("list-msg").textContent = e.message;
+          return;
+        }
+        // ממתינים לאישור ראשונים
+        users.sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1));
+        $("users").replaceChildren(
+          ...users.map((u) => {
+            const self = u.id === me.id;
+            const pending = !u.active && !u.last_login_at;
+            return el(
+              "tr",
+              { className: pending ? "pending" : "" },
+              el("td", { textContent: u.name + (self ? " (את/ה)" : "") }),
+              el("td", { textContent: u.email, dir: "ltr" }),
+              el("td", { textContent: u.role === "admin" ? "מנהל" : "משתמש" }),
+              el(
+                "td",
+                {},
+                el("span", {
+                  className: "tag " + (u.active ? "on" : pending ? "wait" : "off"),
+                  textContent: u.active ? "פעיל" : pending ? "ממתין לאישור" : "מושבת",
+                }),
+              ),
+              el("td", { textContent: u.created_at }),
+              el("td", { textContent: u.last_login_at || "—" }),
+              el(
+                "td",
+                {},
+                el(
+                  "div",
+                  { className: "actions" },
+                  !u.active &&
+                    button(pending ? "אישור" : "הפעלה", () => change(u, { active: true }, `${u.email} פעיל`), true),
+                  u.active &&
+                    !self &&
+                    button("השבתה", () => {
+                      if (confirm(`להשבית את ${u.email}? המשתמש ינותק מיד.`))
+                        change(u, { active: false }, `${u.email} הושבת`);
+                    }),
+                  !self &&
+                    button(u.role === "admin" ? "הפוך למשתמש" : "הפוך למנהל", () =>
+                      change(u, { role: u.role === "admin" ? "user" : "admin" }, "התפקיד עודכן"),
+                    ),
+                  button("סיסמה חדשה", () => {
+                    const password = prompt(`סיסמה חדשה ל-${u.email} (10 תווים לפחות):`);
+                    if (password) change(u, { password }, `הסיסמה של ${u.email} הוחלפה. מסור אותה למשתמש.`);
+                  }),
+                ),
+              ),
+            );
+          }),
+        );
+      }
+
+      $("add").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await api("/api/admin/users", {
+            method: "POST",
+            body: JSON.stringify({
+              name: $("a-name").value,
+              email: $("a-email").value,
+              password: $("a-pw").value,
+              role: $("a-role").value,
+            }),
+          });
+          $("add-msg").className = "msg";
+          $("add-msg").textContent = `${$("a-email").value} נוסף. מסור לו את הסיסמה הזמנית.`;
+          $("add").reset();
+          load();
+        } catch (err) {
+          $("add-msg").className = "msg error";
+          $("add-msg").textContent = err.message;
+        }
+      });
+
+      load();
+    </script>
+  </body>
+</html>

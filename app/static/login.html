@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>כניסה · מנסח ההסכמים</title>
+    <!-- אותו דף ל-/login ול-/register: הסקריפט בסוף מציג את הטופס המתאים לכתובת -->
     <meta name="theme-color" content="#ffffff" />
     <script>
       // מצב בהיר/כהה נקבע לפני שהדף מצויר, כדי שבמצב כהה לא יהבהב לבן. ברירת המחדל בהיר; הכפתור שומר את הבחירה
@@ -148,27 +149,95 @@
         font-size: 12px;
         color: var(--muted);
       }
+      .ok {
+        margin: 0 0 14px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: #e5f4ea;
+        color: #1d6b3d;
+        font-size: 14px;
+      }
+      :root[data-theme="dark"] .ok {
+        background: #1f3a2a;
+        color: #9fe0b5;
+      }
+      .hint {
+        margin: -10px 0 16px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .switch {
+        margin: 16px 0 0;
+        text-align: center;
+        font-size: 14px;
+      }
+      .switch a {
+        color: var(--brand);
+        font-weight: 600;
+      }
     </style>
   </head>
   <body>
-    <form method="post" action="/login">
+    <form method="post" action="/login" id="login" hidden>
       <img class="logo" src="/static/logo.webp" alt="" width="96" height="78" />
       <h1>מנסח ההסכמים</h1>
       <p class="sub">כלי פנימי לניסוח טיוטות הסכמים</p>
-      <p class="err" id="err" role="alert" hidden>סיסמה שגויה. נסה שוב.</p>
+      <p class="ok" id="login-ok" role="status" hidden>
+        נרשמת בהצלחה. החשבון ממתין לאישור מנהל, ואחרי האישור אפשר להיכנס.
+      </p>
+      <p class="err" id="login-err" role="alert" hidden></p>
+      <label for="email">אימייל</label>
+      <input id="email" name="email" type="email" dir="ltr" autocomplete="username" required />
       <label for="pw">סיסמה</label>
-      <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus />
+      <input id="pw" name="password" type="password" autocomplete="current-password" required />
       <input type="hidden" name="next" id="next" value="/" />
       <button>כניסה</button>
-      <p class="note">אחרי הכניסה האתר זוכר אותך ל-30 יום</p>
+      <p class="switch">אין לך משתמש? <a href="/register">הרשמה</a></p>
+      <p class="note">אחרי הכניסה האתר זוכר אותך ל-30 יום. שכחת סיסמה? פנה למנהל המערכת</p>
+    </form>
+    <form method="post" action="/register" id="register" hidden>
+      <img class="logo" src="/static/logo.webp" alt="" width="96" height="78" />
+      <h1>הרשמה</h1>
+      <p class="sub">משתמש אישי: הטיוטות והשיחות שלך גלויות רק לך</p>
+      <p class="err" id="reg-err" role="alert" hidden></p>
+      <label for="r-name">שם מלא</label>
+      <input id="r-name" name="name" maxlength="100" autocomplete="name" required />
+      <label for="r-email">אימייל</label>
+      <input id="r-email" name="email" type="email" dir="ltr" autocomplete="email" required />
+      <label for="r-pw">סיסמה</label>
+      <input id="r-pw" name="password" type="password" minlength="10" autocomplete="new-password" required />
+      <p class="hint">10 תווים לפחות</p>
+      <button>הרשמה</button>
+      <p class="switch">כבר יש לך משתמש? <a href="/login">כניסה</a></p>
     </form>
     <script>
       const q = new URLSearchParams(location.search);
-      const err = document.getElementById("err");
-      err.hidden = !q.has("error");
-      if (q.get("error") === "locked")
-        err.textContent = "יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד 15 דקות.";
-      document.getElementById("next").value = q.get("next") || "/"; // השרת מוודא שזו כתובת בתוך האתר
+      const $ = (id) => document.getElementById(id);
+      const page = location.pathname === "/register" ? "register" : "login";
+      // השרת מחזיר רק קוד שגיאה, והטקסט כאן: כך אי אפשר לשתול הודעה מזויפת בקישור
+      const ERRORS = {
+        login: {
+          1: "האימייל או הסיסמה שגויים. נסה שוב.",
+          locked: "יותר מדי ניסיונות שגויים. אפשר לנסות שוב בעוד 15 דקות.",
+          pending: "החשבון ממתין לאישור מנהל, או שהושבת. פנה למנהל המערכת.",
+        },
+        register: {
+          email: "כתובת האימייל לא תקינה.",
+          name: "חסר שם.",
+          password: "הסיסמה צריכה להיות באורך 10 תווים לפחות (ולא ארוכה מדי).",
+          exists: "הכתובת הזו כבר רשומה. אפשר להיכנס, ומי ששכח סיסמה פונה למנהל.",
+          locked: "יותר מדי הרשמות מהרשת הזו. אפשר לנסות שוב בעוד 15 דקות.",
+        },
+      };
+      $(page).hidden = false;
+      document.title = (page === "register" ? "הרשמה" : "כניסה") + " · מנסח ההסכמים";
+      const err = $(page === "register" ? "reg-err" : "login-err");
+      const msg = ERRORS[page][q.get("error")];
+      err.hidden = !msg;
+      err.textContent = msg || "";
+      $("login-ok").hidden = !q.has("registered");
+      $(page === "register" ? "r-name" : "email").focus();
+      $("next").value = q.get("next") || "/"; // השרת מוודא שזו כתובת בתוך האתר
     </script>
   </body>
 </html>

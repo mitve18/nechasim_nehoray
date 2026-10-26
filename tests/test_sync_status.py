@@ -12,12 +12,14 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
 from googleapiclient.errors import HttpError  # noqa: E402
 
 import sync  # noqa: E402
 from app import drive, main, store  # noqa: E402
+from users import logged_in  # noqa: E402
 
 PDF, PNG = "application/pdf", "image/png"
 SHORTCUT, FOLDER = drive.SHORTCUT_MIME, drive.FOLDER_MIME
@@ -175,7 +177,7 @@ def test_status_and_admin_pages():
     ]
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(), init=lambda conn: None,
                              status=lambda conn: {"updated_at": "21/10/2026 06:04", "documents": 42, "failed": True},
-                             recent_runs=lambda conn: runs, status_rows=lambda conn: []):
+                             recent_runs=lambda conn: runs, status_rows=lambda conn: []), logged_in():
         c = TestClient(main.app)
         s = c.get("/api/status").json()
         assert {k: s[k] for k in ("updated_at", "documents", "failed")} == {

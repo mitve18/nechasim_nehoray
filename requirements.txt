@@ -10,6 +10,7 @@ openpyxl==3.1.5
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 fastapi==0.156.2
+bcrypt==5.0.0
 uvicorn==0.54.0
 pytesseract==0.3.13
 pypdfium2==5.14.0

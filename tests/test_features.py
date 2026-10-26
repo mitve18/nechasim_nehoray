@@ -28,6 +28,7 @@ from agno.run.agent import RunContentEvent, RunOutput  # noqa: E402
 from agno.run.base import RunStatus  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pg import postgres  # noqa: E402
+from users import ADMIN, logged_in  # noqa: E402
 
 import sync  # noqa: E402
 from app import draft, drive, extract, github, main, store  # noqa: E402
@@ -186,7 +187,7 @@ def test_files_panel_queries():
         assert store.mark_retry(conn, "broken") == "broken.pdf" and store.mark_retry(conn, "missing") is None
         assert store.retry_ids(conn) == {"broken"}
 
-        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in():
             files = TestClient(main.app).get("/api/files").json()
         assert [f["name"] for f in files] == ["broken.pdf", "doc.pdf", "הועלה.pdf"]
 
@@ -196,10 +197,11 @@ def test_history_save_list_open_delete_rate_and_no_expiry():
         if conn is None:
             return skip("אין py-pglite או Node")
         store.init(conn)
+        user = ADMIN | {"id": store.create_user(conn, ADMIN["email"], "מנהל", "x", "admin")}
         msgs = [{"role": "user", "content": "הסכם שכירות"}, {"role": "assistant", "content": "ט\n\nגוף", "isDoc": True}]
         body = {"title": "הסכם שכירות", "html": "<p><b>גוף</b></p>", "text": "גוף", "messages": msgs,
                 "sources": [{"name": "א.pdf", "base": True}]}
-        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in(user):
             c = TestClient(main.app)
             first = c.post("/api/history", json=body).json()["id"]
             assert c.post("/api/history", json=body | {"id": first, "text": "גוף ערוך"}).json()["id"] == first
@@ -238,9 +240,11 @@ def test_search_learns_from_draft_ratings():
         _agreement(conn, "liked", "אהוב.pdf")
         far = "[" + ",".join(["0.1"] * 1535 + ["0.2"]) + "]"  # קצת רחוק יותר מהשאילתה
         conn.execute("update agreements set embedding = %s::vector where file_id = 'liked'", (far,))
-        for _ in range(3):
-            d = store.save_draft(conn, None, "ט", "<p>x</p>", "x", [], [{"name": "אהוב.pdf"}])
-            store.rate_draft(conn, d, 1)
+        # הלמידה משותפת: דירוגים של כמה משתמשים נספרים יחד
+        uids = [store.create_user(conn, f"u{i}@corp.co", "u", "x") for i in range(3)]
+        for uid in uids:
+            d = store.save_draft(conn, uid, None, "ט", "<p>x</p>", "x", [], [{"name": "אהוב.pdf"}])
+            store.rate_draft(conn, uid, d, 1)
         with mock.patch.object(store, "embed", lambda text, usage=None: VEC):
             assert [r["name"] for r in store.search(conn, "q", k=2)] == ["קרוב.pdf", "אהוב.pdf"]
             assert [r["name"] for r in store.search(conn, "q", k=2, learn=True)] == ["אהוב.pdf", "קרוב.pdf"]
@@ -303,13 +307,14 @@ def test_costs_per_draft_and_week_total():
         store.log_usage(conn, "sync", [("gpt-4o", 100_000, 0, 1_000)])
         store.log_usage(conn, "sync", [("gpt-4o", 1_000_000, 0, 0)])
         conn.execute("update api_usage set at = now() - interval '8 days' where input_tokens = 1000000")  # מחוץ לשבוע
-        store.save_draft(conn, None, "טיוטה א", "<p>x</p>", "x", [], [], "conv-a")
-        store.save_draft(conn, None, "טיוטה ישנה", "<p>y</p>", "y", [], [])  # מלפני מדידת העלויות
+        uid = store.create_user(conn, ADMIN["email"], "מנהל", "x", "admin")
+        store.save_draft(conn, uid, None, "טיוטה א", "<p>x</p>", "x", [], [], "conv-a")
+        store.save_draft(conn, uid, None, "טיוטה ישנה", "<p>y</p>", "y", [], [])  # מלפני מדידת העלויות
 
-        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in():
             c = TestClient(main.app).get("/api/costs").json()
         assert c["days"] == 7
-        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in():
             c30 = TestClient(main.app).get("/api/costs?days=30").json()
             assert TestClient(main.app).get("/api/costs?days=8").status_code == 400
             assert TestClient(main.app).get("/api/costs/xlsx?days=90").status_code == 200
@@ -324,11 +329,12 @@ def test_costs_per_draft_and_week_total():
         assert round(c["total"], 6) == round(c["draft"]["cost"] + c["sync"]["cost"], 6)
 
         # ניסוח באתר רושם את העלות עם מזהה השיחה, גם בלי מסמכי בסיס. סבב שאלות נעצר ב-Intake: קריאה אחת
-        def fake_run(self, messages):
+        def fake_run(self, messages, **kw):
+            assert kw == {"user_id": str(ADMIN["id"]), "session_id": "conv-b"}  # תיוג ב-Agno, בלי db
             return SimpleNamespace(status=RunStatus.completed, metrics=run.metrics,
                                    content=draft.Intake(status="questions", questions=["מי הצדדים?"], examples=[]))
         with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), \
-                mock.patch.object(Agent, "run", fake_run):
+                mock.patch.object(Agent, "run", fake_run), logged_in():
             assert TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
                                                                   "conversation": "conv-b"}).status_code == 200
         assert conn.execute("select count(*) from api_usage where conversation = 'conv-b'").fetchone()[0] == 1
@@ -340,7 +346,7 @@ def test_ask_cites_only_documents_the_tools_returned():
            "text": "[עמוד 1]\n\nמבוא\n\n[עמוד 2]\n\n7.2 הסודיות תחול 5 שנים"}
     logged = []
 
-    def fake_run(self, messages):
+    def fake_run(self, messages, **kw):
         if self.model.id == ask.READER_MODEL:  # הקורא של ask_documents: מקבל מסמך אחד ומחזיר רק קטעים
             assert "<שאלה>סודיות?</שאלה>" in messages and "7.2 הסודיות" in messages
             return SimpleNamespace(status=RunStatus.completed, content='"הסודיות תחול 5 שנים" סעיף 7.2, עמוד 2',
@@ -362,10 +368,12 @@ def test_ask_cites_only_documents_the_tools_returned():
                              search_chunks=lambda conn, q, k=8, usage=None: [
                                  doc | {"section": "7.2 סודיות", "page": 2, "text": "7.2 הסודיות תחול 5 שנים"}],
                              get_doc=lambda conn, fid: doc if fid == "d1" else None,
-                             record=lambda kind, usage, conv=None: logged.append((kind, usage, conv))), \
-            mock.patch.object(Agent, "run", fake_run):
+                             record=lambda kind, usage, conv=None: logged.append((kind, usage, conv)),
+                             save_chat=lambda conn, uid, chat_id, title, msgs, conv: 7), \
+            mock.patch.object(Agent, "run", fake_run), logged_in():
         r = TestClient(main.app).post("/api/ask", json={"messages": [{"role": "user", "content": "כמה זמן הסודיות?"}],
                                                         "conversation": "q1"}).json()
+    assert r["chat_id"] == 7
     assert r["citations"] == [{"n": 1, "file_id": "d1", "section": "סעיף 7.2", "page": 2,
                                "quote": "הסודיות תחול 5 שנים", "name": "הסכם.pdf", "url": "https://drive/d1"}]
     assert logged == [("ask", [("gpt-4.1-mini", 500, 0, 50), ("gpt-4o", 1000, 0, 100)], "q1")]
@@ -429,7 +437,7 @@ def test_server_start_creates_tables_before_first_sync():
     with postgres() as conn:
         if conn is None:
             return skip("אין py-pglite או Node")
-        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)):
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in():
             with TestClient(main.app) as c:  # with מריץ את ה-lifespan, כמו הפעלת השרת ב-Render
                 for _ in range(100):  # המיגרציות רצות ברקע, אחרי שהשרת כבר עונה
                     if conn.execute("select to_regclass('files')").fetchone()[0]:
@@ -577,27 +585,21 @@ class UploadDrive:
         return SimpleNamespace(execute=lambda: self.saved | self.wrong)
 
 
-def test_upload_api_requires_password_and_renames():
+def test_upload_api_requires_login_and_renames():
     calls = []
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"), mock.patch.dict(os.environ, {"RENDER": ""}), \
-            mock.patch.object(drive, "service", lambda: calls.append("drive")):
-        c = TestClient(main.app)  # פיתוח מקומי בלי סיסמה: האתר פתוח, אבל פעולות כתיבה חסומות
-        assert c.get("/api/me").json() == {"writer": False, "sync": github.configured()}
-        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 403
-        assert c.post("/api/sync").status_code == 403
-    assert calls == []  # לא מחובר: אין קריאה ל-Drive
+    with mock.patch.object(main.auth, "SECRET", "s"), mock.patch.object(drive, "service", lambda: calls.append("drive")):
+        c = TestClient(main.app)  # לא מחובר: פעולות כתיבה חסומות, בלי קריאה ל-Drive
+        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 401
+        assert c.post("/api/sync").status_code == 401
+    assert calls == []
 
     queued, fake = [], UploadDrive()
-    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"), \
-            mock.patch.object(drive, "service", lambda: fake), \
+    with mock.patch.object(drive, "service", lambda: fake), \
             mock.patch.dict(os.environ, {"DRIVE_FOLDER_ID": "folder"}), \
             mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None),
                                 add_queued=lambda conn, f: queued.append(f["name"])), \
-            mock.patch.object(github, "configured", lambda: False):
-        c = TestClient(main.app)
-        assert c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7").status_code == 401  # לא מחובר
-        assert fake.saved is None
-        assert c.post("/login", data={"password": "secret"}, follow_redirects=False).status_code == 303
+            mock.patch.object(github, "configured", lambda: False), logged_in(ADMIN | {"role": "user"}):
+        c = TestClient(main.app)  # העלאה פתוחה לכל משתמש מחובר, לא רק ל-admin
         assert c.get("/api/me").json()["writer"] is True
         r = c.post("/api/upload?name=הסכם.pdf", content=b"%PDF-1.7")
         assert r.json() == {"name": "הסכם (1).pdf", "renamed": True, "sync": None,
@@ -618,16 +620,18 @@ def test_upload_api_requires_password_and_renames():
 def test_draft_limits_and_errors():
     ok = {"status": "questions", "questions": ["?"], "title": "", "body": "", "sources": []}
     body = {"messages": [{"role": "user", "content": "נסח"}]}
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
-                             _drafts=main.defaultdict(main.deque)), \
-            mock.patch.dict(os.environ, {"RENDER": ""}), mock.patch.object(draft, "stream", lambda *a: iter([ok])):
-        a, b = TestClient(main.app, cookies={"sid": "a"}), TestClient(main.app, cookies={"sid": "b"})
-        assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
-        r = a.post("/api/draft", json=body)
-        assert r.status_code == 429 and "ניסוחים בשעה" in r.json()["detail"]
-        assert all(b.post("/api/draft", json=body).status_code == 200 for _ in range(10))  # דפדפן אחר: מגבלה נפרדת
-        r = b.post("/api/draft", json=body)  # 40 ניסוחים באתר היום
-        assert r.status_code == 429 and "היומית" in r.json()["detail"]
+    with mock.patch.multiple(main, DAILY_DRAFT_LIMIT=40, _daily={"date": None, "count": 0},
+                             _drafts=main.defaultdict(main.deque)), mock.patch.object(draft, "stream", lambda *a: iter([ok])):
+        with logged_in(ADMIN | {"id": 1}):
+            a = TestClient(main.app)
+            assert all(a.post("/api/draft", json=body).status_code == 200 for _ in range(main.DRAFTS_PER_HOUR))
+            r = a.post("/api/draft", json=body)
+            assert r.status_code == 429 and "ניסוחים בשעה" in r.json()["detail"]
+        with logged_in(ADMIN | {"id": 2}):  # משתמש אחר: מגבלה נפרדת
+            b = TestClient(main.app)
+            assert all(b.post("/api/draft", json=body).status_code == 200 for _ in range(10))
+            r = b.post("/api/draft", json=body)  # 40 ניסוחים באתר היום
+            assert r.status_code == 429 and "היומית" in r.json()["detail"]
 
     def boom(*a):
         raise RuntimeError("openai 500: secret-internal-detail")
@@ -636,7 +640,7 @@ def test_draft_limits_and_errors():
         yield {"type": "delta", "text": "הסכם"}
         boom()
 
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t", _daily={"date": None, "count": 0}),             mock.patch.dict(os.environ, {"RENDER": ""}):
+    with mock.patch.multiple(main, _daily={"date": None, "count": 0}), logged_in():
         with mock.patch.object(draft, "stream", boom):
             r = TestClient(main.app).post("/api/draft", json=body)
         assert r.status_code == 502 and "ניסוח נכשל" in r.json()["detail"] and "secret" not in r.text
@@ -647,58 +651,6 @@ def test_draft_limits_and_errors():
         assert [e["type"] for e in events] == ["delta", "error"] and "secret" not in r.text
     model = draft.build_writer().model
     assert (model.timeout, model.max_retries) == (120, 1)
-
-
-def test_whole_site_requires_login():
-    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"):
-        c = TestClient(main.app, follow_redirects=False)
-        r = c.get("/")
-        assert r.status_code == 303 and r.headers["location"] == "/login?next=/"  # מסך כניסה בפעם הראשונה
-        for path in ("/api/files", "/api/status", "/api/status/docx", "/admin/sync"):
-            assert c.get(path).status_code == 401, path
-        assert c.post("/api/draft", json={"messages": [{"role": "user", "content": "x"}]}).status_code == 401
-        assert c.get("/healthz").status_code == 200  # בדיקת התקינות של Render
-        assert c.get("/static/logo.webp").status_code == 200 and c.get("/static/favicon.png").status_code == 200
-        assert "סיסמה" in c.get("/login").text
-
-        wrong = c.post("/login", data={"password": "nope", "next": "/admin/sync"})
-        assert wrong.status_code == 303 and wrong.headers["location"] == "/login?error=1&next=/admin/sync"
-        assert "session" not in c.cookies
-        for evil in ("//evil.com", "https://evil.com", "/\\evil.com"):  # לא מפנים לאתר אחר אחרי הכניסה
-            assert c.post("/login", data={"password": "secret", "next": evil}).headers["location"] == "/"
-        ok = c.post("/login", data={"password": "secret", "next": "/admin/sync"})
-        assert ok.status_code == 303 and ok.headers["location"] == "/admin/sync"
-        cookie = ok.headers["set-cookie"].lower()
-        assert "max-age=2592000" in cookie and "httponly" in cookie  # 30 יום
-        assert c.get("/").status_code == 200
-
-        assert c.get("/").headers["x-frame-options"] == "DENY"
-        assert "frame-ancestors 'none'" in c.get("/login").headers["content-security-policy"]
-
-    # העוגייה חתומה עם זמן הכניסה: אחרי 30 יום, או עוגייה ישנה בלי זמן, השרת מבקש כניסה מחדש
-    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret"):
-        old = main.session_cookie(time.time() - main.SESSION_DAYS * 24 * 3600 - 1)
-        for cookie in (old, "token-of-secret", "9999999999.forged", main.session_cookie()[:-1] + "x"):
-            assert TestClient(main.app, cookies={"session": cookie}).get("/api/me").status_code == 401, cookie
-        assert TestClient(main.app, cookies={"session": main.session_cookie()}).get("/api/me").status_code == 200
-
-    # ניחוש סיסמה: אחרי LOGIN_FAILS כישלונות מאותו IP, גם הסיסמה הנכונה נחסמת עד שהחלון עובר
-    with mock.patch.multiple(main, PASSWORD="secret", TOKEN="token-of-secret", _login_fails=main.defaultdict(main.deque)), \
-            mock.patch.object(main.asyncio, "sleep", mock.AsyncMock()):
-        c = TestClient(main.app, follow_redirects=False)
-        ip = {"x-forwarded-for": "6.6.6.6, 1.2.3.4"}  # הראשון מזויף; נספר האחרון, שהפרוקסי הוסיף
-        for _ in range(main.LOGIN_FAILS):
-            assert c.post("/login", data={"password": "nope"}, headers=ip).headers["location"].startswith("/login?error=1")
-        r = c.post("/login", data={"password": "secret"}, headers=ip)
-        assert "error=locked" in r.headers["location"] and "session" not in r.cookies
-        assert c.post("/login", data={"password": "secret"}, headers={"x-forwarded-for": "5.5.5.5"}).headers["location"] == "/"
-
-    with mock.patch.multiple(main, PASSWORD="", TOKEN="t"):
-        with mock.patch.dict(os.environ, {"RENDER": "true"}):  # ב-Render בלי סיסמה: חסום, לא פתוח לכולם
-            c = TestClient(main.app, follow_redirects=False)
-            assert c.get("/").status_code == 503 and c.get("/healthz").status_code == 200
-        with mock.patch.dict(os.environ, {"RENDER": ""}):  # פיתוח מקומי: פתוח
-            assert TestClient(main.app).get("/").status_code == 200
 
 
 def test_focus_file_in_agent_context():
@@ -727,7 +679,7 @@ def test_focus_file_in_agent_context():
     docs = {"b1": base, "b2": {**base, "file_id": "b2", "name": "בסיס2.pdf", "text": "טקסט שני"}}
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(None), get_doc=lambda conn, fid: docs.get(fid),
                              search=lambda conn, q, usage=None, learn=False: [base, other]), \
-            mock.patch.object(Agent, "run", fake_run):
+            mock.patch.object(Agent, "run", fake_run), logged_in():
         out = draft.draft([{"role": "user", "content": "נסח"}], ["b2", "b1", "b2"])
         assert [(s["name"], s.get("base")) for s in out["sources"]] == [
             ("בסיס2.pdf", True), ("בסיס.pdf", True), ("אחר.pdf", None)]

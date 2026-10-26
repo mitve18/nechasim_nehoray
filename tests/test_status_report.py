@@ -16,6 +16,7 @@ import docx  # noqa: E402
 from docx.oxml.ns import qn  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from pg import postgres  # noqa: E402
+from users import logged_in  # noqa: E402
 
 import sync  # noqa: E402
 from app import docx_export, main, store  # noqa: E402
@@ -156,7 +157,7 @@ def test_tsv_format():
 def test_api_status_and_word_export():
     with mock.patch.multiple(store, connect=lambda: contextlib.nullcontext(),
                              status=lambda conn: {"updated_at": "21/10/2026 07:58", "documents": 45, "failed": False},
-                             status_rows=lambda conn: ROWS):
+                             status_rows=lambda conn: ROWS), logged_in():
         c = TestClient(main.app)
         s = c.get("/api/status").json()
         r = c.get("/api/status/docx")

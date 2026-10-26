@@ -142,11 +142,12 @@ def build_agent(seen, usage):
     )
 
 
-def ask(messages, conversation=None):
-    """messages: [{role: user|assistant, content}]. מחזיר {answer, citations: [{n, name, url, section, page, quote}]}."""
+def ask(messages, conversation=None, user_id=None):
+    """messages: [{role: user|assistant, content}]. מחזיר {answer, citations: [{n, name, url, section, page, quote}]}.
+    user_id ו-conversation עוברים ל-Agno לתיוג בלבד; ההיסטוריה נשמרת בטבלת chats (main.api_ask)."""
     seen, usage = {}, []
     try:
-        result = build_agent(seen, usage).run(messages)
+        result = build_agent(seen, usage).run(messages, user_id=user_id and str(user_id), session_id=conversation)
         usage.append(store.agent_usage(result, MODEL))
     finally:
         store.record("ask", usage, conversation)

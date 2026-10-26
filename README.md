@@ -109,7 +109,7 @@ python sync.py --list
 אמורה להופיע רשימת כל הקבצים בתיקייה (כולל תתי-תיקיות): תאריך שינוי, סוג קובץ ושם.
 
 ## איפה שמים סודות
-הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY`, `DATABASE_URL`, `APP_PASSWORD` ו-`GH_DISPATCH_TOKEN`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
+הסודות בפרויקט הם `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OPENAI_API_KEY`, `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD` ו-`GH_DISPATCH_TOKEN`. הרשימה המלאה של המשתנים, עם הסבר מאיפה משיגים כל אחד, נמצאת ב-[`.env.example`](.env.example).
 
 ### פיתוח מקומי
 - הסודות נשמרים **רק** בקובץ `dev\.env`. הקובץ מוחרג ב-`.gitignore`.
@@ -135,7 +135,8 @@ python sync.py --list
 | `GOOGLE_REFRESH_TOKEN` | [myaccount.google.com/permissions](https://myaccount.google.com/permissions) ← האפליקציה ← **Remove access**. אחר כך מריצים שוב `scripts/get_refresh_token.py` |
 | `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) ← Revoke למפתח ויצירת מפתח חדש |
 | `DATABASE_URL` | Neon ← הפרויקט ← Roles ← Reset password, ואז מעתיקים את ה-connection string החדש |
-| `APP_PASSWORD` | בוחרים סיסמה חדשה ב-Render. כל מי שנכנס עם הסיסמה הישנה מתנתק אוטומטית |
+| `SECRET_KEY` | מפיקים מפתח חדש (`python -c "import secrets; print(secrets.token_urlsafe(48))"`) ומעדכנים ב-Render. כל המחוברים מתנתקים |
+| סיסמה של משתמש | admin נותן סיסמה חדשה בדף `/admin/users`. המשתמש מתנתק מיד מכל הדפדפנים |
 | `GH_DISPATCH_TOKEN` | GitHub ← Settings ← Developer settings ← Fine-grained tokens ← Revoke, ויוצרים token חדש |
 
 אחרי ההנפקה מחדש מעדכנים את הערך החדש ב-`.env` וב-Render ← Environment.
@@ -186,9 +187,18 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
   תאריכים, סכומים ועמודים (עמודה `metadata` מסוג jsonb, ו-`end_date` בעמודה נפרדת). שדה שלא כתוב במסמך נשאר null.
 - **Backfill:** בכל סנכרון, מסמכים בלי נתונים מובנים (או עם `metadata_version` ישן) מושלמים מהטקסט ששמור במסד,
   בלי הורדה מ-Drive ובלי OCR. מוסיפים שדה? מעלים את `METADATA_VERSION` ב-[`app/store.py`](app/store.py), והסנכרון הבא משלים.
-- **כל האתר מאחורי סיסמה** (`APP_PASSWORD`): מסך כניסה בפעם הראשונה, והאתר זוכר את המשתמש ל-30 יום.
-  פתוחים בלי כניסה רק `/login`, `/healthz` (בדיקת התקינות של Render) והלוגו. בלי `APP_PASSWORD` ב-Render האתר חסום,
-  כדי שלא ייפתח לכולם בטעות. החלפת הסיסמה מנתקת את כל המחוברים.
+- **משתמשים אישיים** ([`app/auth.py`](app/auth.py)): כל עובד נרשם באימייל ובסיסמה (bcrypt) ב-`/register`, והאתר זוכר
+  אותו ל-30 יום (עוגייה חתומה ב-`SECRET_KEY`, HttpOnly, SameSite=Lax). כתובת מדומיין ב-`SIGNUP_DOMAINS` נפתחת מיד;
+  כל כתובת אחרת ממתינה לאישור. פתוחים בלי כניסה רק `/login`, `/register`, `/healthz` והלוגו. בלי `SECRET_KEY`
+  האתר חסום. בכל בקשה השרת בודק במסד שהמשתמש פעיל, כך שהשבתה או סיסמה חדשה מנתקות מיד.
+  הגנות: עד 10 ניסיונות כניסה שגויים ב-15 דקות לכל IP ולכל כתובת, עד 5 הרשמות לכל IP, ובקשה שמשנה משהו ונשלחה
+  מאתר אחר (Origin זר) נחסמת (CSRF).
+- **מה של מי:** טיוטות ושיחות "שאלו" שייכות למשתמש, וכל שאילתה עליהן מסננת לפי `user_id` (משאב של משתמש אחר מחזיר 404).
+  ארכיון ההסכמים, הסנכרון וההעלאה משותפים לכולם. עלויות, לוג הסנכרון וניהול משתמשים (`/admin/users`: אישור, השבתה,
+  תפקיד וסיסמה חדשה למי ששכח) רק ל-admin. ה-admin הראשון נוצר מ-`ADMIN_EMAIL` ו-`ADMIN_PASSWORD`, ומקבל את הטיוטות
+  שנוצרו לפני המשתמשים.
+- **Agno:** `user_id` ומזהה השיחה (`session_id`) עוברים לכל `agent.run` לתיוג בלבד. ל-Agents אין `db`: ההיסטוריה
+  נשמרת בטבלאות שלנו (`drafts`, `chats`), בלי pool שני ל-Neon ובלי כפילות.
   הקובץ נבדק בשרת לפי סיומת, גודל (עד 20MB) ותוכן, ומועלה לתיקייה הראשית. שם קיים מקבל סיומת (1), (2).
 - **כפתור הסנכרון** מפעיל את ה-workflow דרך GitHub API (`GH_DISPATCH_TOKEN`, `GH_REPO`), לכל היותר פעם ב-5 דקות.
 
@@ -218,7 +228,9 @@ uvicorn app.main:app --reload           # האתר בכתובת http://127.0.0.1
 ### טיוטות, עורך ועלויות
 - **טיוטות** (טבלת `drafts`): כל ניסוח נשמר מיד, וכל עריכה נשמרת אוטומטית אחרי שנייה וחצי, עם העיצוב
   והשיחה. פתיחה של טיוטה מחזירה אותה לעריכה ואת השיחה להמשך. טיוטות נשמרות ללא הגבלת זמן ונמחקות רק ידנית.
-  הטיוטות משותפות לכל מי שנכנס עם הסיסמה.
+  כל משתמש רואה רק את הטיוטות שלו.
+- **שיחות "שאלו"** (טבלת `chats`): כל שיחה נשמרת אחרי התשובה הראשונה, עם הציטוטים, ומופיעה ב"השיחות שלי" בצד המסך.
+  שאלת המשך בשיחה שמורה לוקחת את ההיסטוריה מהמסד (40 ההודעות האחרונות), ולא ממה שהדפדפן שלח.
 - **משוב** ("מרוצים מנוסח ההסכם?" מתחת לשיחה, אופציונלי): נשמר בעמודה `drafts.rating` (1, 0, 1-). בניסוחים הבאים
   החיפוש במאגר (`store.search` עם `learn=True`) מעלה מעט מסמכים שטיוטות שנוסחו מהם קיבלו משוב טוב, ומוריד מסמכים
   שקיבלו משוב רע.

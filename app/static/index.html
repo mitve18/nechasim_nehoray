@@ -214,6 +214,96 @@
         font-size: 12px;
         text-align: center;
       }
+      /* השיחות של המשתמש ב"שאלו על המסמכים", מהאחרונה. גוללות בתוך התפריט; בטלפון הן במסך הפתיחה של העמוד */
+      .chats {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin-block: -12px;
+      }
+      .chats h2 {
+        margin: 0 0 6px;
+        padding: 0 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .chats ul {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr); /* כותרת ארוכה נחתכת ב-… ולא מרחיבה את התפריט */
+        gap: 1px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .chat-item {
+        display: flex;
+        align-items: center;
+        border-radius: 8px;
+      }
+      .chat-item:hover,
+      .chat-item.current {
+        background: var(--brand-soft);
+      }
+      .chat-item button,
+      .chat-item button:hover:not(:disabled) {
+        border: 0;
+        background: none;
+      }
+      .chat-open {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 12px;
+        text-align: start;
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--nav-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chat-del {
+        padding: 4px 10px;
+        color: var(--muted);
+        visibility: hidden;
+      }
+      .chat-item:hover .chat-del,
+      .chat-del:focus-visible {
+        visibility: visible;
+      }
+      .chat-del:hover:not(:disabled) {
+        color: var(--err);
+      }
+      .chats-hero {
+        display: none;
+      }
+      .side-foot form {
+        display: flex;
+      }
+      /* המשתמש המחובר, מעל תחתית התפריט */
+      .me {
+        display: grid;
+        gap: 2px;
+        padding: 0 12px;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .me b {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .me small {
+        text-align: right;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .me a {
+        color: var(--brand);
+        font-weight: 500;
+      }
       /* תחתית התפריט, בשורה אחת: כרטיס הסנכרון (מוביל לעמוד הסנכרון) וכפתור אייקון למצב בהיר/כהה */
       .side-foot {
         margin-top: auto;
@@ -457,8 +547,15 @@
         }
         .brand small,
         .side-sync,
-        .side::before {
+        .side::before,
+        .side .chats,
+        .me {
           display: none;
+        }
+        .chats-hero {
+          display: block;
+          margin: 24px 0 0;
+          max-width: 520px;
         }
         .side-foot {
           margin-top: 0;
@@ -472,7 +569,9 @@
           bottom: 0;
           inset-inline: 0;
           display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
+          /* עמודה לכל קישור גלוי: "עלויות" מוסתר ממי שאינו מנהל */
+          grid-auto-flow: column;
+          grid-auto-columns: minmax(0, 1fr);
           gap: 0;
           padding: 6px 4px env(safe-area-inset-bottom);
           background: var(--card);
@@ -2380,7 +2479,7 @@
               <path d="M8 16H3v5" /></svg
             >סנכרון</a
           >
-          <a href="#costs"
+          <a href="#costs" id="nav-costs" hidden
             ><svg
               class="icon"
               viewBox="0 0 24 24"
@@ -2396,6 +2495,15 @@
             >עלויות</a
           >
         </nav>
+        <div class="chats" id="chats-side" role="region" aria-label="השיחות שלי" hidden>
+          <h2>השיחות שלי</h2>
+          <ul></ul>
+        </div>
+        <div class="me" id="me" hidden>
+          <b id="me-name"></b>
+          <small id="me-email" dir="ltr"></small>
+          <a href="/admin/users" id="me-admin" hidden>ניהול משתמשים</a>
+        </div>
         <div class="side-foot">
           <a class="side-sync" href="#status" id="side-sync" hidden>
             <span class="dot" aria-hidden="true"></span>
@@ -2437,6 +2545,24 @@
               <path d="m19.1 4.9-1.4 1.4" /></svg
             ><span id="theme-label" class="visually-hidden">מצב כהה</span>
           </button>
+          <form method="post" action="/logout">
+            <button class="theme-btn" title="יציאה" aria-label="יציאה">
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="m16 17 5-5-5-5" />
+                <path d="M21 12H9" />
+              </svg>
+            </button>
+          </form>
         </div>
       </aside>
 
@@ -2475,6 +2601,10 @@
                   </button>
                 </li>
               </ul>
+              <div class="chats chats-hero" id="chats-hero" role="region" aria-label="השיחות שלי" hidden>
+                <h2>השיחות שלי</h2>
+                <ul></ul>
+              </div>
             </div>
             <div class="hero-art" aria-hidden="true">
               <img src="/static/logo.webp" alt="" width="280" height="229" />
@@ -4052,6 +4182,12 @@
         }
         $("sync-row").hidden = !(me.writer && me.sync);
         $("dropzone").hidden = !me.writer;
+        const admin = me.user.role === "admin";
+        $("me-name").textContent = me.user.name;
+        $("me-email").textContent = me.user.email;
+        $("me-admin").hidden = $("nav-costs").hidden = !admin;
+        $("me").hidden = false;
+        if (!admin && location.hash === "#costs") location.hash = "#ask";
       }
       // הכניסה פגה (אחרי 30 יום, או שהסיסמה הוחלפה) בזמן שהאתר פתוח: חוזרים למסך הכניסה
       const toLogin = () =>
@@ -4853,10 +4989,82 @@
       }
 
       // ---- שאלו על המסמכים ----
-      // השיחה נשלחת כולה בכל שאלה, כדי ששאלת המשך ("ומה לגבי השני?") תובן
+      // כל שיחה נשמרת בשרת אחרי התשובה הראשונה (askChatId), ושאלת המשך ממשיכה מההיסטוריה שבשרת,
+      // כדי ש"ומה לגבי השני?" תובן גם אחרי שחוזרים לשיחה ישנה
       let askMessages = [],
+        askChatId = null,
         askConversation = newConversation(),
         answerSeq = 0;
+      async function loadChats() {
+        let list;
+        try {
+          list = await api("/api/chats");
+        } catch {
+          return;
+        }
+        for (const id of ["chats-side", "chats-hero"]) {
+          $(id).hidden = !list.length;
+          $(id)
+            .querySelector("ul")
+            .replaceChildren(
+              ...list.map((c) =>
+                el(
+                  "li",
+                  { className: "chat-item" + (c.id === askChatId ? " current" : "") },
+                  el("button", {
+                    type: "button",
+                    className: "chat-open",
+                    textContent: c.title,
+                    title: c.title + " · " + c.updated_at,
+                    ariaCurrent: c.id === askChatId ? "true" : null,
+                    onclick: () => openChat(c.id),
+                  }),
+                  el("button", {
+                    type: "button",
+                    className: "chat-del",
+                    textContent: "✕",
+                    ariaLabel: "מחיקת השיחה " + c.title,
+                    onclick: () => deleteChat(c),
+                  }),
+                ),
+              ),
+            );
+        }
+      }
+      async function openChat(id) {
+        let c;
+        try {
+          c = await api("/api/chats/" + id);
+        } catch (e) {
+          toast(e.message);
+          return loadChats();
+        }
+        askChatId = c.id;
+        askMessages = c.messages;
+        askConversation = c.conversation || newConversation();
+        $("thread").replaceChildren(
+          ...c.messages.map((m) =>
+            m.role === "user"
+              ? el("div", { className: "q-bubble", textContent: m.content })
+              : answerNode({ answer: m.content, citations: m.citations || [] }),
+          ),
+        );
+        $("ask-hero").hidden = true;
+        $("ask-new").hidden = false;
+        location.hash = "#ask";
+        loadChats();
+        $("q").focus();
+      }
+      async function deleteChat(c) {
+        if (!confirm(`למחוק את השיחה "${c.title}"?`)) return;
+        try {
+          await api("/api/chats/" + c.id, { method: "DELETE" });
+          if (c.id === askChatId) $("ask-new").onclick();
+        } catch (e) {
+          toast(e.message);
+        }
+        loadChats();
+      }
       const growQ = () => {
         const q = $("q");
         q.style.height = "auto";
@@ -4884,7 +5092,9 @@
       });
       $("ask-new").onclick = () => {
         askMessages = [];
+        askChatId = null;
         askConversation = newConversation();
+        loadChats();
         $("thread").replaceChildren();
         $("ask-hero").hidden = false;
         $("ask-new").hidden = true;
@@ -4910,12 +5120,18 @@
           const r = await api("/api/ask", {
             method: "POST",
             body: JSON.stringify({
-              messages: askMessages,
+              // בשיחה שמורה השרת לוקח את ההיסטוריה מהמסד, ומספיק לשלוח את השאלה החדשה
+              messages: askChatId ? askMessages.slice(-1) : askMessages,
               conversation: askConversation,
+              chat_id: askChatId,
             }),
           });
-          askMessages.push({ role: "assistant", content: r.answer });
+          askMessages.push({ role: "assistant", content: r.answer, citations: r.citations });
           pending.replaceWith(answerNode(r));
+          if (r.chat_id && r.chat_id !== askChatId) {
+            askChatId = r.chat_id;
+            loadChats(); // שיחה חדשה נכנסת לרשימה
+          }
         } catch (e) {
           askMessages.pop();
           pending.replaceWith(
@@ -5027,6 +5243,7 @@
       loadStatus();
       loadMe();
       loadFiles();
+      loadChats();
 
       $("input").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey))
