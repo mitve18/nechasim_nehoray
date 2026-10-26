@@ -2,7 +2,7 @@ google-api-python-client==2.201.0
 google-auth==2.62.0
 google-auth-oauthlib==1.5.0
 python-dotenv==1.2.4
-openai==3.35.1
+openai==3.36.1
 agno==3.1.7
 pypdf==6.21.1
 python-docx==1.2.0
