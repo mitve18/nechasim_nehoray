@@ -250,7 +250,7 @@
             <input id="a-email" type="email" dir="ltr" required />
           </div>
           <div>
-            <label for="a-pw">סיסמה זמנית</label>
+            <label for="a-pw">סיסמה</label>
             <input id="a-pw" type="text" minlength="10" autocomplete="off" required />
           </div>
           <div>
@@ -377,7 +377,7 @@
             }),
           });
           $("add-msg").className = "msg";
-          $("add-msg").textContent = `${$("a-email").value} נוסף. מסור לו את הסיסמה הזמנית.`;
+          $("add-msg").textContent = `${$("a-email").value} נוסף. מסור לו את הסיסמה.`;
           $("add").reset();
           load();
         } catch (err) {
