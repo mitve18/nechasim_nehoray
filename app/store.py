@@ -144,6 +144,13 @@ create table if not exists chats (
     updated_at timestamptz not null default now()
 );
 create index if not exists chats_user on chats (user_id, updated_at desc);
+-- מי גרם לעלות, לסינון בעמוד "עלויות". null בסנכרון (לא שייך למשתמש). שורות מלפני העמודה משויכות דרך
+-- מזהה השיחה של הטיוטה או של שיחת "שאלו"; כשאין כאלה (שיחה שלא נשמרה) הן נשארות רק ב"כל המשתמשים"
+alter table api_usage add column if not exists user_id bigint references users;
+update api_usage u set user_id = d.user_id from drafts d
+where u.user_id is null and u.conversation = d.conversation and d.user_id is not null;
+update api_usage u set user_id = c.user_id from chats c
+where u.user_id is null and u.conversation = c.conversation;
 """
 TZ = "Asia/Jerusalem"  # ההמרה נעשית ב-Postgres, שיש לו את טבלאות אזורי הזמן גם כשאין tzdata ב-Windows
 PENDING = "(metadata is null or coalesce(metadata_version, 0) < %s)"  # מסמך שעוד צריך השלמת נתונים מובנים
@@ -195,20 +202,21 @@ def agent_usage(result, model):
     return (model, m.input_tokens or 0, m.cache_read_tokens or 0, m.output_tokens or 0) if m else None
 
 
-def log_usage(conn, kind, usage, conversation=None):
-    """usage: [(model, input_tokens, cached_tokens, output_tokens)]. kind: 'draft' (באתר) או 'sync'."""
-    rows = [(kind, *u, cost(*u), conversation) for u in usage if u]
+def log_usage(conn, kind, usage, conversation=None, user_id=None):
+    """usage: [(model, input_tokens, cached_tokens, output_tokens)]. kind: 'draft' (באתר) או 'sync'.
+    user_id: מי גרם לעלות (None בסנכרון)."""
+    rows = [(kind, *u, cost(*u), conversation, user_id) for u in usage if u]
     if rows:
         with conn.cursor() as cur:
             cur.executemany("insert into api_usage (kind, model, input_tokens, cached_tokens, output_tokens, "
-                            "cost_usd, conversation) values (%s, %s, %s, %s, %s, %s, %s)", rows)
+                            "cost_usd, conversation, user_id) values (%s, %s, %s, %s, %s, %s, %s, %s)", rows)
 
 
-def record(kind, usage, conversation=None):
+def record(kind, usage, conversation=None, user_id=None):
     """log_usage בחיבור משלו, לאתר. מסד לא זמין לא מכשיל את הניסוח או התשובה; רק העלות הזו לא תירשם."""
     try:
         with connect() as conn:
-            log_usage(conn, kind, usage, conversation)
+            log_usage(conn, kind, usage, conversation, user_id)
     except Exception as e:
         log.warning(f"רישום העלות נכשל: {e!r}")
 
@@ -678,6 +686,13 @@ def update_user(conn, user_id, active=None, role=None, password_hash=None):
         "where id = %s returning id", (active, role, password_hash, user_id)).fetchone() is not None
 
 
+def reject_user(conn, user_id):
+    """דחיית בקשת הרשמה: מוחק משתמש שעוד לא אושר ומעולם לא נכנס (ולכן אין לו טיוטות או שיחות).
+    False אם אין משתמש כזה, או שהוא כבר פעיל או נכנס בעבר (אותו משביתים ולא מוחקים)."""
+    return conn.execute("delete from users where id = %s and not active and last_login_at is null returning id",
+                        (user_id,)).fetchone() is not None
+
+
 def needs_admin(conn):
     return conn.execute("select not exists (select 1 from users where role = 'admin')").fetchone()[0]
 
@@ -694,24 +709,33 @@ def bootstrap_admin(conn, email, name, password_hash):
     return user_id
 
 
-def costs(conn, days=7):
-    """עמוד "עלויות": סה"כ ב-days הימים האחרונים לפי סוג, העלות של כל טיוטה מהתקופה, ושיחות שלא נשמרו כטיוטה."""
+def costs(conn, days=7, user_id=None):
+    """עמוד "עלויות": סה"כ ב-days הימים האחרונים לפי סוג, העלות של כל טיוטה מהתקופה, ושיחות שלא נשמרו כטיוטה.
+    user_id: רק העלויות של משתמש אחד (בלי הסנכרון, שלא שייך למשתמש). None: כל המשתמשים."""
     week = "now() - make_interval(days => %s)"
+    by = (user_id,) if user_id else ()
+
+    def only(col):  # תנאי הסינון למשתמש, או כלום כשמציגים את כולם
+        return f" and {col} = %s" if user_id else ""
+
     kinds = {r["kind"]: r for r in _dicts(
-        conn, f"select kind, sum(cost_usd)::float as cost, count(*) as calls from api_usage where at >= {week} "
-              "group by kind", (days,))}
+        conn, f"select kind, sum(cost_usd)::float as cost, count(*) as calls from api_usage "
+              f"where at >= {week}{only('user_id')} group by kind", (days, *by))}
     drafts = _dicts(conn, f"""
-        select d.id, d.title, to_char(d.created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at,
+        select d.id, d.title, d.user_id, us.name as user_name,
+               to_char(d.created_at at time zone '{TZ}', 'DD/MM/YYYY HH24:MI') as created_at,
                sum(u.cost_usd)::float as cost, count(u.id) filter (where u.model <> %s) as runs
         from drafts d left join api_usage u on u.conversation = d.conversation
-        where d.updated_at >= {week}
-        group by d.id order by d.created_at desc""", (EMBED_MODEL, days))
+        left join users us on us.id = d.user_id
+        where d.updated_at >= {week}{only('d.user_id')}
+        group by d.id, us.name order by d.created_at desc""", (EMBED_MODEL, days, *by))
     unsaved = conn.execute(f"""
         select coalesce(sum(cost_usd), 0)::float from api_usage u
-        where kind = 'draft' and at >= {week}
+        where kind = 'draft' and at >= {week}{only('u.user_id')}
           and not exists (select 1 from drafts d where d.conversation = u.conversation)""",
-                           (days,)).fetchone()[0]
+                           (days, *by)).fetchone()[0]
     since = conn.execute(f"select to_char(min(at) at time zone '{TZ}', 'DD/MM/YYYY') from api_usage").fetchone()[0]
+    user = _dicts(conn, "select name, email from users where id = %s", (user_id,)) if user_id else []
     return {"days": days, "total": sum(k["cost"] for k in kinds.values()),
             **{k: kinds.get(k, {"cost": 0, "calls": 0}) for k in ("draft", "ask", "sync")},
-            "drafts": drafts, "unsaved": unsaved, "since": since}
+            "drafts": drafts, "unsaved": unsaved, "since": since, "user": user[0] if user else None}

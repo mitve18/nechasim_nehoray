@@ -303,6 +303,18 @@
         load();
       }
 
+      async function reject(u) {
+        try {
+          await api("/api/admin/users/" + u.id, { method: "DELETE" });
+          $("list-msg").className = "msg";
+          $("list-msg").textContent = `בקשת ההרשמה של ${u.email} נדחתה`;
+        } catch (e) {
+          $("list-msg").className = "msg error";
+          $("list-msg").textContent = e.message;
+        }
+        load();
+      }
+
       async function load() {
         let users;
         try {
@@ -343,6 +355,10 @@
                   { className: "actions" },
                   !u.active &&
                     button(pending ? "אישור" : "הפעלה", () => change(u, { active: true }, `${u.email} פעיל`), true),
+                  pending &&
+                    button("דחייה", () => {
+                      if (confirm(`לדחות את בקשת ההרשמה של ${u.email}? הבקשה תימחק.`)) reject(u);
+                    }),
                   u.active &&
                     !self &&
                     button("השבתה", () => {

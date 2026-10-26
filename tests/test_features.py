@@ -337,7 +337,26 @@ def test_costs_per_draft_and_week_total():
                 mock.patch.object(Agent, "run", fake_run), logged_in():
             assert TestClient(main.app).post("/api/draft", json={"messages": [{"role": "user", "content": "נסח"}],
                                                                   "conversation": "conv-b"}).status_code == 200
-        assert conn.execute("select count(*) from api_usage where conversation = 'conv-b'").fetchone()[0] == 1
+        assert conn.execute("select count(*), min(user_id) from api_usage where conversation = 'conv-b'"
+                            ).fetchone() == (1, ADMIN["id"])  # העלות נרשמת עם המשתמש שגרם לה
+
+        # סינון לפי משתמש: רק העלויות והטיוטות שלו, בלי הסנכרון. שורות ישנות בלי user_id משויכות דרך הטיוטה
+        other = store.create_user(conn, "other@corp.co", "אחר", "x")
+        store.log_usage(conn, "ask", [draft_run], "conv-other", other)
+        store.save_draft(conn, other, None, "טיוטה של אחר", "<p>z</p>", "z", [], [], "conv-other")
+        conn.execute("update api_usage set user_id = null where conversation = 'conv-a'")
+        store.init(conn)  # המיגרציה משלימה את user_id מהטיוטה של אותה שיחה
+        assert conn.execute("select count(*) from api_usage where conversation = 'conv-a' and user_id = %s",
+                            (uid,)).fetchone()[0] == 3
+        with mock.patch.object(store, "connect", lambda: contextlib.nullcontext(conn)), logged_in():
+            mine = TestClient(main.app).get(f"/api/costs?user={other}").json()
+            everyone = TestClient(main.app).get("/api/costs").json()
+            assert TestClient(main.app).get(f"/api/costs/xlsx?user={other}").status_code == 200
+        assert mine["user"] == {"name": "אחר", "email": "other@corp.co"} and everyone["user"] is None
+        assert [d["title"] for d in mine["drafts"]] == ["טיוטה של אחר"] and mine["sync"]["cost"] == 0
+        assert round(mine["total"], 6) == 0.045 and mine["unsaved"] == 0
+        assert {d["user_name"] for d in everyone["drafts"]} == {"מנהל", "אחר"}
+        assert everyone["sync"]["cost"] > 0 and everyone["total"] > mine["total"] + everyone["sync"]["cost"]
 
 
 def test_ask_cites_only_documents_the_tools_returned():
@@ -368,7 +387,7 @@ def test_ask_cites_only_documents_the_tools_returned():
                              search_chunks=lambda conn, q, k=8, usage=None: [
                                  doc | {"section": "7.2 סודיות", "page": 2, "text": "7.2 הסודיות תחול 5 שנים"}],
                              get_doc=lambda conn, fid: doc if fid == "d1" else None,
-                             record=lambda kind, usage, conv=None: logged.append((kind, usage, conv)),
+                             record=lambda kind, usage, conv=None, uid=None: logged.append((kind, usage, conv, uid)),
                              save_chat=lambda conn, uid, chat_id, title, msgs, conv: 7), \
             mock.patch.object(Agent, "run", fake_run), logged_in():
         r = TestClient(main.app).post("/api/ask", json={"messages": [{"role": "user", "content": "כמה זמן הסודיות?"}],
@@ -376,7 +395,7 @@ def test_ask_cites_only_documents_the_tools_returned():
     assert r["chat_id"] == 7
     assert r["citations"] == [{"n": 1, "file_id": "d1", "section": "סעיף 7.2", "page": 2,
                                "quote": "הסודיות תחול 5 שנים", "name": "הסכם.pdf", "url": "https://drive/d1"}]
-    assert logged == [("ask", [("gpt-4.1-mini", 500, 0, 50), ("gpt-4o", 1000, 0, 100)], "q1")]
+    assert logged == [("ask", [("gpt-4.1-mini", 500, 0, 50), ("gpt-4o", 1000, 0, 100)], "q1", ADMIN["id"])]
 
 
 def test_draft_web_check_and_deep_review():
@@ -402,7 +421,7 @@ def test_draft_web_check_and_deep_review():
 
     msgs = [{"role": "user", "content": "סוג החוזה: הסכם שירותים\n\nנטיית הניסוח: מאוזנת"}]
     with mock.patch.object(Agent, "run", fake_run), \
-            mock.patch.object(store, "record", lambda kind, usage, conv=None: logged.append(usage)):
+            mock.patch.object(store, "record", lambda kind, usage, conv=None, uid=None: logged.append(usage)):
         out = draft.draft(msgs, web=True, review=True)
         # הבודק מחזיר תיקונים נקודתיים: מה שנמצא הוחל, ומה שלא נמצא מדווח בהערות
         assert out["body"] == "גוף מתוקן" and out["review_notes"][0] == "הוסף סעיף שיפוי"

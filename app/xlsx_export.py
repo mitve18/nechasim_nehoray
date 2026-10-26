@@ -69,7 +69,8 @@ def build_costs(c):
     ws["A1"] = TITLE
     ws["A1"].font = Font(bold=True, size=16, color=BRAND)
     ws["A2"] = f"{c['days']} הימים האחרונים · הופק {datetime.now():%d/%m/%Y %H:%M}" + (
-        f" · נמדד מ-{c['since']}" if c["since"] else "")
+        f" · נמדד מ-{c['since']}" if c["since"] else "") + (
+        f" · משתמש: {c['user']['name']} ({c['user']['email']})" if c.get("user") else " · כל המשתמשים")
     ws["A2"].font = Font(color="6B7280")
     ws["A3"] = "הערכה לפי הטוקנים של כל קריאה ומחירון OpenAI; החשבון ב-OpenAI הוא הקובע."
     ws["A3"].font = Font(italic=True, size=9, color="6B7280")
@@ -85,20 +86,22 @@ def build_costs(c):
     r += 2
     ws.cell(r, 1, "עלות לכל טיוטה").font = Font(bold=True, size=13, color=BRAND)
     r += 1
-    _header(ws, r, ["טיוטה", "נוצרה", "בקשות למודל", "עלות"])
+    _header(ws, r, ["טיוטה", "משתמש", "נוצרה", "בקשות למודל", "עלות"])
     head = r
     for d in c["drafts"]:
         r += 1
-        _row(ws, r, [d["title"] or "ללא כותרת", d["created_at"], d["runs"] or 0, float(d["cost"] or 0)])
+        _row(ws, r, [d["title"] or "ללא כותרת", d.get("user_name") or "—", d["created_at"], d["runs"] or 0,
+                     float(d["cost"] or 0)])
     if c["unsaved"]:
         r += 1
-        _row(ws, r, ["שיחות שלא נשמרו כטיוטה", None, None, float(c["unsaved"])])
+        _row(ws, r, ["שיחות שלא נשמרו כטיוטה", None, None, None, float(c["unsaved"])])
     r += 1
-    _row(ws, r, ['סה"כ', None, None, float(sum(d["cost"] or 0 for d in c["drafts"]) + c["unsaved"])], total=True)
+    _row(ws, r, ['סה"כ', None, None, None, float(sum(d["cost"] or 0 for d in c["drafts"]) + c["unsaved"])],
+         total=True)
     if r > head + 1:
-        ws.auto_filter.ref = f"A{head}:D{r - 1}"
+        ws.auto_filter.ref = f"A{head}:E{r - 1}"
 
-    for col, width in zip("ABCD", (48, 18, 16, 14)):
+    for col, width in zip("ABCDE", (48, 22, 18, 16, 14)):
         ws.column_dimensions[col].width = width
     ws.page_setup.orientation = "portrait"
     ws.page_setup.fitToWidth, ws.page_setup.fitToHeight = 1, 0

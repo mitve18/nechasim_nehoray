@@ -119,11 +119,14 @@ def test_build_costs_xlsx():
     from app.xlsx_export import build_costs, build_table
     c = {"days": 7, "since": "01/10/2026", "total": 0.5, "unsaved": 0.1,
          "draft": {"cost": 0.3, "calls": 4}, "ask": {"cost": 0.15, "calls": 2}, "sync": {"cost": 0.05, "calls": 1},
-         "drafts": [{"title": "הסכם", "created_at": "20/10/2026 10:00", "runs": 2, "cost": 0.2}]}
+         "drafts": [{"title": "הסכם", "user_name": "דנה", "created_at": "20/10/2026 10:00", "runs": 2, "cost": 0.2}],
+         "user": None}
     ws = openpyxl.load_workbook(io.BytesIO(build_costs(c))).active
-    assert ws.sheet_view.rightToLeft
+    assert ws.sheet_view.rightToLeft and "כל המשתמשים" in ws["A2"].value
     rows = [[v for v in r if v is not None] for r in ws.iter_rows(values_only=True)]
-    assert ['סה"כ', 7, 0.5] in rows and ["הסכם", "20/10/2026 10:00", 2, 0.2] in rows
+    assert ['סה"כ', 7, 0.5] in rows and ["הסכם", "דנה", "20/10/2026 10:00", 2, 0.2] in rows
+    one = openpyxl.load_workbook(io.BytesIO(build_costs(c | {"user": {"name": "דנה", "email": "d@x.co"}}))).active
+    assert "משתמש: דנה (d@x.co)" in one["A2"].value
     ws = openpyxl.load_workbook(io.BytesIO(build_table("סטטוס", ["מדד", "ערך"], [["מסמכים", "42"]]))).active
     assert ws.sheet_view.rightToLeft and ["מסמכים", "42"] in [list(r) for r in ws.iter_rows(values_only=True)]
     assert rows[-1][0] == 'סה"כ' and abs(rows[-1][1] - 0.3) < 1e-9

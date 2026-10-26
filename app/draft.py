@@ -283,7 +283,7 @@ def _events(messages, focus, conversation, web, review, revise, user_id):
             out |= _review(messages, out, usage, tag)
         yield {"type": "result", **out, "sources": sources}
     finally:  # גם ניסוח שנכשל, או שהעובד סגר את החלון באמצעו (GeneratorExit), עלה כסף
-        store.record("draft", usage, conversation)
+        store.record("draft", usage, conversation, user_id)
 
 
 def draft(*args, **kwargs):

@@ -218,6 +218,15 @@ def test_admin_manages_users():
             assert listed["new@corp.co"]["role"] == "user" and listed["new@corp.co"]["active"]
             assert "password_hash" not in listed["new@corp.co"]
 
+            # דחיית בקשת הרשמה: נמחקת. משתמש פעיל, או שכבר נכנס, לא נמחק כך (אותו משביתים)
+            register("spam@gmail.com")
+            spam = conn.execute("select id from users where email = 'spam@gmail.com'").fetchone()[0]
+            assert worker.delete(f"/api/admin/users/{spam}").status_code == 403
+            assert boss.delete(f"/api/admin/users/{spam}").json() == {"ok": True}
+            assert boss.delete(f"/api/admin/users/{spam}").status_code == 404
+            assert "spam@gmail.com" not in {u["email"] for u in boss.get("/api/admin/users").json()}
+            assert boss.delete(f"/api/admin/users/{new_id}").status_code == 404
+
             # אישור משתמש שנרשם מבחוץ
             register("guest@gmail.com")
             guest = conn.execute("select id from users where email = 'guest@gmail.com'").fetchone()[0]

@@ -443,16 +443,16 @@ def _days(days):
 
 
 @app.get("/api/costs", dependencies=[Depends(admin)])
-def api_costs(days: int = 7):
-    """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל."""
+def api_costs(days: int = 7, user: int | None = None):
+    """עמוד "עלויות". מ-SQL בלבד, בלי קריאה למודל. user: רק העלויות של משתמש אחד; בלעדיו כל המשתמשים."""
     with store.connect() as conn:
-        return store.costs(conn, _days(days))
+        return store.costs(conn, _days(days), user)
 
 
 @app.get("/api/costs/xlsx", dependencies=[Depends(admin)])
-def api_costs_xlsx(days: int = 7):
+def api_costs_xlsx(days: int = 7, user: int | None = None):
     with store.connect() as conn:
-        c = store.costs(conn, _days(days))
+        c = store.costs(conn, _days(days), user)
     name = quote(f"עלויות {date.today():%d-%m-%Y}.xlsx")
     return Response(
         xlsx_export.build_costs(c),
@@ -560,6 +560,15 @@ def api_user_update(user_id: int, req: UserChange, request: Request):
     with store.connect() as conn:
         if not store.update_user(conn, user_id, req.active, req.role, hashed):
             raise HTTPException(404, "המשתמש לא נמצא")
+    return {"ok": True}
+
+
+@app.delete("/api/admin/users/{user_id}", dependencies=[Depends(admin)])
+def api_user_reject(user_id: int):
+    """דחיית בקשת הרשמה שממתינה לאישור. הכתובת יכולה להירשם שוב, ושוב תמתין לאישור."""
+    with store.connect() as conn:
+        if not store.reject_user(conn, user_id):
+            raise HTTPException(404, "אין בקשת הרשמה ממתינה של המשתמש הזה")
     return {"ok": True}
 
 

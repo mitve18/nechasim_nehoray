@@ -1532,6 +1532,33 @@
         border-color: var(--brand);
         color: var(--brand-deep);
       }
+      /* עמוד "עלויות": תקופה ומשתמש באותה שורה (בטלפון יורדים לשורה הבאה) */
+      .c-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .c-filters .seg {
+        margin-top: 0;
+      }
+      .c-user {
+        height: 40px;
+        min-width: 190px;
+        max-width: 100%;
+        padding: 0 10px;
+        border: 1px solid var(--brand-line);
+        border-radius: 10px;
+        background: var(--card);
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+      }
+      .c-user:focus-visible {
+        outline: 3px solid var(--ring);
+        outline-offset: 2px;
+      }
       .c-head {
         display: flex;
         align-items: center;
@@ -3240,16 +3267,21 @@
               כל קריאה לפי המחירון של OpenAI, ולכן היא הערכה; החשבון ב-OpenAI
               הוא הקובע.
             </p>
-            <div class="seg" role="group" aria-label="תקופה" id="c-days">
-              <button type="button" data-days="7" aria-pressed="true">
-                7 ימים
-              </button>
-              <button type="button" data-days="30" aria-pressed="false">
-                30 ימים
-              </button>
-              <button type="button" data-days="90" aria-pressed="false">
-                90 ימים
-              </button>
+            <div class="c-filters">
+              <div class="seg" role="group" aria-label="תקופה" id="c-days">
+                <button type="button" data-days="7" aria-pressed="true">
+                  7 ימים
+                </button>
+                <button type="button" data-days="30" aria-pressed="false">
+                  30 ימים
+                </button>
+                <button type="button" data-days="90" aria-pressed="false">
+                  90 ימים
+                </button>
+              </div>
+              <select id="c-user" class="c-user" aria-label="משתמש">
+                <option value="">כל המשתמשים</option>
+              </select>
             </div>
           </header>
           <div class="tiles">
@@ -3279,7 +3311,7 @@
               <button
                 type="button"
                 id="c-xlsx"
-                onclick="location.href = '/api/costs/xlsx?days=' + costDays"
+                onclick="location.href = '/api/costs/xlsx?' + costQuery()"
               >
                 ⬇ ייצוא לאקסל
               </button>
@@ -3290,6 +3322,7 @@
                 <thead>
                   <tr>
                     <th scope="col">טיוטה</th>
+                    <th scope="col" id="c-user-th">משתמש</th>
                     <th scope="col">נוצרה</th>
                     <th scope="col">בקשות למודל</th>
                     <th scope="col">עלות</th>
@@ -4746,26 +4779,49 @@
             x.setAttribute("aria-pressed", x === b);
           loadCosts();
         };
+      // סינון לפי משתמש. ברירת המחדל: כל המשתמשים. הרשימה נטענת פעם אחת, כשנכנסים לעמוד בפעם הראשונה
+      const costQuery = () =>
+        `days=${costDays}` + ($("c-user").value ? `&user=${$("c-user").value}` : "");
+      $("c-user").onchange = () => loadCosts();
+      async function loadCostUsers() {
+        if ($("c-user").options.length > 1) return;
+        try {
+          const users = await api("/api/admin/users");
+          $("c-user").append(
+            ...users.map((u) =>
+              el("option", { value: u.id, textContent: `${u.name} (${u.email})` }),
+            ),
+          );
+        } catch {} // בלי הרשימה העמוד עדיין מציג את כל המשתמשים
+      }
       async function loadCosts() {
+        loadCostUsers();
         let c;
         try {
-          c = await api("/api/costs?days=" + costDays);
+          c = await api("/api/costs?" + costQuery());
         } catch {
           $("c-note").textContent = "העלויות לא זמינות כרגע.";
           $("c-note").hidden = false;
           return;
         }
         $("c-note").hidden = true;
-        $("c-total-l").textContent = `סה"כ ב-${c.days} הימים האחרונים`;
+        const all = !c.user; // כל המשתמשים: עמודת "משתמש" בטבלה, והסנכרון נכלל בסה"כ
+        const cols = all ? 5 : 4;
+        $("c-total-l").textContent =
+          `סה"כ ב-${c.days} הימים האחרונים` + (all ? "" : ` · ${c.user.name}`);
         $("c-total").textContent = usd(c.total);
         $("c-draft").textContent = usd(c.draft.cost);
         $("c-draft-n").textContent = c.draft.calls + " קריאות ל-API";
         $("c-ask").textContent = usd(c.ask.cost);
         $("c-ask-n").textContent = c.ask.calls + " קריאות ל-API";
-        $("c-sync").textContent = usd(c.sync.cost);
-        $("c-sync-n").textContent = c.sync.calls + " קריאות ל-API";
+        // הסנכרון לא שייך לאף משתמש, ולכן מופיע רק ב"כל המשתמשים"
+        $("c-sync").textContent = all ? usd(c.sync.cost) : "—";
+        $("c-sync-n").textContent = all
+          ? c.sync.calls + " קריאות ל-API"
+          : "לא שייך למשתמש מסוים";
+        $("c-user-th").hidden = !all;
         $("c-since").textContent = c.since
-          ? `העלויות נמדדות מ-${c.since}. לחיצה על טיוטה פותחת אותה לעריכה.`
+          ? `העלויות נמדדות מ-${c.since}. לחיצה על טיוטה שלך פותחת אותה לעריכה.`
           : "עדיין לא נרשמו עלויות.";
         $("c-rows").replaceChildren(
           ...(c.drafts.length
@@ -4776,13 +4832,17 @@
                   el(
                     "th",
                     { scope: "row" },
-                    el("button", {
-                      type: "button",
-                      className: "linkish",
-                      textContent: d.title || "ללא כותרת",
-                      onclick: () => openHistory(d.id),
-                    }),
+                    // רק טיוטה של המנהל עצמו נפתחת: טיוטות של משתמשים אחרים פתוחות רק להם
+                    d.user_id === me?.user?.id
+                      ? el("button", {
+                          type: "button",
+                          className: "linkish",
+                          textContent: d.title || "ללא כותרת",
+                          onclick: () => openHistory(d.id),
+                        })
+                      : d.title || "ללא כותרת",
                   ),
+                  all && el("td", { textContent: d.user_name || "—" }),
                   el("td", { textContent: d.created_at }),
                   el("td", { textContent: d.runs || "—" }),
                   el("td", { textContent: usd(d.cost) }),
@@ -4793,7 +4853,7 @@
                   "tr",
                   {},
                   el("td", {
-                    colSpan: 4,
+                    colSpan: cols,
                     className: "c-empty",
                     textContent: "אין טיוטות מהתקופה הזו.",
                   }),
@@ -4809,7 +4869,7 @@
                   {},
                   el("th", {
                     scope: "row",
-                    colSpan: 3,
+                    colSpan: cols - 1,
                     textContent:
                       "שיחות שלא נשמרו כטיוטה (שאלות בלבד, ניסוח שנכשל או טיוטה שנמחקה)",
                   }),

@@ -150,7 +150,7 @@ def ask(messages, conversation=None, user_id=None):
         result = build_agent(seen, usage).run(messages, user_id=user_id and str(user_id), session_id=conversation)
         usage.append(store.agent_usage(result, MODEL))
     finally:
-        store.record("ask", usage, conversation)
+        store.record("ask", usage, conversation, user_id)
     if result.status != RunStatus.completed or not isinstance(result.content, Answer):
         raise RuntimeError(f"המודל לא החזיר תשובה תקינה: {str(result.content)[:300]}")
     citations = [c.model_dump() | seen[c.file_id] for c in result.content.citations if c.file_id in seen]
