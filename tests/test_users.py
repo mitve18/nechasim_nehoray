@@ -80,7 +80,7 @@ def test_register_login_cookie_and_csrf():
             hashed = conn.execute("select password_hash from users where email = 'dana@corp.co'").fetchone()[0]
             assert hashed.startswith("$2b$") and PASSWORD not in hashed
             cookie = r.headers["set-cookie"].lower()
-            assert "httponly" in cookie and "samesite=lax" in cookie and "max-age=2592000" in cookie
+            assert "httponly" in cookie and "samesite=lax" in cookie and f"max-age={auth.SESSION_DAYS * 24 * 3600}" in cookie
 
             # כתובת מבחוץ: ממתינה לאישור admin, גם אחרי סיסמה נכונה
             _, r = register("guest@gmail.com")
@@ -114,11 +114,12 @@ def test_register_login_cookie_and_csrf():
             r = c.post("/logout")
             assert r.headers["location"] == "/login" and c.get("/api/me").status_code == 401
 
-            # עוגייה מזויפת, ישנה (30 יום) או של משתמש אחר בלי חתימה תקפה: 401
-            old = auth.cookie(1, 1, time.time() - auth.SESSION_DAYS * 24 * 3600 - 1)
-            for bad in (old, "1.1.9999999999.forged", auth.cookie(1, 1)[:-1] + "x", auth.cookie(1, 2), "garbage"):
+            # עוגייה מזויפת או של משתמש אחר בלי חתימה תקפה: 401. עוגייה ישנה (שנה) עדיין תקפה: אין תפוגה
+            for bad in ("1.1.9999999999.forged", auth.cookie(1, 1)[:-1] + "x", auth.cookie(1, 2), "garbage"):
                 assert TestClient(main.app, cookies={"session": bad}).get("/api/me").status_code == 401, bad
-            assert TestClient(main.app, cookies={"session": auth.cookie(1, 1)}).get("/api/me").status_code == 200
+            old = auth.cookie(1, 1, time.time() - 365 * 24 * 3600)
+            for good in (auth.cookie(1, 1), old):
+                assert TestClient(main.app, cookies={"session": good}).get("/api/me").status_code == 200
 
             # ניחוש סיסמה: אחרי LOGIN_FAILS כישלונות לאותה כתובת, גם מ-IP אחר ועם הסיסמה הנכונה, חסום
             for i in range(main.LOGIN_FAILS):

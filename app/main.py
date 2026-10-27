@@ -1,6 +1,6 @@
 """שרת הווב: ניסוח הסכמים, ייצוא ל-Word, פאנל קבצים ודוחות.
 
-כל האתר מאחורי כניסה אישית (אימייל וסיסמה, ראה app/auth.py), ועוגייה שזוכרת את המשתמש ל-30 יום.
+כל האתר מאחורי כניסה אישית (אימייל וסיסמה, ראה app/auth.py), ועוגייה שזוכרת את המשתמש עד שהוא יוצא.
 פתוחים בלי כניסה רק /login, /register, /healthz (בדיקת התקינות של Render) והקבצים הסטטיים.
 בלי SECRET_KEY האתר חסום ("לא מוגדר"), כדי שלא ייפתח לכולם בטעות.
 טיוטות ושיחות שייכות למשתמש. ארכיון ההסכמים, הסנכרון וההעלאה משותפים. עלויות, לוג סנכרון וניהול משתמשים: admin.
@@ -110,7 +110,10 @@ async def require_login(request: Request, call_next):
         log.exception("בדיקת המשתמש נכשלה")
         return JSONResponse({"detail": "מסד הנתונים לא זמין כרגע. נסה שוב בעוד דקה"}, 503)
     if request.state.user:
-        return await call_next(request)
+        resp = await call_next(request)
+        if path == "/":  # מחדש את תוקף העוגייה, כדי שמי שנכנס לאתר לא יתנתק אף פעם
+            _set_session(resp, request, request.cookies["session"])
+        return resp
     if path.startswith("/api/"):
         return JSONResponse({"detail": "נדרשת כניסה"}, 401)
     return RedirectResponse("/login?next=" + quote(path), 303)
@@ -177,11 +180,15 @@ async def _form(request):
     return lambda name: form.get(name, [""])[0]
 
 
-def _login_response(request, target, user_id, version):
-    resp = RedirectResponse(target, 303)
-    resp.set_cookie("session", auth.cookie(user_id, version), httponly=True, samesite="lax",
+def _set_session(resp, request, value):
+    resp.set_cookie("session", value, httponly=True, samesite="lax",
                     secure=request.headers.get("x-forwarded-proto") == "https",
                     max_age=auth.SESSION_DAYS * 24 * 3600)
+
+
+def _login_response(request, target, user_id, version):
+    resp = RedirectResponse(target, 303)
+    _set_session(resp, request, auth.cookie(user_id, version))
     return resp
 
 

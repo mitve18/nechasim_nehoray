@@ -12,7 +12,7 @@ import time
 import bcrypt
 
 SECRET = os.environ.get("SECRET_KEY", "")
-SESSION_DAYS = 30
+SESSION_DAYS = 400  # התקרה של הדפדפנים לעוגייה. העוגייה מתחדשת בכל כניסה לדף הראשי, כך שבפועל אין תפוגה
 MIN_PASSWORD = 10
 MAX_PASSWORD_BYTES = 72  # התקרה של bcrypt; bcrypt 5 זורק שגיאה על סיסמה ארוכה יותר
 EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
@@ -56,11 +56,11 @@ def cookie(user_id, version, now=None):
 
 
 def parse(value):
-    """(user_id, session_version) מעוגייה חתומה שעוד לא עברו עליה SESSION_DAYS, אחרת None."""
+    """(user_id, session_version) מעוגייה חתומה, אחרת None. אין תפוגה: מתנתקים רק ביציאה, השבתה או איפוס סיסמה."""
     parts = (value or "").split(".")
     if not SECRET or len(parts) != 4 or not all(p.isdigit() for p in parts[:3]):
         return None
     uid, ver, ts, sig = parts
-    if not hmac.compare_digest(sig, _sign(f"{uid}.{ver}.{ts}")) or time.time() - int(ts) >= SESSION_DAYS * 24 * 3600:
+    if not hmac.compare_digest(sig, _sign(f"{uid}.{ver}.{ts}")):
         return None
     return int(uid), int(ver)
