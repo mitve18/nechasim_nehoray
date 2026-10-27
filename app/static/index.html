@@ -4304,7 +4304,7 @@
         $("me").hidden = false;
         if (!admin && location.hash === "#costs") location.hash = "#ask";
       }
-      // הכניסה פגה (אחרי 30 יום, או שהסיסמה הוחלפה) בזמן שהאתר פתוח: חוזרים למסך הכניסה
+      // הכניסה פגה (הסיסמה הוחלפה או שהמשתמש הושבת) בזמן שהאתר פתוח: חוזרים למסך הכניסה
       const toLogin = () =>
         location.assign("/login?next=" + encodeURIComponent(location.pathname));
 
