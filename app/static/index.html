@@ -1951,6 +1951,11 @@
       .dropzone:focus-within {
         outline: 3px solid var(--ring);
       }
+      @media (hover: hover) and (pointer: fine) {
+        .dropzone.camera {
+          display: none; /* מחשב בלי מצלמה: ההעלאה הרגילה מספיקה */
+        }
+      }
       .visually-hidden {
         position: absolute;
         width: 1px;
@@ -3371,6 +3376,16 @@
                 />
                 ⬆ גרור קבצים או לחץ להעלאה
               </label>
+              <label class="dropzone camera" id="camera" hidden>
+                <input
+                  type="file"
+                  id="camera-input"
+                  class="visually-hidden"
+                  accept="image/*"
+                  capture="environment"
+                />
+                📷 צלם מסמך
+              </label>
             </div>
             <div id="upload-progress" hidden role="status">
               <div class="bar" aria-hidden="true"><i id="upload-bar"></i></div>
@@ -4297,6 +4312,7 @@
         }
         $("sync-row").hidden = !(me.writer && me.sync);
         $("dropzone").hidden = !me.writer;
+        $("camera").hidden = !me.writer;
         const admin = me.user.role === "admin";
         $("me-name").textContent = me.user.name;
         $("me-email").textContent = me.user.email;
@@ -4501,6 +4517,24 @@
       $("file-input").addEventListener("change", (e) => {
         uploadFiles(e.target.files);
         e.target.value = "";
+      });
+      // צילום מהמצלמה: אייפון קורא לכל צילום "image.jpg", ולכן שם עם תאריך ושעה. הסיומת לפי סוג הקובץ (JPEG או HEIC)
+      const PHOTO_EXT = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/heic": "heic",
+        "image/heif": "heif",
+        "image/webp": "webp",
+      };
+      $("camera-input").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        const ext = PHOTO_EXT[file.type];
+        const d = new Date(),
+          p = (n) => String(n).padStart(2, "0");
+        const name = `צילום ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}.${ext}`;
+        uploadFiles([ext ? new File([file], name, { type: file.type }) : file]);
       });
       const dropzone = $("dropzone");
       dropzone.addEventListener("dragover", (e) => {

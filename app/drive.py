@@ -18,6 +18,7 @@ DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DOC = "application/msword"
 GDOC = "application/vnd.google-apps.document"
 MAX_UPLOAD = 20 * 1024 * 1024
+OCR_MAX_SIDE = 3000  # הצלע הארוכה של תמונה שנשלחת ל-OCR של Drive
 
 
 def _is_heif(d):
@@ -120,9 +121,11 @@ def download(svc, f):
 def ocr_image(svc, img):
     """OCR של Google לעמוד סרוק אחד (חינם): Drive ממיר את התמונה ל-Google Docs עם זיהוי טקסט בעברית,
     מייצאים טקסט ומוחקים את העותק. כמו ההמרה של DOC, העותק נוצר ב"האחסון שלי" ולא בתיקיית ההסכמים.
-    JPEG באפור, כי Drive מזהה טקסט רק בתמונות של עד 2MB."""
+    JPEG באפור, כי Drive מזהה טקסט רק בתמונות של עד 2MB. צילום טלפון (12–48 מגה-פיקסל) מוקטן קודם, אחרת הוא גדול מזה."""
+    img = img.convert("L")
+    img.thumbnail((OCR_MAX_SIDE, OCR_MAX_SIDE))  # בערך 250 DPI לדף A4: עדיין חד מספיק לזיהוי
     buf = io.BytesIO()
-    img.convert("L").save(buf, "JPEG", quality=85)
+    img.save(buf, "JPEG", quality=85)
     media = MediaIoBaseUpload(buf, mimetype="image/jpeg")
     tmp = svc.files().create(body={"name": "tmp-ocr", "mimeType": GDOC, "parents": ["root"]}, media_body=media,
                              ocrLanguage="he", fields="id").execute()
